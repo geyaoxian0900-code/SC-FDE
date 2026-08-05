@@ -1,0 +1,13 @@
+{
+  "script": "single_board_loopback",
+  "timestamp": "20260804_191313",
+  "port": "COM6",
+  "baud": 9600,
+  "frames": 300,
+  "passed": 300,
+  "fer": 0.0,
+  "crc_pass": 300,
+  "hardfault_resets": 0,
+  "csv": "results\\single_loopback_20260804_191313.csv",
+  "log": "results\\single_loopback_20260804_191313.log"
+}

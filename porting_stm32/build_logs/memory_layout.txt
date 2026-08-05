@@ -1,0 +1,16 @@
+Keil build verification - memory layout (from Project.axf)
+
+      Code (inc. data)   RO Data    RW Data    ZI Data      Debug   Object Name
+     13916       1564       1340         20          0          0   ROM Totals for D:\Keli5\project\GD32E503C_START_Demo_Suites\GD32E503C_START_Demo_Suites\Projects\02_SC_FDE_UWA_MODEM\MDK-ARM\output\Project.axf
+
+Key symbols:
+177  g_passband_rx_buffer       0x2000242a   Lc    3  Data  De   0x4000
+186  g_twiddle                  0x200074e0   Lc    3  Data  De   0x200
+236  g_loopback_samples         0x2000122a   Lc    3  Data  De   0x1200
+268  g_uw                       0x200079e0   Lc    3  Data  De   0x100
+269  g_tx_data                  0x200076e0   Lc    3  Data  De   0x300
+271  g_phase_symbols            0x2000662c   Lc    3  Data  De   0xab0
+272  g_frame_symbols            0x20000c28   Lc    3  Data  De   0x600
+273  g_fft_a                    0x20000424   Lc    3  Data  De   0x400
+274  g_fft_b                    0x20000824   Lc    3  Data  De   0x400
+763  __initial_sp               0x20008ae0   Gb    3  Data  Hi

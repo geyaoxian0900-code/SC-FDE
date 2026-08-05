@@ -1,0 +1,29 @@
+# Keil / MDK-ARM build artifacts
+**/MDK-ARM/output/
+**/MDK-ARM/*.uvguix.*
+**/MDK-ARM/Listings/
+**/MDK-ARM/Objects/
+*.axf
+*.hex
+*.map
+*.o
+*.d
+*.crf
+*.htm
+
+# CMake / PC test build artifacts
+porting_stm32/pc_tests/build/
+build/
+
+# Logs and archives
+*.zip
+*.log
+tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# MATLAB transient
+papers/**/results/*.png

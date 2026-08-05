@@ -1,0 +1,78 @@
+# 水声单载波统一仿真工程
+
+本目录统一管理原论文复现脚本和 `02_SC_FDE_UWA_MODEM` 工程配套仿真。
+所有数值实验从 `run_all_simulations.m` 进入，实验清单由
+`list_simulations.m` 查询。
+
+## 目录
+
+```text
+papers/
+├── run_all_simulations.m       统一批处理入口
+├── list_simulations.m          实验 ID 清单
+├── modules/+scfde/             可替换模块和公共流水线
+├── engineering_simulation/     从 MCU 工程整理来的仿真
+├── chapter2_simulation/        论文第2章 UW/SC-FDE
+├── chapter3_simulation/        论文第3章同步/多普勒
+├── chapter4_simulation/        论文第4章判决反馈均衡
+├── common/                     论文仿真共用 LDPC
+├── examples/                   模块替换示例
+└── tests/                      轻量回归测试
+```
+
+## 运行
+
+```matlab
+cd('D:\Keli5\project\GD32E503C_START_Demo_Suites\papers')
+list_simulations
+
+% 默认快速运行全部数值实验
+summary = run_all_simulations;
+
+% 仅运行 SC-TDE 和论文第4章
+options = struct("profile", "quick", ...
+    "experiments", ["engineering.sc_tde", "paper.chapter4"]);
+summary = run_all_simulations(options);
+
+% 完整参数
+summary = run_all_simulations(struct("profile", "full"));
+```
+
+统一入口默认捕获单个实验的错误并继续运行。开发和回归时可设置
+`stopOnError=true`，让第一个错误立即中止。
+
+## 模块替换
+
+SC-TDE 使用以下流水线：
+
+```text
+source(cfg)
+  -> channel(tx, cfg)
+  -> receiverBank(channelState, sourceState, cfg)
+  -> metric(receiverState, sourceState, cfg)
+```
+
+模块通过 `options.modules` 中的函数句柄注入。默认模块在
+`modules/+scfde/default_modules.m` 注册。替换模块只需维持契约，不需要修改
+`simulate_chapter2_single_carrier_tde.m` 或统一入口。
+
+```matlab
+modules.channel = @custom_flat_channel;
+options = struct("profile", "quick", ...
+    "experiments", "engineering.sc_tde", "modules", modules);
+summary = run_all_simulations(options);
+```
+
+完整示例见 `examples/run_module_swap_example.m`。模块结构允许继续增加新的
+信源、实测信道、神经网络均衡器或指标计算器；不同实验可以通过
+`experimentOptions.<实验ID转换后的字段名>` 覆盖参数，例如
+`experimentOptions.engineering_sc_tde.snrDb = 8`。
+
+## 兼容性
+
+原 MCU 工程下的 MATLAB 文件暂时保留，避免影响 GUI、固件验证脚本和已有调用。
+新的开发和批处理应使用本目录。论文第2至第4章入口已由脚本改为带可选参数的
+函数，但 `run_chapter2_simulation` 这类无参数调用仍然兼容。
+
+当前仿真使用合成信道和可重复构造的 LDPC。论文未公开的校验矩阵以及缺失的
+水池原始录音不能由这些脚本恢复，输出用于趋势验证而非逐点复制原论文曲线。

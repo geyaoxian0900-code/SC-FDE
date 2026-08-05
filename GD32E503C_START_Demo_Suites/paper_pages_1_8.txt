@@ -1,0 +1,235 @@
+PAGES: 67
+META: {'/Producer': 'TTKN', '/CreationDate': "D:20231107185133-08'00'", '/Author': 'CNKI', '/Creator': 'ReaderEx_DIS 2.4.0 Build 4053'}
+
+===== PAGE 1 =====
+分
+类
+号
+：
+
+
+密
+级
+：
+
+Ｕ Ｄ Ｃ ：
+
+
+
+编 号 ：
+
+工
+学
+硕
+士
+学
+位
+论
+文
+时
+变
+信
+道
+下
+水
+声
+单
+载
+波
+频
+域
+均
+衡
+与
+同 步
+技
+术
+研
+究
+硕
+士
+研
+宄
+生
+．
+？
+杨
+思
+琪
+指
+导 教
+师
+：
+乔
+钢
+学
+科
+、
+专
+业
+：
+水
+声
+工
+程
+ 哈
+尔 滨
+ 工
+程
+大 学
+２ ０２ ０ 年 ０ ３ 月
+
+
+===== PAGE 2 =====
+分类号： 密级：
+ＵＤＣ： 编号：
+工学硕士学位论文
+时变信道下水声单载波频域均衡与
+同步技术研究
+硕士研究生 ：杨思琪
+指 导 教 师 ：乔钢
+学 位 级 别 ：工学硕士
+学科、 专业 ：水声工程
+所 在 单 位 ：水声工程学院
+论文提交日期：2020 年 3 月
+论文答辩日期：2020 年 3 月
+学位授予单位：哈尔滨工程大学
+
+===== PAGE 3 =====
+Classified Index:
+U.D.C:
+A Dissertation for the degree of D. Eng
+Research on Frequency Domain Equalization and
+Synchronization Technology for Underwater
+Acoustic Single-Carrier in System Time-Varying
+Channel
+Candidate: Yang Siqi
+Supervisor: Prof.Qiao Gang
+Academic Degree Applied for: Master of Engineering
+Specialty: Underwater Acoustic Engineering
+Date of Submission: March，2020
+Date of Oral Examination: March，2020
+University: Harbin Engineering University
+
+===== PAGE 4 =====
+
+
+===== PAGE 5 =====
+哈尔滨工程大学硕士学位论文
+摘 要
+水声通信技术在海洋观测、深海探测开发以及军用等方面都有着其重要的意义。由
+于水声信道是一个时间/频率双选择性衰落信道，码间干扰极大，对高速水声通信发展形
+成阻碍。现今应用广泛的水声高速通信方式是正交频分复用（OFDM）技术，相比于
+OFDM 技术，水声单载波频域均衡（SC-FDE）技术有着峰均比低、抗频域选择性衰落、
+对频偏不敏感等优点，引得众多科研人员进行研究。本文基于 SC-FDE 系统重点研究了
+水声时变信道下的同步技术以及信道均衡技术。
+首先，介绍了帧结构选取方式，比较了几种独特字（UW）的性能，选取最优的负
+载帧格式与 UW 序列，并比较了 UW 序列长短对水声 SC-FDE 系统误码率（BER）性能
+影响，也对单载波通信系统中的关键技术进行介绍。
+然后，针对水声 SC-FDE 系统中的同步技术展开研究，首先给出了一种常用在单载
+波通信的基于 UW 序列的同步方法，但是该种方法易受水声多普勒效应以及多径扩展延
+迟影响，不利于同步点的估计。基于此研究了基于 UW 序列二维自相关时间同步及多普
+勒估计方法，利用水声 SC-FDE 系统每个数据块前后的 UW 序列，进行二维自相关搜索，
+同时得到精确的时间同步和多普勒因子估计。该部分最后进行数值仿真分析，得出结论：
+基于 UW 序列的二维自相关方法在多径信道和大多普勒频偏下性能明显优于基于 UW
+序列的互相关方法。
+最后，为减小信号码间干扰影响，分别研究了三种频域均衡算法，分别是时频域判
+决反馈均衡（FD-DFE）算法、基于噪声预测的判决反馈均衡算法以及块迭代判决反馈
+均衡（IB-DFE）算法。其中 FD-DFE 算法是一种传统的均衡算法，其前馈部分在频域，
+反馈部分在时域且是逐符号进行判决。基于噪声预测均衡方法则是前馈部分采用了最小
+均方误差均衡（MMSE）算法，并利用 UW 序列的已知特性对 UW 序列的噪声进行估计，
+进而估计出数据噪声，计算复杂度低于 FD-DFE 算法。最后介绍了迭代部分融合了 LDPC
+码的 IB-DFE 技术，其反馈部分是逐块进行判决，计算复杂度低于前两种均衡方法，且
+BER 性能上优于前两种算法。仿真与水池实验结果表明 FD-DFE 算法 BER 性能比基于
+噪声预测的判决反馈均衡算法 BER 性能好，而 IB-DFE 算法的 BER 性能在三种算法中
+性能最好，且系统 BER 性能与 UW 序列长度和 SNR 相关。
+关键词：单载波频域均衡；同步技术；时频域判决反馈均衡；噪声预测均衡；块迭代判
+决反馈均衡
+
+===== PAGE 6 =====
+哈尔滨工程大学硕士学位论文
+Abstract
+Underwater acoustic communication technology is of great significance in marine
+observation, deep-sea exploration and development, and military use. The underwater
+acoustic channel is a time / frequency dual selective fading channel, the inter-symbol
+interference is extremely large, which hinders the development of high-speed underwater
+acoustic communication. Currently, the widely used underwater acoustic high-speed
+communication method is orthogonal frequency division multiplexing (OFDM) technology.
+Compared with OFDM technology, underwater acoustic single carrier frequency domain
+equalization (SC-FDE) technology has many advantages,such as low peak-to-average
+ratio ,Resistant to frequency selective fading, and insensitivity to frequency offset have
+attracted many researchers,etc. Based on the SC-FDE system, this paper focuses on the
+synchronization technology and channel equalization technology under the underwater
+acoustic time-varying channel.
+First, it introduces the frame structure selection method, compares the performance of
+several unique words(UW), selects the optimal payload frame format and unique word
+sequence, and compares the effect of length of the UW sequence on the bit error rate (BER)
+performance of the underwater SC-FDE system, also introduces the key technologies in the
+single carrier communication system.
+Then,Research on synchronization technology in underwater acoustic SC-FDE system.
+First, a UW sequence-based synchronization method commonly used in single-carrier
+communication is given, but this method is affected by the underwater acoustic Doppler effect
+and Multipath spreading delay,witch is not conducive to the estimation of synchronization
+points. So a two-dimensional autocorrelation time synchronization and Doppler estimation
+method based on UW sequences is studied,which uses UW sequences before and after each
+data block of the underwater acoustic SC-FDE system to go for a two-dimensional
+autocorrelation search to get the precise time synchronization and Doppler factor estimation.
+At the end of this part, a numerical simulation analysis is performed, and it is concluded that
+the two-dimensional autocorrelation method based on UW sequences is significantly better
+than the cross-correlation method based on UW sequences in multipath channels and most
+
+===== PAGE 7 =====
+哈尔滨工程大学硕士学位论文
+Doppler frequency offsets channel.
+Finally, in order to reduce the impact of signal-to-symbol interference, three
+frequency-domain equalization algorithms were studied, namely time-frequency domain
+decision feedback equalization (FD-DFE) algorithm, based noise prediction decision feedback
+equalization algorithm, and block iterative decision feedback equalization (IB-DFE)
+algorithm. The FD-DFE algorithm is a traditional equalization algorithm, that its feedforward
+part is in the frequency domain, and its feedback part is in the time domain to go for
+decision ,which is made symbol by symbol. Based on noise prediction equalization method’s
+feedforward is used the minimum mean square error equalization (MMSE) algorithm and
+feedback part is used the known characteristics of the UW sequence to estimated the noise of
+the received UW sequence and then to estimate the data noise, which Its complexity is lower
+than FD-DFE. Finally, the IB-DFE technology that incorporates LDPC codes in the iterative
+part is introduced. The feedback part is judged block by block, the computational complexity
+is lower than the first two equalization methods, and the BER performance is better than the
+two algorithms. The simulation and pool experiment results show that the BER performance
+of the FD-DFE algorithm is better than the BER performance of the decision feedback
+equalization algorithm based on noise prediction, and the BER performance of the IB-DFE
+algorithm is the best of the three algorithms, and the system BER performance related to UW
+sequence length and SNR.
+Keywords: single carrier frequency domain equalization, synchronization technology,
+time-frequency domain decision feedback equalization, noise prediction
+equalization，block iterative decision feedback equalization.
+
+===== PAGE 8 =====
+哈尔滨工程大学硕士学位论文
+目 录
+第 1 章 绪论...............................................................................................................................1
+1.1 课题背景及研究意义...................................................................................................1
+1.2 无线通信领域的 SC-FDE 技术研究现状...................................................................3
+1.3 水声 SC-FDE 技术研究现状.......................................................................................4
+1.4 论文的主要内容...........................................................................................................5
+第 2 章 水声 SC-FDE 系统基本原理................................................................................................... 7
+2.1 基于 UW 序列的水声 SC-FDE 基本原理.................................................................. 7
+2.2 水声 SC-FDE 系统帧结构设计...................................................................................8
+2.2.1 数据块结构选取.................................................................................................9
+2.2.2 UW 序列选取.................................................................................................... 11
+2.2.3 UW 序列长度选取............................................................................................ 15
+2.3 水声 SC-FDE 系统中的关键技术..............................................................................16
+2.3.1 信道估计算法...................................................................................................17
+2.3.2 频域均衡技术...................................................................................................18
+2.3.2.1 线性均衡技术................................................................................................19
+2.3.2.2 判决反馈均衡技术........................................................................................19
+2.3.3 信道编码技术...................................................................................................20
+2.4 本章小结.....................................................................................................................22
+第 3 章 时变信道下的同步技术............................................................................................................23
+3.1 基于 UW 序列互相关的的时间同步及多普勒估计方法......................................... 23
+3.1.1 时间同步算法....................................................................................................23
+3.1.2 多普勒频移因子估计算法................................................................................25
+3.2 基于 UW 序列的二维自相关时间同步及多普勒估计方法.................................... 26
+3.3 数值仿真分析..............................................................................................................27
+3.4 本章小结.....................................................................................................................31
+第 4 章 水声 SC-FDE 系统中的判决反馈均衡算法.......................................................................33
+4.1 引言..............................................................................................................................33
