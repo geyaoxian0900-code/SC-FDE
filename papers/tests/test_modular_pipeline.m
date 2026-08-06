@@ -15,12 +15,12 @@ end
 function testDefaultPipelineReturnsReceiverMetrics(testCase)
 options = small_options();
 result = simulate_chapter2_single_carrier_tde(options);
-verifyEqual(testCase, numel(result.names), 17);
-verifyEqual(testCase, size(result.ber), [1, 17]);
+verifyEqual(testCase, numel(result.names), 10);
+verifyEqual(testCase, size(result.ber), [1, 10]);
 verifyTrue(testCase, all(isfinite(result.ber)));
-verifyEqual(testCase, numel(result.equalizerEstimates), 17);
+verifyEqual(testCase, numel(result.equalizerEstimates), 10);
 verifyEqual(testCase, size(result.equalizerEstimates{2}), size(result.tx));
-verifyEqual(testCase, numel(result.equalizerTraces), 17);
+verifyEqual(testCase, numel(result.equalizerTraces), 10);
 trace = result.equalizerTraces{2};
 verifyEqual(testCase, size(trace.coefficientHistory, 1), ...
     options.feedforwardTaps + options.feedbackTaps);
@@ -37,7 +37,7 @@ options.modules.channel = @custom_flat_channel;
 result = simulate_chapter2_single_carrier_tde(options);
 verifyEqual(testCase, result.channel.impulse, exp(1j * 0.2), ...
     "AbsTol", 1e-12);
-verifyEqual(testCase, size(result.ber), [1, 17]);
+verifyEqual(testCase, size(result.ber), [1, 10]);
 end
 
 function testCustomEqualizerCanBePluggedIn(testCase)

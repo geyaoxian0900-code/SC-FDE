@@ -682,7 +682,13 @@ end
 grid on;
 box on;
 set(gca, "YScale", "log");
-xlim([min(cfg.snrDb), max(cfg.snrDb)]);
+snrMin = min(cfg.snrDb);
+snrMax = max(cfg.snrDb);
+if snrMax == snrMin
+    snrMin = snrMin - 1;
+    snrMax = snrMax + 1;
+end
+xlim([snrMin, snrMax]);
 ylim([1e-4, 1]);
 xlabel("SNR (dB)");
 ylabel("BER");

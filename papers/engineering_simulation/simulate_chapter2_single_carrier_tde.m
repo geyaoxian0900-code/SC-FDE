@@ -34,6 +34,13 @@ defaults.pathGains = [1, 0.72 * exp(1j * 0.5), ...
     0.48 * exp(-1j * 1.0), 0.30 * exp(1j * 1.7)];
 defaults.outputDir = fullfile(fileparts(mfilename("fullpath")), "results");
 defaults.modules = struct();
+% This entry uses a BPSK training+data linear-convolution frame, which is
+% compatible with the Chapter 2 TDE equalizers only. Frequency-domain
+% equalizers (Chapter 3) require the QPSK data+UW cyclic frame and are
+% selected through run_unified_equalizer instead.
+defaults.equalizers = ["dfe", "lms-dfe", "nlms-dfe", "rls-dfe", ...
+    "dpll-dfe", "mc-lms-dfe", "mc-nlms-dfe", "mc-rls-dfe", ...
+    "ptr-dfe", "subband-ptr-dfe"];
 cfg = scfde.merge_struct(defaults, options);
 
 assert(numel(cfg.pathDelays) == numel(cfg.pathGains), ...

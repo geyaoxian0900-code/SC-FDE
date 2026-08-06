@@ -88,10 +88,15 @@ link = struct("trainingSymbols", 64, "dataSymbols", dataSymbols, ...
     "blmsStep", 0.06, "blmsLeakage", 1e-3, ...
     "blmsRegularization", 1e-3, "turboDamping", 0.75);
 link.equalizers = cfg.equalizers;
-impulse = [link.pathGains, zeros(1, N - numel(link.pathGains))];
+% Build the multipath impulse response honoring the configured delays.
+impulse = zeros(1, N);
+for path = 1:numel(link.pathGains)
+    impulse(link.pathDelays(path) + 1) = link.pathGains(path);
+end
+impulse = impulse / norm(impulse);
 H = fft(impulse);
 totalErrors = zeros(1, 0);
-totalBits = 0;
+totalBits = zeros(1, 0);
 for frame = 1:cfg.frameCount
     bits = randi([0, 1], 1, 2 * dataSymbols);
     data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
@@ -102,31 +107,37 @@ for frame = 1:cfg.frameCount
         (randn(size(received)) + 1j * randn(size(received)));
     src = struct("data", data, "tx", block, ...
         "training", block(1:link.trainingSymbols));
-    ch = struct("received", received, "impulse", link.pathGains, ...
+    ch = struct("received", received, "impulse", impulse, ...
         "branches", [received; received]);
     recv = scfde.receiver_bank_pluggable(ch, src, link);
-    if frame == 1
+    if isempty(totalErrors)
         results.ids = recv.ids;
         results.names = recv.names;
         totalErrors = zeros(1, numel(recv.ids));
+        totalBits = zeros(1, numel(recv.ids));
     end
     for eq = 1:numel(recv.ids)
         out = recv.outputs{eq}(:).';
         if numel(out) == N
-            % ch2 TDE: full-block output; training = first trainingSymbols
-            % symbols, data = the rest up to dataSymbols (UW excluded)
+            % ch2 TDE: full-block output; data = symbols after the training
+            % prefix up to dataSymbols (UW tail excluded)
             payload = link.trainingSymbols + 1:dataSymbols;
             ref = block(payload);
         else
             payload = 1:min(numel(out), dataSymbols);
             ref = data(payload);
         end
-        totalErrors(eq) = totalErrors(eq) + ...
-            sum(out(payload) ~= ref);
+        % Bit-level comparison for QPSK (real/imag >= 0), so the reported
+        % metric is BER, not SER.
+        errSym = out(payload);
+        refSym = ref;
+        errBits = [real(errSym) >= 0, imag(errSym) >= 0];
+        refBits = [real(refSym) >= 0, imag(refSym) >= 0];
+        totalErrors(eq) = totalErrors(eq) + sum(errBits ~= refBits);
+        totalBits(eq) = totalBits(eq) + numel(refBits);
     end
-    totalBits = totalBits + dataSymbols;
 end
-results.ber = totalErrors / totalBits;
+results.ber = totalErrors ./ totalBits;
 results.traces = recv.traces;
 results.config = link;
 results.scenario = "qpsk";
@@ -232,9 +243,15 @@ results.scenario = "csk";
 end
 
 function scenario = infer_scenario(equalizers)
-ids = string(equalizers);
-if iscell(ids)
-    ids = string([ids{:}]);
+ids = strings(1, 0);
+if iscell(equalizers)
+    for k = 1:numel(equalizers)
+        if ischar(equalizers{k}) || isstring(equalizers{k})
+            ids(end + 1) = string(equalizers{k}); %#ok<AGROW>
+        end
+    end
+elseif ischar(equalizers) || isstring(equalizers)
+    ids = string(equalizers);
 end
 if any(contains(ids, "cck-"))
     scenario = "cck";

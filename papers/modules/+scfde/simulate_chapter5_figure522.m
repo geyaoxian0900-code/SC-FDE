@@ -59,14 +59,14 @@ for index = 1:numel(codewordLengths)
     else
         xticks(ax, -30:10:30);
     end
-    xlabel(ax, {"閺冭泛娆㈤敍鍫㈢垳閻楀浄绱?, panelLabels(index)});
-    ylabel(ax, "瑜版帊绔撮崠鏍х畽鎼?);
+    xlabel(ax, {"Delay (chip)", panelLabels(index)});
+    ylabel(ax, "Normalized amplitude");
     ax.FontName = "Microsoft YaHei";
     ax.FontSize = 10.5;
     ax.LineWidth = 1;
 end
 annotation(fig, "textbox", [0.20, 0.045, 0.60, 0.045], "String", ...
-    "閸?5-22  娑撳秴鎮撻梹鍨 CCK 閻礁鐡ч惃鍕殰閻╃鍙х紒鎾寸亯", "EdgeColor", "none", ...
+    "Fig 5-22: aperiodic autocorrelation of CCK words", "EdgeColor", "none", ...
     "HorizontalAlignment", "center", "FontName", "Microsoft YaHei", ...
     "FontSize", 13);
 exportgraphics(fig, figurePath, "Resolution", 220);
