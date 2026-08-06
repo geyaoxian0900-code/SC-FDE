@@ -1,0 +1,9 @@
+function receiver = ptr_dfe(channel, source, cfg)
+%PTR_DFE Passive time-reversal (PTR) front end + known DFE (book 2-47).
+timeReversal = conj(fliplr(channel.impulse));
+[decisions, mse, estimates, trace] = scfde.equalizers.known_dfe_core( ...
+    filter(timeReversal, 1, channel.received), source.tx, ...
+    conv(timeReversal, channel.impulse), cfg);
+receiver = scfde.equalizers.pack_equalizer("Passive TR-DFE", "ptr-dfe", ...
+    decisions, mse, estimates, trace);
+end

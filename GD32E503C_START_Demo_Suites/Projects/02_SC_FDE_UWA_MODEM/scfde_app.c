@@ -178,9 +178,12 @@ static void app_digital_loopback(void)
 static void app_analog_loopback(void)
 {
     /* DAC-ADC analog self-loopback: capture a silent preroll first, then
-       transmit through PA4->PA0 (1k series) while the DMA capture continues.
-       The frame start is therefore expected around the preroll boundary. */
-    static const uint8_t payload[]={'S','C','-','F','D','E','1','2','3','4'};
+       transmit through PA4->PA0 (series resistor optional) while the DMA
+       capture continues. The frame start is therefore expected around the
+       preroll boundary. Text is read from the console (<=18 bytes); an
+       empty line falls back to "SC-FDE1234" for automated testing. */
+    uint8_t payload[SCFDE_MAX_PAYLOAD];
+    uint8_t payload_length;
     const uint32_t frame_tx_samples=scfde_modem_get_tx_sample_length();
     const uint32_t frame_rx_samples=frame_tx_samples/2u;
     const uint32_t capture_length=
@@ -194,7 +197,16 @@ static void app_analog_loopback(void)
 
     printf("Analog self-loopback with %s...\r\n",
            scfde_equalizer_name(scfde_modem_get_equalizer()));
-    if(scfde_modem_prepare_tx(payload,(uint8_t)sizeof(payload),0xAAu)==0u)
+    printf("Text (max %u bytes): ",SCFDE_MAX_PAYLOAD);
+    payload_length=app_read_line(payload,SCFDE_MAX_PAYLOAD);
+    if(payload_length==0u)
+    {
+        static const uint8_t fallback[]={'S','C','-','F','D','E','1','2','3','4'};
+        memcpy(payload,fallback,sizeof(fallback));
+        payload_length=(uint8_t)sizeof(fallback);
+        printf("(empty line: using fallback \"SC-FDE1234\")\r\n");
+    }
+    if(scfde_modem_prepare_tx(payload,payload_length,0xAAu)==0u)
     {
         printf("TX packet rejected.\r\n");
         return;

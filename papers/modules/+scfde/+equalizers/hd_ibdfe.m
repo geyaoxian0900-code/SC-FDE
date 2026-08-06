@@ -1,0 +1,16 @@
+function receiver = hd_ibdfe(channel, source, cfg)
+%HD_IBDFE Hard-decision iterative block DFE module (book 3-64/3-81~3-87).
+N = numel(channel.received);
+cfg = scfde.equalizers.ch3_setup(cfg, N, numel(source.data));
+uw = scfde.equalizers.ch3_zadoff_chu(cfg.uwLength, 1);
+H = fft([channel.impulse(:).', zeros(1, N - numel(channel.impulse))]);
+training = scfde.equalizers.ch3_zadoff_chu(N, 1);
+[symbols, trace] = scfde.equalizers.ch3_ibdfe_equalize( ...
+    channel.received, channel.received, training, H, ...
+    cfg.noiseVariance, uw, cfg, "hard", false);
+decisions = scfde.equalizers.ch3_qpsk_map( ...
+    scfde.equalizers.ch3_qpsk_demap(symbols(1:cfg.dataSymbols)));
+receiver = scfde.equalizers.pack_equalizer("HD-IBDFE", "hd-ibdfe", ...
+    decisions, abs(symbols(1:cfg.dataSymbols) - source.data).^2, ...
+    symbols(1:cfg.dataSymbols), trace);
+end

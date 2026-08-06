@@ -68,6 +68,37 @@ summary = run_all_simulations(options);
 `experimentOptions.<实验ID转换后的字段名>` 覆盖参数，例如
 `experimentOptions.engineering_sc_tde.snrDb = 8`。
 
+### 均衡器即插即用
+
+接收机模块 `receiver_bank_pluggable` 将每个均衡器视为独立模块，统一契约：
+
+```text
+receiver = equalizer(channel, source, cfg)
+```
+
+返回值只需包含 `outputs{1}`（与 `source.tx` 对齐的符号估计）、`ids`、
+`names`；`traces`/`learningMse`/`estimates` 可选。内置 10 个均衡器注册在
+`modules/+scfde/equalizer_registry.m`，实现位于 `+scfde/+equalizers/`。
+
+通过 `cfg.equalizers` 选择要运行的均衡器：
+
+```matlab
+% 全部内置（默认）
+options.equalizers = "all";
+
+% 内置子集（按 ID）
+options.equalizers = ["dfe", "nlms-dfe", "ptr-dfe"];
+
+% 单个自定义均衡器（函数句柄，即插即用）
+options.equalizers = @custom_matched_filter;
+
+% 混合：自定义模块 + 内置 ID
+options.equalizers = { @custom_matched_filter, "rls-dfe" };
+```
+
+完整示例见 `examples/run_custom_equalizer_example.m`。添加新均衡器只需在
+`+scfde/+equalizers/` 放一个契约函数并（可选）在注册表中登记 ID。
+
 ## 兼容性
 
 原 MCU 工程下的 MATLAB 文件暂时保留，避免影响 GUI、固件验证脚本和已有调用。

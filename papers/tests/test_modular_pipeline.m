@@ -15,12 +15,12 @@ end
 function testDefaultPipelineReturnsReceiverMetrics(testCase)
 options = small_options();
 result = simulate_chapter2_single_carrier_tde(options);
-verifyEqual(testCase, numel(result.names), 10);
-verifyEqual(testCase, size(result.ber), [1, 10]);
+verifyEqual(testCase, numel(result.names), 17);
+verifyEqual(testCase, size(result.ber), [1, 17]);
 verifyTrue(testCase, all(isfinite(result.ber)));
-verifyEqual(testCase, numel(result.equalizerEstimates), 10);
+verifyEqual(testCase, numel(result.equalizerEstimates), 17);
 verifyEqual(testCase, size(result.equalizerEstimates{2}), size(result.tx));
-verifyEqual(testCase, numel(result.equalizerTraces), 10);
+verifyEqual(testCase, numel(result.equalizerTraces), 17);
 trace = result.equalizerTraces{2};
 verifyEqual(testCase, size(trace.coefficientHistory, 1), ...
     options.feedforwardTaps + options.feedbackTaps);
@@ -37,7 +37,32 @@ options.modules.channel = @custom_flat_channel;
 result = simulate_chapter2_single_carrier_tde(options);
 verifyEqual(testCase, result.channel.impulse, exp(1j * 0.2), ...
     "AbsTol", 1e-12);
-verifyEqual(testCase, size(result.ber), [1, 10]);
+verifyEqual(testCase, size(result.ber), [1, 17]);
+end
+
+function testCustomEqualizerCanBePluggedIn(testCase)
+options = small_options();
+options.equalizers = @custom_matched_filter;
+result = simulate_chapter2_single_carrier_tde(options);
+verifyEqual(testCase, result.receiver.ids, "custom-matched-filter");
+verifyEqual(testCase, numel(result.receiver.outputs), 1);
+verifyTrue(testCase, all(isfinite(result.ber)));
+end
+
+function testMixedEqualizerBank(testCase)
+options = small_options();
+options.equalizers = { @custom_matched_filter, "rls-dfe" };
+result = simulate_chapter2_single_carrier_tde(options);
+verifyEqual(testCase, result.receiver.ids, ["custom-matched-filter", "rls-dfe"]);
+verifyEqual(testCase, size(result.ber), [1, 2]);
+end
+
+function testBuiltinEqualizerSelection(testCase)
+options = small_options();
+options.equalizers = ["dfe", "nlms-dfe", "ptr-dfe"];
+result = simulate_chapter2_single_carrier_tde(options);
+verifyEqual(testCase, result.receiver.ids, ["dfe", "nlms-dfe", "ptr-dfe"]);
+verifyEqual(testCase, size(result.ber), [1, 3]);
 end
 
 function options = small_options()

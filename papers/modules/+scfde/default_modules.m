@@ -1,9 +1,19 @@
 function modules = default_modules(overrides)
 %DEFAULT_MODULES Default replaceable modules for the SC-TDE link.
+%
+% The receiverBank module is a bank dispatcher. Its set of equalizers is
+% configured through cfg.equalizers (see receiver_bank_pluggable):
+%   - "all"                        every built-in equalizer
+%   - string array of module IDs   built-ins from equalizer_registry
+%   - function handle              a single custom equalizer module
+%   - cell array                   mix of IDs and custom function handles
+% Every equalizer module follows the contract
+%   receiver = equalizer(channel, source, cfg)
+% so arbitrary equalizers can be plugged in without touching built-ins.
 
 modules.source = @scfde.source_bpsk;
 modules.channel = @scfde.channel_two_branch_multipath;
-modules.receiverBank = @scfde.receiver_bank_tde;
+modules.receiverBank = @scfde.receiver_bank_pluggable;
 modules.metric = @scfde.metric_ber;
 modules.plot = [];
 

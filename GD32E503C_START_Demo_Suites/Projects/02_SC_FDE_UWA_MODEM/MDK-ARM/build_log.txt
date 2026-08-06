@@ -2,7 +2,7 @@
 Build target 'GD32E503C_START'
 compiling scfde_app.c...
 linking...
-Program Size: Code=14300 RO-data=1368 RW-data=20 ZI-data=35528  
+Program Size: Code=14400 RO-data=1412 RW-data=20 ZI-data=35528  
 FromELF: creating hex file...
 ".\output\Project.axf" - 0 Error(s), 0 Warning(s).
-Build Time Elapsed:  00:00:01
+Build Time Elapsed:  00:00:04
