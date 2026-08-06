@@ -19,7 +19,7 @@ for index = 0:M - 1
     phase = scfde.equalizers.ch5_cck_phases(name, rowBits);
     word = scfde.equalizers.ch5_cck_word(phase);
     if wordLength > 8
-        word = extend_scfde.equalizers.ch5_cck_word(word, wordLength, rowBits);
+        word = scfde.equalizers.ch5_extend_cck_word(word, wordLength, rowBits);
     end
     if unitEnergy
         word = word / sqrt(wordLength);

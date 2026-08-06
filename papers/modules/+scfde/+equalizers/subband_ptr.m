@@ -1,20 +1,14 @@
 function output = subband_ptr(input, impulse, bandCount, regularization)
-%SUBBAND_PTR Shared subband passive time-reversal front end (2-48).
+%SUBBAND_PTR Subarray passive time-reversal front end (book 2-48).
+% Each frequency band applies the time-reversed channel as a matched
+% filter (no inverse filtering): Y(f) * conj(H(f)). The regularization
+% argument is accepted for interface compatibility but a pure PTR uses no
+% division by |H|^2, matching Eq. (2-48): y_p(n) = sum_k h_k*(-n) (x) r_k(n).
 input = input(:).';
 fftLength = 2^nextpow2(numel(input) + numel(impulse) - 1);
 spectrum = fft(input, fftLength);
 channelSpectrum = fft([impulse, zeros(1, fftLength - numel(impulse))]);
-outputSpectrum = zeros(1, fftLength);
-frequency = (0:fftLength - 1) / fftLength;
-for bandIndex = 1:bandCount
-    mask = frequency >= (bandIndex - 1) / bandCount & ...
-        frequency < bandIndex / bandCount;
-    if bandIndex == bandCount
-        mask = frequency >= (bandIndex - 1) / bandCount;
-    end
-    outputSpectrum(mask) = spectrum(mask) .* conj(channelSpectrum(mask)) ./ ...
-        (abs(channelSpectrum(mask)).^2 + regularization);
-end
+outputSpectrum = spectrum .* conj(channelSpectrum);
 output = ifft(outputSpectrum);
 output = output(1:numel(input));
 end

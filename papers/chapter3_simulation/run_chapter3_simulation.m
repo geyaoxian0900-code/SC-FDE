@@ -47,7 +47,7 @@ h = chapter3_channel(cfg);
 
 fprintf("Running Chapter 3 simulations...\n");
 
-%% Figures 3.2 and 3.3: UW timing metric from equations (3-1)-(3-4)
+%% Figures 3.2 and 3.3: UW double-correlation timing metric
 [timeStatic, metricStatic] = frame_timing_metric(cfg, uw, h, 0, 10);
 [timeDoppler, metricDoppler] = frame_timing_metric(cfg, uw, h, 0.0017, 10);
 
@@ -216,7 +216,7 @@ function [time, metric] = frame_timing_metric(cfg, uw, h, doppler, snrDb)
     received = conv(compressed, h);
     received = add_awgn(received, snrDb);
     % Phi_1 and Phi_2 are the two adjacent UW correlations.  Phi_3 is
-    % the known-UW energy term, as defined in equations (3-1)-(3-4).
+    % the known-UW energy term of the double-UW timing metric.
     pairLength = numel(received) - 2 * cfg.uwLength + 1;
     metric = zeros(pairLength, 1);
     uwConjugate = conj(uw);
@@ -242,9 +242,9 @@ end
 
 function errors = estimate_fig35_doppler_errors( ...
         cfg, uw, snrDb, lambda, trials)
-    % Equations (3-9)-(3-15): search Doppler and timing jointly using the
+    % Search Doppler and timing jointly using the
     % normalized correlations between the two pre-data UWs and post-data
-    % UW. Equation (3-16) defines MSE as |a-a_hat| in this thesis.
+    % UW. MSE is defined as the absolute Doppler estimation error.
     trueDoppler = cfg.defaultDoppler;
     samplesPerSymbol = round(cfg.fs * cfg.Ts);
     uwSamples = repelem(uw, samplesPerSymbol);
@@ -323,32 +323,109 @@ function errors = estimate_fig35_doppler_errors( ...
     end
 end
 
+function errors = estimate_fig35_doppler_errors_velocity( ...
+        cfg, snrDb, lambda, trials, velocity, multipath)
+    % Signal-level Doppler estimator Monte Carlo with configurable true
+    % velocity and optional multipath, using the UW-correlation joint search.
+    trueDoppler = velocity / cfg.soundSpeed;
+    samplesPerSymbol = round(cfg.fs * cfg.Ts);
+    uw = chu_sequence(cfg.uwLength);
+    uwSamples = repelem(uw, samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
+    initialDoppler = round(trueDoppler / delta) * delta;
+    dopplerCandidates = initialDoppler + (-2:2) * delta;
+    timingRadius = max(1, lambda);
+    hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
+    delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
+    phases = [0, 0.45, -0.90, 1.35];
+    gains = cfg.pathGain .* exp(1j * phases);
+    if multipath
+        hSamples(delays + 1) = gains;
+    else
+        hSamples(1) = gains(1);
+    end
+    hSamples = hSamples / norm(hSamples);
+    errors = zeros(trials * cfg.blockCount, 1);
+    errorIndex = 0;
+
+    for trial = 1:trials
+        frame = uw;
+        for block = 1:cfg.blockCount
+            data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
+            frame = [frame; uw; data; uw]; %#ok<AGROW>
+        end
+        transmitted = repelem(frame, samplesPerSymbol);
+        outputLength = floor((numel(transmitted) - 1) * ...
+            (1 + trueDoppler)) + 1;
+        sourcePosition = (0:outputLength-1).' / ...
+            (1 + trueDoppler) + 1;
+        expanded = interp1((1:numel(transmitted)).', transmitted, ...
+            sourcePosition, "linear", 0);
+        received = add_awgn(conv(expanded, hSamples), snrDb);
+
+        basePosition = (1:numel(received)).';
+        finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
+            / lambda + (1 - 1 / lambda);
+        receivedFine = interp1(basePosition, received, finePosition, ...
+            "linear", 0);
+
+        for block = 1:cfg.blockCount
+            bestScore = -inf;
+            bestDoppler = initialDoppler;
+            nominal = 1 + round((block - 1) * blockSamples * ...
+                lambda * (1 + initialDoppler));
+            timingCandidates = nominal + (-timingRadius:timingRadius);
+
+            for candidateDoppler = dopplerCandidates
+                windowLength = round(numel(uwSamples) * lambda * ...
+                    (1 + candidateDoppler));
+                postUwOffset = round(blockSamples * lambda * ...
+                    (1 + candidateDoppler));
+                for timing = timingCandidates
+                    firstLast = timing + windowLength - 1;
+                    secondFirst = timing + windowLength;
+                    secondLast = secondFirst + windowLength - 1;
+                    postFirst = timing + postUwOffset;
+                    postLast = postFirst + windowLength - 1;
+                    if timing < 1 || postLast > numel(receivedFine)
+                        continue;
+                    end
+                    firstUw = receivedFine(timing:firstLast);
+                    secondUw = receivedFine(secondFirst:secondLast);
+                    postUw = receivedFine(postFirst:postLast);
+                    phi1 = sum(firstUw .* conj(postUw));
+                    phi2 = sum(secondUw .* conj(postUw));
+                    phi3 = sum(abs(postUw).^2);
+                    score = abs((phi1 + phi2) / max(phi3, eps));
+                    if score > bestScore
+                        bestScore = score;
+                        bestDoppler = candidateDoppler;
+                    end
+                end
+            end
+            errorIndex = errorIndex + 1;
+            errors(errorIndex) = abs(trueDoppler - bestDoppler);
+        end
+    end
+end
+
 function errors = doppler_error_samples(cfg, snrDb, lambda, multipath, ...
         velocity, trials, method)
-    trueDoppler = velocity / cfg.soundSpeed;
-    resolution = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
-    if method == "cross"
-        lambdaGain = 1;
-        baseNoise = 2.0e-4;
-        floorScale = 2.0;
+    % Monte Carlo Doppler estimation errors from the actual signal-level
+    % estimator (oversampled UW-correlation joint search), matching
+    % equations (3-9)-(3-15).  The analytic baseNoise/floorScale model
+    % previously used here is removed: curves now come from the estimator.
+    if method == "twod"
+        lambdaUsed = lambda;
     else
-        lambdaGain = sqrt(lambda);
-        baseNoise = 3.5e-5;
-        floorScale = 0.45;
+        lambdaUsed = 1;
     end
-    channelScale = 1 + 4 * multipath;
-    noiseStd = baseNoise * channelScale * 10^(-snrDb / 20) / lambdaGain;
-    rawError = noiseStd * randn(trials, 1);
-
-    if method == "cross" && multipath
-        failureProbability = 1 ./ (1 + exp(-(velocity - 2.55) * 8));
-        failures = rand(trials, 1) < failureProbability;
-        rawError(failures) = rawError(failures) + ...
-            0.15 .* (2 * randi([0, 1], sum(failures), 1) - 1);
+    errors = estimate_fig35_doppler_errors_velocity( ...
+        cfg, snrDb, lambdaUsed, trials, velocity, multipath);
+    if trials == 1
+        errors = errors(1);
     end
-    estimate = round((trueDoppler + rawError) / resolution) * resolution;
-    quantizationBias = floorScale * resolution * (rand(trials, 1) - 0.5);
-    errors = estimate - trueDoppler + quantizationBias;
 end
 
 function curves = estimator_curve(cfg, snrValues, multipath, velocity)
