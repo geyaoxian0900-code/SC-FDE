@@ -245,96 +245,34 @@ function errors = estimate_fig35_doppler_errors( ...
     % Search Doppler and timing jointly using the
     % normalized correlations between the two pre-data UWs and post-data
     % UW. MSE is defined as the absolute Doppler estimation error.
-    trueDoppler = cfg.defaultDoppler;
-    samplesPerSymbol = round(cfg.fs * cfg.Ts);
-    uwSamples = repelem(uw, samplesPerSymbol);
-    blockSamples = cfg.blockLength * samplesPerSymbol;
-    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
-    initialDoppler = round(trueDoppler / delta) * delta;
-    dopplerCandidates = initialDoppler + (-2:2) * delta;
-    timingRadius = max(1, lambda);
-    hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
-    delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
-    phases = [0, 0.45, -0.90, 1.35];
-    gains = cfg.pathGain .* exp(1j * phases);
-    hSamples(delays + 1) = gains;
-    hSamples = hSamples / norm(hSamples);
-    errors = zeros(trials * cfg.blockCount, 1);
-    errorIndex = 0;
-
-    for trial = 1:trials
-        frame = uw;
-        for block = 1:cfg.blockCount
-            data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
-            frame = [frame; uw; data; uw]; %#ok<AGROW>
-        end
-        transmitted = repelem(frame, samplesPerSymbol);
-        outputLength = floor((numel(transmitted) - 1) * ...
-            (1 + trueDoppler)) + 1;
-        sourcePosition = (0:outputLength-1).' / ...
-            (1 + trueDoppler) + 1;
-        expanded = interp1((1:numel(transmitted)).', transmitted, ...
-            sourcePosition, "linear", 0);
-        received = add_awgn(conv(expanded, hSamples), snrDb);
-
-        basePosition = (1:numel(received)).';
-        finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
-            / lambda + (1 - 1 / lambda);
-        receivedFine = interp1(basePosition, received, finePosition, ...
-            "linear", 0);
-
-        for block = 1:cfg.blockCount
-            bestScore = -inf;
-            bestDoppler = initialDoppler;
-            nominal = 1 + round((block - 1) * blockSamples * ...
-                lambda * (1 + initialDoppler));
-            timingCandidates = nominal + (-timingRadius:timingRadius);
-
-            for candidateDoppler = dopplerCandidates
-                windowLength = round(numel(uwSamples) * lambda * ...
-                    (1 + candidateDoppler));
-                postUwOffset = round(blockSamples * lambda * ...
-                    (1 + candidateDoppler));
-                for timing = timingCandidates
-                    firstLast = timing + windowLength - 1;
-                    secondFirst = timing + windowLength;
-                    secondLast = secondFirst + windowLength - 1;
-                    postFirst = timing + postUwOffset;
-                    postLast = postFirst + windowLength - 1;
-                    if timing < 1 || postLast > numel(receivedFine)
-                        continue;
-                    end
-                    firstUw = receivedFine(timing:firstLast);
-                    secondUw = receivedFine(secondFirst:secondLast);
-                    postUw = receivedFine(postFirst:postLast);
-                    phi1 = sum(firstUw .* conj(postUw));
-                    phi2 = sum(secondUw .* conj(postUw));
-                    phi3 = sum(abs(postUw).^2);
-                    score = abs((phi1 + phi2) / max(phi3, eps));
-                    if score > bestScore
-                        bestScore = score;
-                        bestDoppler = candidateDoppler;
-                    end
-                end
-            end
-            errorIndex = errorIndex + 1;
-            errors(errorIndex) = abs(trueDoppler - bestDoppler);
-        end
-    end
+    % Delegates to the truth-independent estimator (fixed prior range).
+    errors = estimate_fig35_doppler_errors_velocity( ...
+        cfg, snrDb, lambda, trials, cfg.defaultVelocity, true);
 end
 
 function errors = estimate_fig35_doppler_errors_velocity( ...
         cfg, snrDb, lambda, trials, velocity, multipath)
     % Signal-level Doppler estimator Monte Carlo with configurable true
     % velocity and optional multipath, using the UW-correlation joint search.
+    % The search is NOT initialized from the true Doppler: a fixed prior
+    % range (derived from the symbol rate and frame length, independent of
+    % the true value) is scanned on a coarse grid, then refined locally.
     trueDoppler = velocity / cfg.soundSpeed;
     samplesPerSymbol = round(cfg.fs * cfg.Ts);
     uw = chu_sequence(cfg.uwLength);
     uwSamples = repelem(uw, samplesPerSymbol);
     blockSamples = cfg.blockLength * samplesPerSymbol;
     delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
-    initialDoppler = round(trueDoppler / delta) * delta;
-    dopplerCandidates = initialDoppler + (-2:2) * delta;
+    % Fixed prior Doppler range, independent of the true value.
+    % The searchable Doppler is bounded by the per-symbol phase advance:
+    % |doppler| < 1/(2*samplesPerSymbol) (Nyquist of the oversampled UW).
+    maxPriorDoppler = 1 / (2 * samplesPerSymbol);
+    priorHalfSpan = maxPriorDoppler;
+    % Coarse grid must resolve the prior range; keep the step bounded by
+    % the fine resolution so the true peak is never skipped.
+    coarseDelta = min(2 * priorHalfSpan / 5, 4 * delta);
+    coarseSteps = max(5, ceil(priorHalfSpan / max(coarseDelta, eps)));
+    dopplerCenter = 0;
     timingRadius = max(1, lambda);
     hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
     delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
@@ -371,17 +309,38 @@ function errors = estimate_fig35_doppler_errors_velocity( ...
             "linear", 0);
 
         for block = 1:cfg.blockCount
-            bestScore = -inf;
-            bestDoppler = initialDoppler;
-            nominal = 1 + round((block - 1) * blockSamples * ...
-                lambda * (1 + initialDoppler));
-            timingCandidates = nominal + (-timingRadius:timingRadius);
-
-            for candidateDoppler = dopplerCandidates
+            % Coarse acquisition over the fixed prior range: scan the
+            % coarse grid at the nominal timing (cheap), keep the peak,
+            % independent of trueDoppler. Timing is refined locally later.
+            coarseBest = 0;
+            coarseScore = -inf;
+            for candidateDoppler = (-coarseSteps:coarseSteps) * coarseDelta
                 windowLength = round(numel(uwSamples) * lambda * ...
                     (1 + candidateDoppler));
                 postUwOffset = round(blockSamples * lambda * ...
                     (1 + candidateDoppler));
+                nominal = 1 + round((block - 1) * blockSamples * ...
+                    lambda * (1 + candidateDoppler));
+                score = uw_correlation_score(receivedFine, ...
+                    nominal, windowLength, postUwOffset, 0);
+                if score > coarseScore
+                    coarseScore = score;
+                    coarseBest = candidateDoppler;
+                end
+            end
+            % Local refinement around the coarse peak (no trueDoppler).
+            dopplerCenter = coarseBest;
+            fineCandidates = dopplerCenter + (-2:2) * delta;
+            bestScore = -inf;
+            bestDoppler = dopplerCenter;
+            nominal = 1 + round((block - 1) * blockSamples * ...
+                lambda * (1 + dopplerCenter));
+            for candidateDoppler = fineCandidates
+                windowLength = round(numel(uwSamples) * lambda * ...
+                    (1 + candidateDoppler));
+                postUwOffset = round(blockSamples * lambda * ...
+                    (1 + candidateDoppler));
+                timingCandidates = nominal + (-timingRadius:timingRadius);
                 for timing = timingCandidates
                     firstLast = timing + windowLength - 1;
                     secondFirst = timing + windowLength;
@@ -408,6 +367,31 @@ function errors = estimate_fig35_doppler_errors_velocity( ...
             errors(errorIndex) = abs(trueDoppler - bestDoppler);
         end
     end
+end
+
+function score = uw_correlation_score(receivedFine, nominal, windowLength, postUwOffset, timingRadius)
+    best = -inf;
+    for timing = nominal + (-timingRadius:timingRadius)
+        firstLast = timing + windowLength - 1;
+        secondFirst = timing + windowLength;
+        secondLast = secondFirst + windowLength - 1;
+        postFirst = timing + postUwOffset;
+        postLast = postFirst + windowLength - 1;
+        if timing < 1 || postLast > numel(receivedFine)
+            continue;
+        end
+        firstUw = receivedFine(timing:firstLast);
+        secondUw = receivedFine(secondFirst:secondLast);
+        postUw = receivedFine(postFirst:postLast);
+        phi1 = sum(firstUw .* conj(postUw));
+        phi2 = sum(secondUw .* conj(postUw));
+        phi3 = sum(abs(postUw).^2);
+        value = abs((phi1 + phi2) / max(phi3, eps));
+        if value > best
+            best = value;
+        end
+    end
+    score = best;
 end
 
 function errors = doppler_error_samples(cfg, snrDb, lambda, multipath, ...

@@ -260,7 +260,7 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         predictionEstimate = mmseEstimate(1:cfg.dataLength) - ...
             predictor * uwError;
         [decodedPrediction, ~] = decode_symbol_estimate(predictionEstimate, ...
-            equalized_noise_variance(W, noiseRatio), ...
+            equalized_noise_variance(W, H, noiseRatio), ...
             ldpc, cfg.ldpcIterations);
         errorsPrediction = errorsPrediction + ...
             sum(decodedPrediction(1:ldpc.K) ~= info);
@@ -268,7 +268,7 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         fdfeEstimate = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...
             cfg.dataLength, 1);
         [decodedFdfe, ~] = decode_symbol_estimate(fdfeEstimate, ...
-            equalized_noise_variance(W, noiseRatio), ...
+            equalized_noise_variance(W, H, noiseRatio), ...
             ldpc, cfg.ldpcIterations);
         errorsFdfe = errorsFdfe + sum(decodedFdfe(1:ldpc.K) ~= info);
 
@@ -291,7 +291,7 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
             iterativeEstimate = ifft(G .* R - B .* Dhat);
             [decodedIterative, posterior] = decode_symbol_estimate( ...
                 iterativeEstimate(1:cfg.dataLength), ...
-                equalized_noise_variance(G, noiseRatio), ...
+                equalized_noise_variance(G, H, noiseRatio), ...
                 ldpc, cfg.ldpcIterations);
             errorsIb(iteration + 1) = errorsIb(iteration + 1) + ...
                 sum(decodedIterative(1:ldpc.K) ~= info);
@@ -312,12 +312,17 @@ function W = normalized_mmse_equalizer(H, noiseRatio)
     W = W / mean(W .* H);
 end
 
-function nv = equalized_noise_variance(W, noiseRatio)
-    % Post-equalization residual noise variance for the MMSE/FD-DFE
-    % outputs: nv = sigma_w^2 * mean(|W_k|^2).  This is derived from the
-    % equalizer coefficients (analytical), not an empirical scale.
-    nv = noiseRatio * mean(abs(W).^2);
-    nv = max(nv, 0.1 * noiseRatio);
+function nv = equalized_noise_variance(W, H, noiseRatio)
+    % Post-equalization residual variance at the equalizer output:
+    %   nv = sigma_w^2 * mean(|W_k|^2)          (filtered thermal noise)
+    %      + mean(|W_k*H_k - 1|^2) * sigma_x^2  (residual ISI, sigma_x=1)
+    % This is the analytical MMSE output error variance.  For FD-DFE and
+    % IBDFE the feedback cancels the residual ISI, so this expression is
+    % an upper bound on their true output variance; using the same bound
+    % for all methods keeps the LLR scaling formula-driven.
+    thermal = noiseRatio * mean(abs(W).^2);
+    residualIsi = mean(abs(W .* H - 1).^2);
+    nv = thermal + residualIsi;
 end
 
 function decisions = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...

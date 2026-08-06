@@ -22,7 +22,8 @@ timeReversal = conj(fliplr(channel.impulse));
 [outputs{9}, curves{9}, estimates{9}, traces{9}] = known_dfe(filter(timeReversal, 1, ...
     channel.received), source.tx, conv(timeReversal, channel.impulse), cfg);
 subband = subband_ptr(channel.received, channel.impulse, ...
-    cfg.numSubbands, cfg.ptrRegularization);
+    cfg.numSubbands, cfg.ptrRegularization, channel.branches, ...
+    channel.branchImpulses);
 [outputs{10}, curves{10}, estimates{10}, traces{10}] = known_dfe(subband, source.tx, ...
     conv(timeReversal, channel.impulse), cfg);
 
@@ -284,13 +285,22 @@ switch updateRule
 end
 end
 
-function output = subband_ptr(input, impulse, bandCount, regularization)
-% Subarray passive time-reversal front end (book 2-48): matched filter
-% Y(f)*conj(H(f)) per subarray; no inverse filtering.
-fftLength = 2^nextpow2(numel(input) + numel(impulse) - 1);
-spectrum = fft(input, fftLength);
-channelSpectrum = fft([impulse, zeros(1, fftLength - numel(impulse))]);
-outputSpectrum = spectrum .* conj(channelSpectrum);
-output = ifft(outputSpectrum);
-output = output(1:numel(input));
+function output = subband_ptr(input, impulse, bandCount, regularization, branches, branchImpulses)
+% Subarray passive time-reversal front end (book 2-48): each branch is
+% matched filtered by h_k*(-n) and the subarray outputs are summed.
+if nargin < 5 || isempty(branches)
+    branches = input(:).';
+end
+if nargin < 6 || isempty(branchImpulses)
+    branchImpulses = impulse(:).';
+end
+branchCount = size(branches, 1);
+if size(branchImpulses, 1) ~= branchCount
+    branchImpulses = repmat(impulse(:).', branchCount, 1);
+end
+output = zeros(1, size(branches, 2));
+for branch = 1:branchCount
+    timeReversed = conj(fliplr(branchImpulses(branch, :)));
+    output = output + filter(timeReversed, 1, branches(branch, :));
+end
 end
