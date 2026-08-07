@@ -1,5 +1,11 @@
 function [decisions, mse, estimates, trace] = known_dfe_core(received, reference, impulse, cfg)
 %KNOWN_DFE_CORE Shared known-channel DFE implementation for the equalizer package.
+% Feedforward weights solve the strict MMSE problem
+%   w = argmin E|w'*r - x|^2  =>  w = (C'C + sigma_w^2/sigma_x^2 * I)^-1 C' e_d
+% where C is the channel convolution matrix, sigma_x^2 = 1 (unit-energy
+% QPSK) and sigma_w^2 = 10^(-snrDb/10) * P_rx, with P_rx the average
+% received power so that the noise covariance is derived from the actual
+% signal and noise variances rather than an empirical constant.
 received = received(:).';
 reference = reference(:).';
 feedforwardLength = cfg.feedforwardTaps;
@@ -12,8 +18,15 @@ for tapIndex = 1:feedforwardLength
 end
 target = zeros(convolutionLength, 1);
 target(delay + 1) = 1;
+% Noise variance: noiseRatio is relative to unit signal variance; scale
+% by the received power so the regularization matches the actual
+% noise-to-signal ratio at the equalizer input.
+signalPower = mean(abs(received(1:min(numel(received), ...
+    max(feedforwardLength, numel(reference))))).^2);
+noisePower = signalPower * 10^(-cfg.snrDb / 10);
+noiseVariance = noisePower / max(signalPower, eps);
 weights = (channelMatrix' * channelMatrix + ...
-    10^(-cfg.snrDb / 10) * 0.03 * eye(feedforwardLength)) \ ...
+    noiseVariance * eye(feedforwardLength)) \ ...
     (channelMatrix' * target);
 effectiveChannel = conv(weights, impulse(:));
 equalized = filter(weights, 1, received);

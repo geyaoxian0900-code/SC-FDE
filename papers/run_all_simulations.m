@@ -124,8 +124,9 @@ if string(cfg.profile) == "quick"
             options.dataSymbols = 500;
         case "engineering.sc_tde_paper"
             options.snrDb = [0, 6, 12];
-            options.dataSymbols = 500;
-            options.trials = 1;
+            options.dataSymbols = 1500;
+            options.trials = 2;
+            options.trainingSymbols = 1500;
         case "engineering.sc_fde"
             options.frameCount = 5;
             options.snrList = [4, 10, 16];

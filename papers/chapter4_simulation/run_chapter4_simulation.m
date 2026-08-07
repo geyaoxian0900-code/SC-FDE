@@ -185,7 +185,10 @@ function bits = qpsk_demodulate(symbols)
 end
 
 function h = chapter4_channel(cfg)
-    delays = round(cfg.pathDelayMs / cfg.Ts_ms);
+    % Delays are given in symbol intervals (pathDelayMs values are treated
+    % as integer symbol delays); the FD-DFE feedback length B in
+    % cfg.fdfeFeedback then spans the main post-cursor ISI taps.
+    delays = round(cfg.pathDelayMs);
     phases = [0, 0.45, -0.90, 1.35];
     gains = cfg.pathGain .* exp(1j * phases);
     h = zeros(max(delays) + 1, 1);
@@ -200,7 +203,6 @@ function [fdfeBer, predictionBer] = simulate_uncoded_equalizers( ...
     totalBits = 0;
     noiseRatio = 10^(-snrDb / 10);
     W = normalized_mmse_equalizer(H, noiseRatio);
-    effectiveImpulse = ifft(W .* H);
     predictor = error_predictor(W, H, noiseRatio, cfg.dataLength);
 
     while totalBits < cfg.uncodedMaxBits && ...
@@ -210,11 +212,16 @@ function [fdfeBer, predictionBer] = simulate_uncoded_equalizers( ...
         transmitted = [data; uw];
         received = ifft(H .* fft(transmitted));
         received = add_awgn(received, snrDb);
-        mmseEstimate = ifft(W .* fft(received));
+        R = fft(received);
+        mmseEstimate = ifft(W .* R);
 
         for feedbackIndex = 1:numel(cfg.fdfeFeedback)
-            estimate = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...
-                cfg.dataLength, cfg.fdfeFeedback(feedbackIndex));
+            feedbackLength = cfg.fdfeFeedback(feedbackIndex);
+            [Wf, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength);
+            mainTap = mean(Wf .* H);
+            filtered = ifft(Wf .* R) / mainTap;
+            estimate = fdfe_symbols(filtered, feedback / mainTap, uw, ...
+                cfg.dataLength);
             errorFdfe(feedbackIndex) = errorFdfe(feedbackIndex) + ...
                 sum(qpsk_demodulate(estimate) ~= bits);
         end
@@ -238,7 +245,6 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
     totalBits = 0;
     noiseRatio = 10^(-snrDb / 10);
     W = normalized_mmse_equalizer(H, noiseRatio);
-    effectiveImpulse = ifft(W .* H);
     predictor = error_predictor(W, H, noiseRatio, cfg.dataLength);
 
     for block = 1:cfg.codedBlocks
@@ -265,11 +271,21 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         errorsPrediction = errorsPrediction + ...
             sum(decodedPrediction(1:ldpc.K) ~= info);
 
-        fdfeEstimate = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...
-            cfg.dataLength, 1);
-        [decodedFdfe, ~] = decode_symbol_estimate(fdfeEstimate, ...
-            equalized_noise_variance(W, H, noiseRatio), ...
-            ldpc, cfg.ldpcIterations);
+        [Wf, feedback] = fd_dfe_design(H, noiseRatio, 1);
+        mainTap = mean(Wf .* H);
+        WfNorm = Wf / mainTap;
+        % FDE-FDFE (book 4.3.1): feedforward MMSE decode first, then
+        % re-encode and cancel post-cursor ISI with decoded symbols,
+        % then decode again.  Uses decoded (not hard-sliced) feedback.
+        fdfeFeedforward = ifft(Wf .* R) / mainTap;
+        [decodedFdfe, ~] = decode_symbol_estimate( ...
+            fdfeFeedforward(1:cfg.dataLength), ...
+            noiseRatio, ldpc, cfg.ldpcIterations);
+        feedbackSymbols = [qpsk_symbols(decodedFdfe); uw];
+        fdfeRefined = fdfe_symbols_decoded(fdfeFeedforward, ...
+            feedback / mainTap, uw, cfg.dataLength, feedbackSymbols);
+        [decodedFdfe, ~] = decode_symbol_estimate(fdfeRefined, ...
+            noiseRatio, ldpc, cfg.ldpcIterations);
         errorsFdfe = errorsFdfe + sum(decodedFdfe(1:ldpc.K) ~= info);
 
         feedbackCodeword = decoded;
@@ -325,13 +341,40 @@ function nv = equalized_noise_variance(W, H, noiseRatio)
     nv = thermal + residualIsi;
 end
 
-function decisions = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...
-        dataLength, feedbackLength)
-    N = numel(mmseEstimate);
+function [W, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength)
+    % FD-DFE coefficients per the book's MMSE derivation
+    % (Eqs. 4-10..4-18 / textbook p.90, 4-56..4-58 form):
+    %   q(n)     = 1/N * sum_k |H_k|^2/(|H_k|^2+sigma^2) * exp(j*2*pi*k*n/N)
+    %   V(m,n)   = q(|m-n|)     (feedback correlation matrix, Toeplitz)
+    %   v(m)     = q(m)         (post-cursor ISI vector, m=1..B)
+    %   f        = V^{-1} v     (time-domain feedback coefficients)
+    %   W_k      = (1 + sum_m f_m) * H_k*/(|H_k|^2+sigma^2)
+    % so the feedforward filter depends on the feedback coefficients,
+    % which themselves follow from the correlation matrix V and vector v.
+    if feedbackLength == 0
+        feedback = zeros(0, 1);
+        W = conj(H) ./ (abs(H).^2 + noiseRatio);
+        return;
+    end
+    gamma = abs(H).^2 ./ (abs(H).^2 + noiseRatio);
+    q = real(ifft(gamma));
+    V = toeplitz(q(1:feedbackLength));
+    v = q(2:feedbackLength + 1);
+    feedback = V \ v;
+    W = (1 + sum(feedback)) * conj(H) ./ (abs(H).^2 + noiseRatio);
+end
+
+function decisions = fdfe_symbols(feedforwardOutput, feedback, uw, ...
+        dataLength)
+    % Time-domain feedback cancellation on the feedforward-filtered
+    % (IFFT of W .* R) block; the UW acts as the cyclic prefix.
+    % The main-tap normalization is applied here so that the output
+    % scale matches the unit-energy QPSK constellation.
+    N = numel(feedforwardOutput);
+    feedbackLength = numel(feedback);
     decisions = zeros(dataLength, 1);
-    mainTap = effectiveImpulse(1);
     for symbolIndex = 1:dataLength
-        value = mmseEstimate(symbolIndex);
+        value = feedforwardOutput(symbolIndex);
         for lag = 1:min(feedbackLength, N - 1)
             previousIndex = symbolIndex - lag;
             if previousIndex >= 1
@@ -340,9 +383,34 @@ function decisions = fdfe_symbols(mmseEstimate, effectiveImpulse, uw, ...
                 wrappedIndex = N + previousIndex;
                 previous = uw(wrappedIndex - dataLength);
             end
-            value = value - effectiveImpulse(lag + 1) / mainTap * previous;
+            value = value - feedback(lag) * previous;
         end
-        decisions(symbolIndex) = hard_qpsk(value / mainTap);
+        decisions(symbolIndex) = hard_qpsk(value);
+    end
+end
+
+function refined = fdfe_symbols_decoded(feedforwardOutput, feedback, ...
+        uw, dataLength, feedbackSymbols)
+    % Feedback cancellation using decoded symbols (book 4.3.1): the
+    % post-cursor ISI is subtracted with the re-encoded decoder output
+    % instead of hard-sliced decisions.  Returns the refined soft
+    % estimates (before slicing) for the decoder.
+    N = numel(feedforwardOutput);
+    feedbackLength = numel(feedback);
+    refined = zeros(dataLength, 1);
+    for symbolIndex = 1:dataLength
+        value = feedforwardOutput(symbolIndex);
+        for lag = 1:min(feedbackLength, N - 1)
+            previousIndex = symbolIndex - lag;
+            if previousIndex >= 1
+                previous = feedbackSymbols(previousIndex);
+            else
+                wrappedIndex = N + previousIndex;
+                previous = uw(wrappedIndex - dataLength);
+            end
+            value = value - feedback(lag) * previous;
+        end
+        refined(symbolIndex) = value;
     end
 end
 

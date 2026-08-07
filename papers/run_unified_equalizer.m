@@ -145,7 +145,7 @@ end
 
 %% Chapter 5 CCK link
 function results = run_cck_scenario(cfg)
-book = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
+[book, bitTable] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 imp = scfde.equalizers.ch5_short_turbo_channel();
 nv = 10^(-cfg.snrDb / 10);
 link = struct("noiseVariance", nv, "receiverCandidateLimit", 128, ...
@@ -170,10 +170,27 @@ for frame = 1:cfg.frameCount
         results.names = recv.names;
     end
     for eq = 1:numel(recv.ids)
-        totalErrors(eq) = totalErrors(eq) + ...
-            sum(recv.outputs{eq}(:) ~= src.data(:));
+        trace = recv.traces{eq};
+        if isfield(trace, "indices")
+            % CCK receivers expose the detected codeword indices; map
+            % them to bits through the bit table (chip distance is not
+            % the bit Hamming distance, so this is the true BER).
+            detectedIdx = trace.indices(:).';
+            detectedIdx = detectedIdx(1:cfg.symbols);
+        else
+            % Recover indices from the chip-level output by nearest
+            % codeword in Euclidean distance.
+            detected = reshape(recv.outputs{eq}(:).', size(book, 2), []);
+            detected = hard_qpsk(detected).';
+            distance = abs(book - reshape(detected, 1, size(book, 2), []));
+            distance = squeeze(sum(distance .^ 2, 2));
+            [~, detectedIdx] = min(distance, [], 1);
+        end
+        txBits = reshape(bitTable(idx, :).', 1, []);
+        rxBits = reshape(bitTable(detectedIdx, :).', 1, []);
+        totalErrors(eq) = totalErrors(eq) + sum(rxBits ~= txBits);
     end
-    totalBits = totalBits + numel(src.data);
+    totalBits = totalBits + numel(txBits);
 end
 results.ber = totalErrors / totalBits;
 results.traces = recv.traces;
@@ -224,17 +241,24 @@ for frame = 1:cfg.frameCount
                 % iterative detectors store (iterations, symbols, users)
                 det = det(end - numel(idx6) + 1:end);
             end
-            totalErrors(eq) = totalErrors(eq) + sum(det ~= idx6);
         elseif isfield(trace, "history")
             % soft-SIC history: (iterations, symbols, users)
             det = squeeze(trace.history(end, :, 1)).';
-            totalErrors(eq) = totalErrors(eq) + sum(det ~= idx6);
         else
-            totalErrors(eq) = totalErrors(eq) + ...
-                sum(recv.outputs{eq}(:) ~= src.data(:));
+            det = reshape(recv.outputs{eq}(:), codeLength, []).';
+            distance = abs(book - reshape(det, 1, size(book, 2), []));
+            distance = squeeze(sum(distance .^ 2, 2));
+            [~, det] = min(distance, [], 1);
+            det = det(:);
         end
+        % Map detected symbol indices to bits through the bit table and
+        % count bit errors (an M-ary symbol error may flip 1 or more
+        % bits, so SER is not BER).
+        txBits = reshape(bits(idx6, :).', 1, []);
+        rxBits = reshape(bits(det, :).', 1, []);
+        totalErrors(eq) = totalErrors(eq) + sum(rxBits ~= txBits);
     end
-    totalBits = totalBits + numel(idx6);
+    totalBits = totalBits + numel(txBits);
 end
 results.ber = totalErrors / totalBits;
 results.traces = recv.traces;
@@ -327,4 +351,9 @@ title(sprintf("Unified equalizer comparison (%s, SNR=%g dB)", ...
     results.scenario, results.config.snrDb));
 exportgraphics(fig, path, "Resolution", 150);
 close(fig);
+end
+
+function symbol = hard_qpsk(value)
+symbol = ((1 - 2 * (real(value) < 0)) + ...
+    1j * (1 - 2 * (imag(value) < 0))) / sqrt(2);
 end

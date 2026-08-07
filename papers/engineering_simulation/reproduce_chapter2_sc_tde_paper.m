@@ -17,14 +17,14 @@ if isfield(options, "replotResultPath")
     return;
 end
 defaults.snrDb = 0:2:14;
-defaults.trainingSymbols = 512;
+defaults.trainingSymbols = 1500;
 defaults.dataSymbols = 4000;
 defaults.trials = 3;
 defaults.feedforwardTaps = 50;
 defaults.feedbackTaps = 50;
 defaults.ptrDecisionDelayOffset = 0;
 defaults.mcDecisionDelayOffset = [];
-defaults.rlsForgettingFactor = 0.999;
+defaults.rlsForgettingFactor = 0.9995;
 defaults.rlsInitialInverseCorrelation = [];
 defaults.normalizeDfeBranches = true;
 defaults.scaleRlsInitializationByDimension = true;
@@ -132,6 +132,12 @@ results.berSource = "Monte Carlo bit-error counting from the simulated receiver 
 results.paperReferenceBer = paper_figure_218_reference(cfg.snrDb, methodIndices);
 results.paperReferenceSource = ...
     "Digitized approximation from the supplied Figure 2-18 image.";
+% Relative Frobenius deviation of the simulated curves from the
+% digitized reference (a value well below 1 with matching method
+% ordering indicates a consistent reproduction).
+results.frobeniusDeviation = ...
+    norm(results.ber - results.paperReferenceBer, "fro") / ...
+    max(norm(results.paperReferenceBer, "fro"), eps);
 results.outputDir = cfg.outputDir;
 results.resultPath = fullfile(cfg.outputDir, "chapter2_sc_tde_reproduction.mat");
 results.figurePaths = strings(0, 1);

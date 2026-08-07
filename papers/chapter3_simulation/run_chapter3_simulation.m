@@ -86,9 +86,20 @@ exportgraphics(fig, fullfile(resultDir, "fig3_5_lambda_mse.png"), ...
 close(fig);
 
 %% Figure 3.6: block-wise Doppler tracking
+% Each block is generated with its own true Doppler factor and the
+% Doppler is estimated from that block's received samples by the same
+% signal-level UW estimator used for Figures 3.5/3.7-3.10 (fixed prior
+% range, coarse acquisition, local refinement).  No truth information
+% enters the estimator.
 trueDoppler = [0.933, 1.000, 0.9533, 1.067, 1.033] * 1e-3;
-crossEstimate = trueDoppler + [8, 16, -5, -17, -10] * 1e-6;
-twoDEstimate = trueDoppler + [-4, -47, -7, -25, -20] * 1e-6;
+trackingSnrDb = 6;
+trackingMultipath = true;
+crossTrack = block_doppler_tracking(cfg, uw, h, trackingSnrDb, ...
+    trueDoppler, 1, trackingMultipath);
+twoDTrack = block_doppler_tracking(cfg, uw, h, trackingSnrDb, ...
+    trueDoppler, 4, trackingMultipath);
+crossEstimate = crossTrack.estimates;
+twoDEstimate = twoDTrack.estimates;
 
 fig = figure("Color", "w", "Position", [100, 100, 760, 500]);
 plot(1:5, trueDoppler, "-o", "LineWidth", 1.4); hold on;
@@ -248,6 +259,112 @@ function errors = estimate_fig35_doppler_errors( ...
     % Delegates to the truth-independent estimator (fixed prior range).
     errors = estimate_fig35_doppler_errors_velocity( ...
         cfg, snrDb, lambda, trials, cfg.defaultVelocity, true);
+end
+
+function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
+        trueDoppler, lambda, multipath)
+    % Block-wise Doppler tracking: each data block is transmitted with
+    % its own true Doppler factor; the per-block Doppler is then
+    % estimated from the received samples by the same signal-level UW
+    % estimator used for Figures 3.5 and 3.7-3.10 (fixed prior range,
+    % coarse acquisition, local refinement).  The true Doppler is only
+    % used to generate the transmitted waveform, never by the estimator.
+    samplesPerSymbol = round(cfg.fs * cfg.Ts);
+    uwSamples = repelem(uw, samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
+    maxPriorDoppler = 1 / (2 * samplesPerSymbol);
+    priorHalfSpan = maxPriorDoppler;
+    coarseDelta = min(2 * priorHalfSpan / 5, 4 * delta);
+    coarseSteps = max(5, ceil(priorHalfSpan / max(coarseDelta, eps)));
+    timingRadius = max(1, lambda);
+    hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
+    delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
+    phases = [0, 0.45, -0.90, 1.35];
+    gains = cfg.pathGain .* exp(1j * phases);
+    if multipath
+        hSamples(delays + 1) = gains;
+    else
+        hSamples(1) = gains(1);
+    end
+    hSamples = hSamples / norm(hSamples);
+    blockCount = numel(trueDoppler);
+    estimates = zeros(blockCount, 1);
+    for block = 1:blockCount
+        data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
+        frame = uw;
+        for repeatBlock = 1:cfg.blockCount
+            frame = [frame; uw; data; uw]; %#ok<AGROW>
+        end
+        transmitted = repelem(frame, samplesPerSymbol);
+        trueValue = trueDoppler(block);
+        outputLength = floor((numel(transmitted) - 1) * ...
+            (1 + trueValue)) + 1;
+        sourcePosition = (0:outputLength-1).' / ...
+            (1 + trueValue) + 1;
+        expanded = interp1((1:numel(transmitted)).', transmitted, ...
+            sourcePosition, "linear", 0);
+        received = add_awgn(conv(expanded, hSamples), snrDb);
+        basePosition = (1:numel(received)).';
+        finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
+            / lambda + (1 - 1 / lambda);
+        receivedFine = interp1(basePosition, received, finePosition, ...
+            "linear", 0);
+        coarseBest = 0;
+        coarseScore = -inf;
+        for candidateDoppler = (-coarseSteps:coarseSteps) * coarseDelta
+            windowLength = round(numel(uwSamples) * lambda * ...
+                (1 + candidateDoppler));
+            postUwOffset = round(blockSamples * lambda * ...
+                (1 + candidateDoppler));
+            nominal = 1 + round(0 * blockSamples * ...
+                lambda * (1 + candidateDoppler));
+            score = uw_correlation_score(receivedFine, ...
+                nominal, windowLength, postUwOffset, 0);
+            if score > coarseScore
+                coarseScore = score;
+                coarseBest = candidateDoppler;
+            end
+        end
+        dopplerCenter = coarseBest;
+        fineCandidates = dopplerCenter + (-2:2) * delta;
+        bestScore = -inf;
+        bestDoppler = dopplerCenter;
+        nominal = 1 + round(0 * blockSamples * ...
+            lambda * (1 + dopplerCenter));
+        for candidateDoppler = fineCandidates
+            windowLength = round(numel(uwSamples) * lambda * ...
+                (1 + candidateDoppler));
+            postUwOffset = round(blockSamples * lambda * ...
+                (1 + candidateDoppler));
+            timingCandidates = nominal + (-timingRadius:timingRadius);
+            for timing = timingCandidates
+                firstLast = timing + windowLength - 1;
+                secondFirst = timing + windowLength;
+                secondLast = secondFirst + windowLength - 1;
+                postFirst = timing + postUwOffset;
+                postLast = postFirst + windowLength - 1;
+                if timing < 1 || postLast > numel(receivedFine)
+                    continue;
+                end
+                firstUw = receivedFine(timing:firstLast);
+                secondUw = receivedFine(secondFirst:secondLast);
+                postUw = receivedFine(postFirst:postLast);
+                phi1 = sum(firstUw .* conj(postUw));
+                phi2 = sum(secondUw .* conj(postUw));
+                phi3 = sum(abs(postUw).^2);
+                score = abs((phi1 + phi2) / max(phi3, eps));
+                if score > bestScore
+                    bestScore = score;
+                    bestDoppler = candidateDoppler;
+                end
+            end
+        end
+        estimates(block) = bestDoppler;
+    end
+    tracking.trueDoppler = trueDoppler(:);
+    tracking.estimates = estimates(:);
+    tracking.errors = abs(tracking.trueDoppler - tracking.estimates);
 end
 
 function errors = estimate_fig35_doppler_errors_velocity( ...
@@ -449,6 +566,13 @@ function export_velocity_comparison(velocities, curves, fileName)
 end
 
 function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
+    % Full same-frame sync-and-compensate chain: the received frame is
+    % generated with the true Doppler, the Doppler is estimated from that
+    % same frame by the signal-level UW estimator (fixed prior range, no
+    % truth), and the compensation applies the signed estimate as a
+    % time-scale resampling plus a carrier phase rotation.  The residual
+    % (true minus estimate) therefore contains both the phase error and
+    % the residual time compression/expansion.
     maxInfoBits = 5e4;
     targetErrors = 80;
     totalBits = 0;
@@ -456,28 +580,75 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
     H = fft(h, cfg.fftLength);
     noiseRatio = 10^(-snrDb / 10);
     equalizer = conj(H) ./ (abs(H).^2 + noiseRatio);
+    trueDoppler = cfg.defaultVelocity / cfg.soundSpeed;
+    samplesPerSymbol = round(cfg.fs * cfg.Ts);
 
     while totalBits < maxInfoBits && totalErrors < targetErrors
         info = randi([0, 1], ldpc.K, 1);
         codeword = scfde_ldpc_encode(info, ldpc);
         data = qpsk_symbols(codeword);
-        transmitted = [data; uw];
-        received = ifft(H .* fft(transmitted));
+        % Two-block frame: the estimator's UW correlation needs a
+        % post-data UW, so the payload block is followed by a filler
+        % block with the same [UW; data; UW] structure.
+        filler = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
+        transmitted = [uw; data; uw; uw; filler; uw];
+        % Oversampled transmission with true Doppler: time-scale
+        % compression/expansion plus carrier frequency shift, then the
+        % oversampled multipath channel (same model as the estimator).
+        txSamples = repelem(transmitted, samplesPerSymbol);
+        outputLength = floor((numel(txSamples) - 1) * ...
+            (1 + trueDoppler)) + 1;
+        sourcePosition = (0:outputLength-1).' / ...
+            (1 + trueDoppler) + 1;
+        stretched = interp1((1:numel(txSamples)).', txSamples, ...
+            sourcePosition, "linear", 0);
+        hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
+        delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
+        phases = [0, 0.45, -0.90, 1.35];
+        hSamples(delays + 1) = cfg.pathGain .* exp(1j * phases);
+        hSamples = hSamples / norm(hSamples);
+        received = conv(stretched, hSamples);
+        n = (0:numel(received)-1).';
+        received = received .* exp(1j * 2 * pi * cfg.fc * ...
+            trueDoppler ./ cfg.fs .* n);
+        received = add_awgn(received, snrDb);
 
         if modeIndex == 1
-            residualDoppler = 0;
-        elseif modeIndex == 2
-            residualDoppler = doppler_error_samples(cfg, snrDb, 4, true, ...
-                cfg.defaultVelocity, 1, "twod");
+            % Ideal compensation: the exact true Doppler is removed.
+            estimateDoppler = trueDoppler;
         else
-            residualDoppler = doppler_error_samples(cfg, snrDb, 1, true, ...
-                cfg.defaultVelocity, 1, "cross");
+            % Estimate from the SAME frame (mode 2: 2-D UW estimator
+            % with lambda=4, mode 3: cross-correlation with lambda=1).
+            if modeIndex == 2
+                lambda = 4;
+            else
+                lambda = 1;
+            end
+            estimateDoppler = estimate_frame_doppler(cfg, uw, received, ...
+                lambda, samplesPerSymbol);
         end
-        n = (0:cfg.fftLength-1).';
-        received = received .* exp(1j * 2 * pi * cfg.fc * ...
-            residualDoppler * cfg.Ts .* n);
-        received = add_awgn(received, snrDb);
-        estimate = ifft(equalizer .* fft(received));
+
+        % Compensation chain: (1) inverse time-scale resampling using the
+        % signed estimate, (2) carrier phase rotation with the signed
+        % estimate.  The residual (trueDoppler - estimateDoppler) stays
+        % in the signal as residual time compression and phase drift.
+        % The transmit side compressed the time axis by 1/(1+trueD);
+        % the compensation expands it back by (1+estimateDoppler).
+        compensatedPosition = n .* (1 + estimateDoppler) + 1;
+        compensated = interp1((1:numel(received)).', received, ...
+            compensatedPosition, "linear", 0);
+        compensated(isnan(compensated)) = 0;
+        % The carrier phase is rotated by the actual resampled time
+        % (compensatedPosition), matching the transmit-side phase.
+        compensated = compensated .* exp(-1j * 2 * pi * cfg.fc * ...
+            estimateDoppler ./ cfg.fs .* (compensatedPosition - 1));
+
+        % Downsample to symbol rate, keep the [data; UW] block (the UW
+        % acts as the cyclic prefix) and equalize in the frequency domain.
+        symbolSamples = compensated(1:samplesPerSymbol:end);
+        blockStart = cfg.uwLength + 1;
+        block = symbolSamples(blockStart:blockStart + cfg.fftLength - 1);
+        estimate = ifft(equalizer .* fft(block));
         dataEstimate = estimate(1:cfg.dataLength);
         llrScale = 2 * sqrt(2) / max(noiseRatio, 1e-6);
         llr = reshape([llrScale * real(dataEstimate).'; ...
@@ -487,6 +658,83 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
         totalBits = totalBits + ldpc.K;
     end
     ber = max(totalErrors, 0.5) / totalBits;
+end
+
+function estimateDoppler = estimate_frame_doppler(cfg, uw, received, ...
+        lambda, samplesPerSymbol)
+    % Signal-level Doppler estimate from one received frame (no truth).
+    % The frame is [UW, data, UW] at the symbol level; the UW-correlation
+    % search of Eqs. (3-9)-(3-15) runs over a fixed prior range with
+    % coarse acquisition then local refinement.  The received waveform is
+    % re-interpolated to the lambda-times oversampled grid for the 2-D
+    % search; the true Doppler is never used inside the search.
+    uwLength = cfg.uwLength;
+    uwSamples = repelem(uw, samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
+    maxPriorDoppler = 1 / (2 * samplesPerSymbol);
+    priorHalfSpan = maxPriorDoppler;
+    coarseDelta = min(2 * priorHalfSpan / 5, 4 * delta);
+    coarseSteps = max(5, ceil(priorHalfSpan / max(coarseDelta, eps)));
+    timingRadius = max(1, lambda);
+
+    basePosition = (1:numel(received)).';
+    finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
+        / lambda + (1 - 1 / lambda);
+    receivedFine = interp1(basePosition, received, finePosition, ...
+        "linear", 0);
+
+    coarseBest = 0;
+    coarseScore = -inf;
+    for candidateDoppler = (-coarseSteps:coarseSteps) * coarseDelta
+        windowLength = round(numel(uwSamples) * lambda * ...
+            (1 + candidateDoppler));
+        postUwOffset = round(blockSamples * lambda * ...
+            (1 + candidateDoppler));
+        nominal = 1 + round(0 * blockSamples * ...
+            lambda * (1 + candidateDoppler));
+        score = uw_correlation_score(receivedFine, ...
+            nominal, windowLength, postUwOffset, 0);
+        if score > coarseScore
+            coarseScore = score;
+            coarseBest = candidateDoppler;
+        end
+    end
+    dopplerCenter = coarseBest;
+    fineCandidates = dopplerCenter + (-2:2) * delta;
+    bestScore = -inf;
+    bestDoppler = dopplerCenter;
+    nominal = 1 + round(0 * blockSamples * ...
+        lambda * (1 + dopplerCenter));
+    for candidateDoppler = fineCandidates
+        windowLength = round(numel(uwSamples) * lambda * ...
+            (1 + candidateDoppler));
+        postUwOffset = round(blockSamples * lambda * ...
+            (1 + candidateDoppler));
+        timingCandidates = nominal + (-timingRadius:timingRadius);
+        for timing = timingCandidates
+            firstLast = timing + windowLength - 1;
+            secondFirst = timing + windowLength;
+            secondLast = secondFirst + windowLength - 1;
+            postFirst = timing + postUwOffset;
+            postLast = postFirst + windowLength - 1;
+            if timing < 1 || postLast > numel(receivedFine)
+                continue;
+            end
+            firstUw = receivedFine(timing:firstLast);
+            secondUw = receivedFine(secondFirst:secondLast);
+            postUw = receivedFine(postFirst:postLast);
+            phi1 = sum(firstUw .* conj(postUw));
+            phi2 = sum(secondUw .* conj(postUw));
+            phi3 = sum(abs(postUw).^2);
+            score = abs((phi1 + phi2) / max(phi3, eps));
+            if score > bestScore
+                bestScore = score;
+                bestDoppler = candidateDoppler;
+            end
+        end
+    end
+    estimateDoppler = bestDoppler;
 end
 
 function y = add_awgn(x, snrDb)
