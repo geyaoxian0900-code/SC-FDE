@@ -43,7 +43,7 @@
 | 4-10..4-18 | MMSE-FD-DFE：`F_k = 1+Σf_m e^{-j2πkm/N}`、`(V-I)f=-v`、`W_k = F_k·H*/(\|H\|²+σ²)`、时域判决反馈 | `fd_dfe_design.m`（包）、`fdfe_symbols.m` | 循环 Toeplitz V、q=ifft(γ) | testFdDfeFeedforwardDependsOnFeedbackLength（独立显式参考 1e-10、g=f 自洽 1e-17） | fig4_2/4_5 | A | 硬判决误差传播（genie 反馈单调改善） | 第3-5轮 |
 | 4-56..4-58 | FDE-FDFE 迭代系数（ρ、λ） | `simulate_coded_equalizers` 内 IBDFE 循环 | ρ∈[0.45,0.97] | 无独立测试 | fig4_7/4_8 | B | 迭代改善不稳定 | 待复核 |
 | BCJR MAP/Log-MAP | 前向后向算法 | `ch4_bcjr_log_domain.m`、`ch4_bcjr_probability.m` | — | 已验证两者数值差 6.66e-16 | fig4_x | A | 无 | 第1轮 |
-| BLMS | 块 LMS 频域实现 | `blms_tf_turbo.m` | 循环块替代 overlap-save | 无 | fig4_x | C | 未做重叠缓存/污染输出丢弃 | 待办 P1 |
+| 图4-25 | 频域块自适应均衡（严格 overlap-save）：重叠缓存、G 时域约束、前 Nf 污染丢弃、频域 NLMS | `fblms_equalizer.m`（新） | N/Nf/μ/ε 参数化 | test_fblms_and_curve_benchmark（无噪声收敛、边界无污染、旧循环块必败） | 待接入 fig4_x | B | 原文步长量级待定位；现有 Turbo 融合版 `ch4_iterate_fd_blms_turbo` 保留 | 本轮 |
 | IBDFE 权重 | `B_k = (λ(σ²+\|H\|²)-σ²)/(σ²+\|H\|²-ρ\|H\|²)` | `simulate_coded_equalizers` | mean(B)≈0 | 已验证 | fig4_7 | A | 无 | 第1轮 |
 
 ## 第 5 章（互补码键控扩频）
@@ -71,10 +71,19 @@
 | 解析残余方差（热噪声+残余 ISI） | `equalized_noise_variance` | 无独立测试 | A |
 | 实验注册表 11 项 | `list_simulations.m`、`run_all_simulations.m` | 无独立测试 | A |
 
+## 仿真曲线定量基准框架
+
+| 工具 | 说明 | 测试 |
+|---|---|---|
+| `curve_benchmark.m` | log-BER RMSE、分区 RMSE、最大 SNR 偏差、排序一致率、A/B/C/D 分级 | testCurveBenchmarkMetrics |
+
+分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
+数字化参考数据待建（book/ 扫描页逐点提取）。
+
 ## 已知缺口（对应 README 审计说明）
 
 1. **HTFDE 可靠度缩放**（第3章）：工程设置，未按原文逐式（待办 P1）
-2. **BLMS overlap-save**（第4章）：循环块近似，结构性差异（待办 P1）
+2. **BLMS overlap-save**（第4章）：已新增严格 overlap-save 的 `fblms_equalizer`（图4-25 语义，含重叠缓存/G 约束/污染丢弃/负向回归），现有 Turbo 融合版保留；原文步长量级与图 4-25 曲线数字化待办
 3. **CCK Turbo 外码**（第5章）：重复码替代完整外码；若无原文公开矩阵，应标 B/C（待办 P1）
 4. **PIC/ESE 阻尼系数**（第6章）：工程设置，需敏感性分析（待办 P1）
 5. **5.5 章 11 径信道**（第5章）：合成信道，需保存逐径参数与敏感性分析（待办 P1）
