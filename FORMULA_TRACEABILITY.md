@@ -43,7 +43,7 @@
 | 4-10..4-18 | MMSE-FD-DFE：`F_k = 1+Σf_m e^{-j2πkm/N}`、`(V-I)f=-v`、`W_k = F_k·H*/(\|H\|²+σ²)`、时域判决反馈 | `fd_dfe_design.m`（包）、`fdfe_symbols.m` | 循环 Toeplitz V、q=ifft(γ) | testFdDfeFeedforwardDependsOnFeedbackLength（独立显式参考 1e-10、g=f 自洽 1e-17） | fig4_2/4_5 | A | 硬判决误差传播（genie 反馈单调改善） | 第3-5轮 |
 | 4-56..4-58 | FDE-FDFE 迭代系数（ρ、λ） | `simulate_coded_equalizers` 内 IBDFE 循环 | ρ∈[0.45,0.97] | 无独立测试 | fig4_7/4_8 | B | 迭代改善不稳定 | 待复核 |
 | BCJR MAP/Log-MAP | 前向后向算法 | `ch4_bcjr_log_domain.m`、`ch4_bcjr_probability.m` | — | 已验证两者数值差 6.66e-16 | fig4_x | A | 无 | 第1轮 |
-| 图4-25 | 频域块自适应均衡（严格 overlap-save）：重叠缓存、G 时域约束、前 Nf 污染丢弃、频域 NLMS | `fblms_equalizer.m`（新） | N/Nf/μ/ε 参数化 | test_fblms_and_curve_benchmark（无噪声收敛、边界无污染、旧循环块必败） | 待接入 fig4_x | B | 原文步长量级待定位；现有 Turbo 融合版 `ch4_iterate_fd_blms_turbo` 保留 | 本轮 |
+| 图4-25 | 频域块自适应均衡（严格 overlap-save）：重叠缓存、G 时域约束、前 Nf 污染丢弃、频域 NLMS | `fblms_equalizer.m` + 模块 `fblms.m`（注册表 `fblms` ID） | N/Nf/μ/ε 参数化（cfg.fblms*） | test_fblms_and_curve_benchmark（无噪声收敛、边界无污染、旧循环块必败、块数修正） | 统一入口 qpsk 场景（fblms ID） | B | 原文步长量级与图 4-25 曲线数字化待办；Turbo 融合版 `ch4_iterate_fd_blms_turbo` 保留 | 本轮 |
 | IBDFE 权重 | `B_k = (λ(σ²+\|H\|²)-σ²)/(σ²+\|H\|²-ρ\|H\|²)` | `simulate_coded_equalizers` | mean(B)≈0 | 已验证 | fig4_7 | A | 无 | 第1轮 |
 
 ## 第 5 章（互补码键控扩频）

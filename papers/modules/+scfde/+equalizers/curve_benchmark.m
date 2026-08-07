@@ -26,6 +26,9 @@ arguments
 end
 berSim = max(berSim, eps);
 reference.ber = max(reference.ber, eps);
+if isvector(berSim) && size(berSim, 1) == 1
+    berSim = berSim(:).'; % keep 1 x S for a single method
+end
 [numMethods, ~] = size(berSim);
 if isempty(methodNames)
     methodNames = "method" + (1:numMethods);
@@ -40,6 +43,7 @@ end
 
 % -- log10(BER) RMSE over reference SNR points -------------------------
 logSim = interp1(snrSim, log10(berSim).', refSnr, "linear", "extrap").';
+logSim = reshape(logSim, numMethods, numel(refSnr));
 logRef = log10(refBer);
 valid = isfinite(logRef) & isfinite(logSim);
 logRmse = sqrt(mean((logSim(valid) - logRef(valid)).^2, "all"));
@@ -58,31 +62,58 @@ for zone = 1:3
 end
 
 % -- max horizontal SNR deviation at equal BER --------------------------
+% Invert the monotonized log10(BER) simulation curve: for each reference
+% point, find the simulation SNR whose log-BER equals the reference
+% log-BER, then take the SNR difference.  Reference points outside the
+% simulation SNR coverage are excluded (marked in coverage).
 maxSnrDeviation = 0;
+covered = true(size(valid));
 for method = 1:numMethods
+    simLog = log10(max(berSim(method, :), eps));
+    [monoSnr, monoLog, monoFlag] = monotonize(snrSim, simLog);
+    % Remove duplicate log-BER values so the inverse interpolation is
+    % well defined (keep the first / lowest-SNR occurrence).
+    [monoLog, keepIndex] = unique(monoLog, "stable");
+    monoSnr = monoSnr(keepIndex);
     for r = 1:numel(refSnr)
         target = refBer(method, r);
         if ~isfinite(target)
+            covered(method, r) = false;
             continue;
         end
-        [~, nearest] = min(abs(berSim(method, :) - target));
+        targetLog = log10(target);
+        % Only invert inside the monotonic span of the simulation.
+        if targetLog < min(monoLog) || targetLog > max(monoLog)
+            covered(method, r) = false;
+            continue;
+        end
+        simSnrAtRef = interp1(monoLog, monoSnr, targetLog, "linear");
+        % The reference SNR must lie inside the simulation SNR range.
+        if refSnr(r) < min(monoSnr) || refSnr(r) > max(monoSnr)
+            covered(method, r) = false;
+            continue;
+        end
         maxSnrDeviation = max(maxSnrDeviation, ...
-            abs(snrSim(nearest) - refSnr(r)));
+            abs(simSnrAtRef - refSnr(r)));
     end
 end
+benchmarkCoverage = covered;
 
 % -- method ordering agreement ------------------------------------------
+% Use the interpolation to the reference SNR grid (logSim) so that
+% different simulation and reference grids do not cause index errors.
 orderAgreement = nan;
 if numMethods >= 2
     matches = 0;
     counted = 0;
     for r = 1:numel(refSnr)
-        simOrder = rank_order(berSim(:, r));
-        refOrder = rank_order(refBer(:, r));
-        if all(isfinite(refBer(:, r)))
-            matches = matches + sum(simOrder == refOrder);
-            counted = counted + numMethods;
+        if ~all(isfinite(refBer(:, r)))
+            continue;
         end
+        simOrder = rank_order(logSim(:, r));
+        refOrder = rank_order(refBer(:, r));
+        matches = matches + sum(simOrder == refOrder);
+        counted = counted + numMethods;
     end
     if counted > 0
         orderAgreement = matches / counted;
@@ -105,10 +136,30 @@ benchmark.logRmse = logRmse;
 benchmark.zoneRmse = zoneRmse;
 benchmark.maxSnrDeviation = maxSnrDeviation;
 benchmark.orderAgreement = orderAgreement;
+benchmark.coverage = benchmarkCoverage;
 benchmark.grade = grade_of(logRmse);
 benchmark.perMethod = perMethod;
 benchmark.methodNames = methodNames;
 benchmark.reference = reference;
+end
+
+function [monoSnr, monoLog, monoFlag] = monotonize(snr, logBer)
+% Monotonize a log-BER curve: keep only the points where log-BER
+% decreases (or stays) as SNR increases, so the curve is invertible.
+% Returns the monotonic (snr, logBer) pairs and a flag per original
+% point indicating whether it was kept.
+monoSnr = [];
+monoLog = [];
+monoFlag = false(size(snr));
+runningMin = inf;
+for index = 1:numel(snr)
+    if isfinite(logBer(index)) && logBer(index) <= runningMin + 1e-12
+        monoSnr(end + 1) = snr(index); %#ok<AGROW>
+        monoLog(end + 1) = logBer(index); %#ok<AGROW>
+        monoFlag(index) = true;
+        runningMin = logBer(index);
+    end
+end
 end
 
 function order = rank_order(values)

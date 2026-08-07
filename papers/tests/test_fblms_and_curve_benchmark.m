@@ -144,3 +144,57 @@ verifyEqual(testCase, benchmark.orderAgreement, 1, ...
     "method ordering must agree");
 verifyTrue(testCase, ismember(benchmark.grade, ["A", "B", "C", "D"]));
 end
+
+function testCurveBenchmarkDifferentSnrGrids(testCase)
+% The benchmark must work with DIFFERENT simulation and reference SNR
+% grids (different lengths and spacings) without index errors, and the
+% ordering agreement must use the interpolated simulation values.
+snrSim = [0, 4, 8, 12, 16];      % 5 points, spacing 4
+reference.snrDb = [1, 5, 9, 13]; % 4 points, spacing 4, offset by 1
+methodNames = ["A", "B"];
+reference.ber = [
+    5e-3, 8e-4, 1.2e-4, 2e-5
+    1.5e-2, 2.4e-3, 3.6e-4, 5.5e-5
+];
+% Simulation A is the reference curve evaluated on the simulation grid
+% (log-linear interpolation), so its log-RMSE must be ~0; simulation B
+% is 3x worse.
+refLogA = interp1(reference.snrDb, log10(reference.ber(1, :)), ...
+    snrSim, "linear", "extrap");
+refLogB = interp1(reference.snrDb, log10(reference.ber(2, :)), ...
+    snrSim, "linear", "extrap");
+berSim = [
+    10 .^ refLogA
+    3 * 10 .^ refLogB
+];
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, methodNames);
+% Round-trip interpolation (reference -> simulation grid -> reference)
+% leaves a small log-RMSE; 0.01 is the two-way interpolation bound.
+verifyEqual(testCase, benchmark.perMethod.logRmse(1), 0, ...
+    "AbsTol", 0.01, "method A is exactly on the reference");
+verifyEqual(testCase, benchmark.orderAgreement, 1, ...
+    "ordering must agree on mismatched grids");
+verifyTrue(testCase, all(isfinite(benchmark.coverage(:))), ...
+    "coverage must be finite");
+end
+
+function testCurveBenchmarkCoverageExclusion(testCase)
+% Reference points outside the simulation SNR range must be excluded
+% from the horizontal SNR deviation (and flagged in coverage), not
+% extrapolated.
+snrSim = 0:2:10;
+reference.snrDb = [-2, 0, 2, 4, 6, 8, 10, 12]; % extends beyond sim
+methodNames = ["A"];
+reference.ber = [1e-1, 1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-6];
+berSim = 10 .^ interp1([-2, 12], [-1, -6], 0:2:10, "linear", "extrap");
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, methodNames);
+% Coverage: first and last reference points lie outside the sim range.
+verifyEqual(testCase, benchmark.coverage(1, 1), false, ...
+    "reference point below the sim SNR range must be excluded");
+verifyEqual(testCase, benchmark.coverage(1, end), false, ...
+    "reference point above the sim SNR range must be excluded");
+verifyTrue(testCase, all(benchmark.coverage(1, 2:end - 1)), ...
+    "interior reference points must be covered");
+end

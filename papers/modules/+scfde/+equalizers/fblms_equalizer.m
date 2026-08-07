@@ -38,7 +38,11 @@ end
 received = received(:).';
 reference = reference(:).';
 totalSamples = numel(received);
-numBlocks = floor((totalSamples - Nf) / N);
+% The implementation provides the initial overlap with previousTail =
+% zeros(1,Nf) and reads from the first input sample, so every input
+% sample belongs to a block: ceil(totalSamples/N) blocks, the last one
+% zero-padded.  The output is cropped back to the original length.
+numBlocks = ceil(totalSamples / N);
 if numBlocks < 1
     error("SCFDE:FBLMS", "Signal too short for the requested block size.");
 end
@@ -55,7 +59,7 @@ for block = 0:numBlocks - 1
     blockEnd = min(blockStart + N - 1, totalSamples);
     current = received(blockStart:blockEnd);
     if numel(current) < N
-        current = [current, zeros(1, N - numel(current))];
+        current = [current, zeros(1, N - numel(current))]; %#ok<AGROW>
     end
     inputBlock = [previousTail, current];
     inputSpectrum = fft(inputBlock, fftLength);
@@ -70,8 +74,10 @@ for block = 0:numBlocks - 1
 
     % -- error ---------------------------------------------------------
     sampleIndex = block * N + (1:N);
+    inFrame = sampleIndex <= totalSamples;
     if block * N + N <= trainLength
-        desired = reference(sampleIndex);
+        desired = zeros(1, N);
+        desired(inFrame) = reference(sampleIndex(inFrame));
     elseif useDecisionFeedback
         desired = sign(real(validSegment));
         desired(desired == 0) = 1;
@@ -103,4 +109,6 @@ for block = 0:numBlocks - 1
     trace.weightNorm(block + 1) = norm(weights);
     trace.errorPower(block + 1) = mean(abs(errorSegment).^2);
 end
+% Crop the output back to the original signal length.
+output = output(1:totalSamples);
 end
