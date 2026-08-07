@@ -308,11 +308,16 @@ function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
             blockSamples, sourcePosition, "linear", 0);
         % Carrier phase: continues from the previous block's final
         % phase, so the phase is continuous across the whole frame.
+        % The saved phase is the NEXT sample's phase (one carrier
+        % frequency step beyond the last sample), so the first sample of
+        % the next block advances by exactly one sample interval instead
+        % of duplicating the boundary sample.
         n = (0:numel(blockStretched)-1).';
         phase = cumulativePhase + 2 * pi * cfg.fc * doppler ./ ...
             cfg.fs .* n;
         blockStretched = blockStretched .* exp(1j * phase);
-        cumulativePhase = phase(end);
+        cumulativePhase = phase(end) + 2 * pi * cfg.fc * doppler ./ ...
+            cfg.fs;
         stretched = [stretched; blockStretched]; %#ok<AGROW>
     end
     % The post-UW of the last block is included in its own block, so no
@@ -327,48 +332,83 @@ end
 
 function estimates = cross_correlation_tracker(cfg, received, samplesPerSymbol)
     % UW cross-correlation Doppler tracker (Eq. 3-8 form).  Each block b
-    % is [pre-UW; pre-UW; data; post-UW]; the post-UW correlation peak
-    % p_b of block b is located and the Doppler factor follows from the
-    % peak deviation from the nominal position:
-    %   a_b = (p_b - nominalPost_b) / (blockLength * samplesPerSymbol)
-    % where nominalPost_b = 1 + (b-1)*blockStride + 2*uwLength + dataLength
-    % with blockStride = blockLength + uwLength symbols (each block
-    % carries its own post-UW).  Every block gets an independent
-    % estimate; block 1 uses the frame start as its reference.
+    % is [pre-UW; pre-UW; data; post-UW] with its own Doppler a_b.  Both
+    % the pre-UW correlation peak and the post-UW correlation peak are
+    % located INSIDE block b, and the Doppler follows from their
+    % in-block spacing:
+    %   a_b = (postPeak_b - prePeak_b - postOffset) / postOffset
+    % with postOffset = 2*uwLength + dataLength samples.  Because both
+    % peaks belong to the same block, the estimate is fully independent
+    % of the other blocks (no mixing of neighbouring Doppler values).
     uwLength = cfg.uwLength;
     uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
     blockSamples = cfg.blockLength * samplesPerSymbol;
     blockStride = blockSamples + numel(uwSamples); % one full block
     postOffset = blockSamples; % post-UW sits 2*uw+data after block start
     blockCount = 5;
-    peaks = zeros(blockCount, 1);
-    nominalPost = zeros(blockCount, 1);
-    nominalPost(1) = 1 + postOffset;
+    prePeaks = zeros(blockCount, 1);
+    postPeaks = zeros(blockCount, 1);
+    nominalBlock = zeros(blockCount, 1);
+    nominalBlock(1) = 1;
     for block = 1:blockCount
         if block > 1
-            nominalPost(block) = nominalPost(block - 1) + blockStride;
+            nominalBlock(block) = nominalBlock(block - 1) + blockStride;
         end
         windowHalf = round(numel(uwSamples) / 2);
-        searchRange = nominalPost(block) + (-windowHalf:windowHalf);
-        searchRange = searchRange(searchRange >= 1 & ...
-            searchRange <= numel(received) - numel(uwSamples));
-        correlation = zeros(size(searchRange));
-        for index = 1:numel(searchRange)
-            window = received(searchRange(index):searchRange(index) + ...
+        % Pre-UW peak: around the block start (drift covers the
+        % accumulated stretch of the earlier blocks).
+        drift = round((block - 1) * blockStride * 2e-3);
+        preRange = nominalBlock(block) + (-drift - windowHalf:...
+            drift + windowHalf);
+        preRange = preRange(preRange >= 1 & ...
+            preRange <= numel(received) - numel(uwSamples));
+        correlation = zeros(size(preRange));
+        for index = 1:numel(preRange)
+            window = received(preRange(index):preRange(index) + ...
                 numel(uwSamples) - 1);
             correlation(index) = abs(sum(window .* conj(uwSamples)));
         end
         [~, peakOffset] = max(correlation);
-        peaks(block) = searchRange(peakOffset);
+        prePeaks(block) = preRange(peakOffset);
+        % Sub-sample refinement by parabolic interpolation around the
+        % integer peak so the in-block spacing resolves Doppler steps
+        % below one sample (postOffset ~ 6912 samples, 1 sample = 1.45e-4).
+        if peakOffset > 1 && peakOffset < numel(correlation)
+            y0 = correlation(peakOffset - 1);
+            y1 = correlation(peakOffset);
+            y2 = correlation(peakOffset + 1);
+            denom = y0 - 2 * y1 + y2;
+            if abs(denom) > eps
+                prePeaks(block) = preRange(peakOffset) + ...
+                    0.5 * (y0 - y2) / denom;
+            end
+        end
+        % Post-UW peak: postOffset samples after the pre-UW peak, with a
+        % window covering the block-internal stretch.
+        postRange = prePeaks(block) + postOffset + ...
+            (-windowHalf:windowHalf);
+        postRange = postRange(round(postRange) >= 1 & ...
+            round(postRange) <= numel(received) - numel(uwSamples));
+        correlation = zeros(size(postRange));
+        for index = 1:numel(postRange)
+            window = received(round(postRange(index)):round(postRange(index)) + ...
+                numel(uwSamples) - 1);
+            correlation(index) = abs(sum(window .* conj(uwSamples)));
+        end
+        [~, peakOffset] = max(correlation);
+        postPeaks(block) = postRange(peakOffset);
+        if peakOffset > 1 && peakOffset < numel(correlation)
+            y0 = correlation(peakOffset - 1);
+            y1 = correlation(peakOffset);
+            y2 = correlation(peakOffset + 1);
+            denom = y0 - 2 * y1 + y2;
+            if abs(denom) > eps
+                postPeaks(block) = postRange(peakOffset) + ...
+                    0.5 * (y0 - y2) / denom;
+            end
+        end
     end
-    estimates = zeros(blockCount, 1);
-    % Adjacent peak-position difference (Eq. 3-8): the deviation of the
-    % inter-block peak spacing from the nominal stride cancels the
-    % accumulated stretch of the earlier blocks.  Block 1 has no
-    % predecessor; its post-UW sits postOffset samples after the frame
-    % start, which serves as the reference.
-    references = [1 + postOffset; peaks(1:end - 1) + blockStride];
-    estimates = (peaks - references) / blockStride;
+    estimates = (postPeaks - prePeaks - postOffset) / postOffset;
 end
 
 function estimates = two_d_tracker(cfg, received, samplesPerSymbol)

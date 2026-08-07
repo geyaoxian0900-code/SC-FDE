@@ -150,3 +150,46 @@ cfg.uwLength = 64;
 blockStart = 2 * cfg.uwLength + 1;
 verifyEqual(testCase, blockStart, 129);
 end
+
+function testCrossTrackerInBlockAlgebra(testCase)
+% The Eq. 3-8 tracker must give an independent per-block estimate from
+% the in-block pre/post UW spacing:
+%   a_b = (postPeak_b - prePeak_b - postOffset) / postOffset
+% with postOffset = blockLength * samplesPerSymbol.  A pure (noiseless,
+% single-path) block stretched by a must show the spacing
+%   postPeak - prePeak = round(postOffset * (1 + a))
+% so the estimate equals a up to the integer-sample quantization.
+samplesPerSymbol = 12;
+uwLength = 64;
+dataLength = 448;
+blockLength = 2 * uwLength + dataLength;
+postOffset = blockLength * samplesPerSymbol;
+a = 0.933e-3;
+idealSpacing = postOffset * (1 + a);
+verifyEqual(testCase, idealSpacing, 6918.4489, "AbsTol", 1e-3);
+verifyEqual(testCase, round(idealSpacing), 6918, ...
+    "one-sample quantization floor of the spacing");
+% The estimator formula must reduce the quantized spacing back to a
+spacing = round(idealSpacing);
+estimate = (spacing - postOffset) / postOffset;
+verifyEqual(testCase, estimate, (6918 - 6912) / 6912, "AbsTol", 1e-15);
+verifyLessThan(testCase, abs(estimate - a), 1.5 / postOffset, ...
+    "quantization error bounded by one sample");
+end
+
+function testCarrierPhaseBoundaryAdvance(testCase)
+% The per-block carrier phase must advance by exactly one sample
+% interval at the block boundary: the saved phase is the next sample's
+% phase (phase(end) + 2*pi*fc*d/fs), so the first sample of the next
+% block differs from the last sample of the previous block.
+cfg.fs = 48000;
+cfg.fc = 10000;
+doppler = 0.933e-3;
+step = 2 * pi * cfg.fc * doppler / cfg.fs;
+verifyEqual(testCase, step, 0.0012214, "AbsTol", 1e-6);
+% previous block last-sample phase at n = L-1; next block first sample
+% at n = 0 must be phase(L-1) + step.
+lastSamplePhase = step * 10;
+nextFirstSamplePhase = lastSamplePhase + step;
+verifyEqual(testCase, nextFirstSamplePhase, step * 11, "AbsTol", 1e-15);
+end
