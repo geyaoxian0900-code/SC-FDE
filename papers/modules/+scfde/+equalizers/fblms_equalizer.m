@@ -1,10 +1,10 @@
 function [output, weights, trace] = fblms_equalizer(received, ...
     reference, trainLength, filterLength, blockLength, step, epsilon, ...
-    useDecisionFeedback)
+    useDecisionFeedback, decisionFcn)
 %FBLMS_EQUALIZER Frequency-domain block LMS equalizer (book Fig. 4-25).
 %   [OUTPUT, WEIGHTS, TRACE] = FBLMS_EQUALIZER(RECEIVED, REFERENCE,
 %   TRAINLENGTH, FILTERLENGTH, BLOCKLENGTH, STEP, EPSILON,
-%   USEDECISIONFEEDBACK)
+%   USEDECISIONFEEDBACK, DECISIONFCN)
 %
 % Implements the book's frequency-domain block adaptive equalizer with
 % strict overlap-save (linear-convolution) semantics:
@@ -20,6 +20,12 @@ function [output, weights, trace] = fblms_equalizer(received, ...
 %   update:       W(k+1) = W(k) + mu_f * F*G*F^H * (R_c*(k) .* E(k))
 %                               / (eps + R_c^H(k)*R_c(k))
 %
+% DECISIONFCN is the modulation-matched hard-decision function used for
+% the decision-directed error (e.g. a 4-quadrant unit-energy QPSK slicer
+% or sign(real(...)) for BPSK); when omitted it defaults to BPSK
+% sign(real(...)).  Zero-padded samples of the final partial block do
+% NOT contribute to the update or the reported error power.
+%
 % The G constraint keeps the weight vector length N_f in the time
 % domain, so the FFT-domain products correspond to linear convolution.
 %
@@ -33,6 +39,9 @@ Nf = filterLength;
 fftLength = N + Nf;
 if nargin < 8
     useDecisionFeedback = false;
+end
+if nargin < 9 || isempty(decisionFcn)
+    decisionFcn = @(values) bpsk_slice(values);
 end
 
 received = received(:).';
@@ -79,12 +88,16 @@ for block = 0:numBlocks - 1
         desired = zeros(1, N);
         desired(inFrame) = reference(sampleIndex(inFrame));
     elseif useDecisionFeedback
-        desired = sign(real(validSegment));
-        desired(desired == 0) = 1;
+        % Modulation-matched hard decision (QPSK 4-quadrant unit-energy
+        % or BPSK sign(real(...)) per the caller).
+        desired = decisionFcn(validSegment);
     else
         desired = validSegment;
     end
     errorSegment = desired - validSegment;
+    % Zero-padded samples of the final partial block must not
+    % contribute to the adaptive update or the reported error power.
+    errorSegment(~inFrame) = 0;
     % The error block is zero-padded to the FFT length; its N samples
     % occupy the positions aligned with the valid output segment.
     errorBlock = zeros(1, fftLength);
@@ -107,8 +120,13 @@ for block = 0:numBlocks - 1
 
     previousTail = current(end - Nf + 1:end);
     trace.weightNorm(block + 1) = norm(weights);
-    trace.errorPower(block + 1) = mean(abs(errorSegment).^2);
+    trace.errorPower(block + 1) = mean(abs(errorSegment(inFrame)).^2);
 end
 % Crop the output back to the original signal length.
 output = output(1:totalSamples);
+end
+
+function symbols = bpsk_slice(values)
+symbols = sign(real(values));
+symbols(symbols == 0) = 1;
 end

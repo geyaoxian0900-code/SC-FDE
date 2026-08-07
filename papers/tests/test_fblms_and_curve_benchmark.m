@@ -40,6 +40,62 @@ verifyEqual(testCase, sign(seg), sign(refseg), ...
     "converged FBLMS decisions must match the reference symbols");
 end
 
+function testFblmsQpskDecisionDirected(testCase)
+% The decision-directed branch must use a modulation-matched slicer:
+% with a QPSK reference and the 4-quadrant unit-energy slicer, the
+% converged equalizer must track the complex QPSK symbols (not collapse
+% them to real BPSK).
+N = 64;
+Nf = 8;
+trainLength = 640;
+bits = randi([0 1], 1, 2048);
+bitMatrix = reshape(bits, 2, []);
+signal = ((1 - 2 * bitMatrix(1, :)) + ...
+    1j * (1 - 2 * bitMatrix(2, :))) / sqrt(2);
+signal = repmat(signal, 1, 4); % 1024 symbols
+step = 0.3;
+epsilon = 1e-6;
+qpskSlicer = @(values) ((1 - 2 * (real(values) < 0)) + ...
+    1j * (1 - 2 * (imag(values) < 0))) / sqrt(2);
+[output, ~, trace] = scfde.equalizers.fblms_equalizer(signal, signal, ...
+    trainLength, Nf, N, step, epsilon, true, qpskSlicer);
+verifyLessThan(testCase, trace.errorPower(end), 1e-2, ...
+    "QPSK decision-directed FBLMS must converge");
+startIdx = Nf + 6 * N + 1;
+seg = output(startIdx:end);
+refseg = signal(startIdx:startIdx + numel(seg) - 1);
+decisions = qpskSlicer(seg);
+verifyEqual(testCase, decisions, refseg, ...
+    "QPSK decisions must match the reference symbols");
+end
+
+function testFblmsPartialFinalBlockNoPaddingUpdate(testCase)
+% The zero-padded samples of a partial final block must not contribute
+% to the adaptive update: with a signal length that is not a multiple
+% of the block size, the last block's error power must reflect only the
+% in-frame samples, and the equalizer must still converge on the
+% training reference.
+N = 64;
+Nf = 8;
+trainLength = 700;  % 10 full blocks + 60 samples (partial last block)
+signal = randi([0 1], 1, 700) * 2 - 1;
+step = 0.3;
+epsilon = 1e-6;
+[output, ~, trace] = scfde.equalizers.fblms_equalizer(signal, signal, ...
+    trainLength, Nf, N, step, epsilon, false);
+verifyEqual(testCase, numel(output), 700, ...
+    "output length must equal the input length");
+% The last block's error power must be computed on the 60 in-frame
+% samples (a padded 64-sample error would be dominated by zeros).
+verifyLessThan(testCase, trace.errorPower(end), 0.2, ...
+    "final partial block must have converged on its in-frame samples");
+startIdx = Nf + 8 * N + 1;
+seg = output(startIdx:end);
+refseg = signal(startIdx:startIdx + numel(seg) - 1);
+verifyLessThan(testCase, mean((seg - refseg).^2), 0.05, ...
+    "converged FBLMS must track the reference");
+end
+
 function testFblmsNoCircularBoundaryContamination(testCase)
 % The block-boundary samples must not be polluted by circular wrap: the
 % first Nf samples of each block are dropped (overlap-save) and the
@@ -191,10 +247,34 @@ berSim = 10 .^ interp1([-2, 12], [-1, -6], 0:2:10, "linear", "extrap");
 benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
     reference, methodNames);
 % Coverage: first and last reference points lie outside the sim range.
-verifyEqual(testCase, benchmark.coverage(1, 1), false, ...
+verifyEqual(testCase, benchmark.horizontalCoverage(1, 1), false, ...
     "reference point below the sim SNR range must be excluded");
-verifyEqual(testCase, benchmark.coverage(1, end), false, ...
+verifyEqual(testCase, benchmark.horizontalCoverage(1, end), false, ...
     "reference point above the sim SNR range must be excluded");
-verifyTrue(testCase, all(benchmark.coverage(1, 2:end - 1)), ...
+verifyTrue(testCase, all(benchmark.horizontalCoverage(1, 2:end - 1)), ...
     "interior reference points must be covered");
+% SNR coverage: 0..10 of the reference are inside the sim range.
+verifyEqual(testCase, benchmark.snrCoverage(1, 2:end - 1), ...
+    true(1, 6), "interior SNR points must be inside the sim range");
+end
+
+function testCurveBenchmarkLowCoverageDowngrades(testCase)
+% With only a small fraction of the reference SNR range covered, the
+% grade must be downgraded to D (insufficient evidence), even if the
+% covered points match exactly.
+snrSim = [0, 2];                    % sim covers only 0-2 dB
+reference.snrDb = 0:2:10;           % reference spans 0-10 dB
+methodNames = ["A"];
+reference.ber = 10 .^ linspace(-1, -5, 6);
+berSim = reference.ber(1:2);        % sim matches the covered points
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, methodNames);
+verifyEqual(testCase, benchmark.perMethod.logRmse(1), 0, ...
+    "AbsTol", 1e-10, "covered points match exactly");
+verifyLessThan(testCase, benchmark.coverageFraction(1), 0.5, ...
+    "coverage fraction must be below 0.5");
+verifyEqual(testCase, benchmark.grade, "D", ...
+    "low coverage must downgrade the grade to D");
+verifyEqual(testCase, benchmark.perMethod.grade(1), "D", ...
+    "per-method grade must be downgraded to D");
 end

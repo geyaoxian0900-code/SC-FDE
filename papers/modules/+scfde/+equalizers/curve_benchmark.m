@@ -41,11 +41,19 @@ if size(refBer, 1) == 1 && numMethods > 1
     refBer = repmat(refBer, numMethods, 1);
 end
 
-% -- log10(BER) RMSE over reference SNR points -------------------------
-logSim = interp1(snrSim, log10(berSim).', refSnr, "linear", "extrap").';
+% -- SNR coverage mask -------------------------------------------------
+% A reference point is covered only if its SNR lies INSIDE the
+% simulation SNR range (no extrapolation).  Only covered points may
+% contribute to the RMSE, ordering and grade.  Points outside the range
+% are excluded and flagged, and a too-low coverage downgrades the grade.
+snrCoverage = refSnr >= min(snrSim) & refSnr <= max(snrSim);
+snrCoverage = repmat(snrCoverage, numMethods, 1);
+
+% -- log10(BER) RMSE over covered reference SNR points ------------------
+logSim = interp1(snrSim, log10(berSim).', refSnr, "linear").';
 logSim = reshape(logSim, numMethods, numel(refSnr));
 logRef = log10(refBer);
-valid = isfinite(logRef) & isfinite(logSim);
+valid = isfinite(logRef) & isfinite(logSim) & snrCoverage;
 logRmse = sqrt(mean((logSim(valid) - logRef(valid)).^2, "all"));
 
 % -- zone RMSE (low / mid / high SNR thirds of the reference) ----------
@@ -64,13 +72,13 @@ end
 % -- max horizontal SNR deviation at equal BER --------------------------
 % Invert the monotonized log10(BER) simulation curve: for each reference
 % point, find the simulation SNR whose log-BER equals the reference
-% log-BER, then take the SNR difference.  Reference points outside the
-% simulation SNR coverage are excluded (marked in coverage).
+% log-BER, then take the SNR difference.  horizontalCoverage additionally
+% requires the target BER to lie inside the invertible curve span.
 maxSnrDeviation = 0;
-covered = true(size(valid));
+horizontalCoverage = snrCoverage;
 for method = 1:numMethods
     simLog = log10(max(berSim(method, :), eps));
-    [monoSnr, monoLog, monoFlag] = monotonize(snrSim, simLog);
+    [monoSnr, monoLog, ~] = monotonize(snrSim, simLog);
     % Remove duplicate log-BER values so the inverse interpolation is
     % well defined (keep the first / lowest-SNR occurrence).
     [monoLog, keepIndex] = unique(monoLog, "stable");
@@ -78,36 +86,29 @@ for method = 1:numMethods
     for r = 1:numel(refSnr)
         target = refBer(method, r);
         if ~isfinite(target)
-            covered(method, r) = false;
+            horizontalCoverage(method, r) = false;
             continue;
         end
         targetLog = log10(target);
         % Only invert inside the monotonic span of the simulation.
         if targetLog < min(monoLog) || targetLog > max(monoLog)
-            covered(method, r) = false;
+            horizontalCoverage(method, r) = false;
             continue;
         end
         simSnrAtRef = interp1(monoLog, monoSnr, targetLog, "linear");
-        % The reference SNR must lie inside the simulation SNR range.
-        if refSnr(r) < min(monoSnr) || refSnr(r) > max(monoSnr)
-            covered(method, r) = false;
-            continue;
-        end
         maxSnrDeviation = max(maxSnrDeviation, ...
             abs(simSnrAtRef - refSnr(r)));
     end
 end
-benchmarkCoverage = covered;
 
 % -- method ordering agreement ------------------------------------------
-% Use the interpolation to the reference SNR grid (logSim) so that
-% different simulation and reference grids do not cause index errors.
+% Only covered reference SNRs participate (no extrapolation).
 orderAgreement = nan;
 if numMethods >= 2
     matches = 0;
     counted = 0;
     for r = 1:numel(refSnr)
-        if ~all(isfinite(refBer(:, r)))
+        if ~all(isfinite(refBer(:, r))) || ~snrCoverage(1, r)
             continue;
         end
         simOrder = rank_order(logSim(:, r));
@@ -121,6 +122,9 @@ if numMethods >= 2
 end
 
 % -- per-method metrics and grade ---------------------------------------
+% Coverage fraction = covered points / TOTAL reference points (a
+% low fraction means insufficient evidence over the full reference).
+coverageFraction = sum(valid, 2) / max(numel(refSnr), 1);
 perMethod.logRmse = nan(1, numMethods);
 perMethod.grade = strings(1, numMethods);
 for method = 1:numMethods
@@ -129,15 +133,19 @@ for method = 1:numMethods
         perMethod.logRmse(method) = sqrt(mean(...
             (logSim(method, methodValid) - logRef(method, methodValid)).^2));
     end
-    perMethod.grade(method) = grade_of(perMethod.logRmse(method));
+    perMethod.grade(method) = grade_of(perMethod.logRmse(method), ...
+        coverageFraction(method));
 end
 
 benchmark.logRmse = logRmse;
 benchmark.zoneRmse = zoneRmse;
 benchmark.maxSnrDeviation = maxSnrDeviation;
 benchmark.orderAgreement = orderAgreement;
-benchmark.coverage = benchmarkCoverage;
-benchmark.grade = grade_of(logRmse);
+benchmark.snrCoverage = snrCoverage;
+benchmark.coverageFraction = coverageFraction;
+benchmark.horizontalCoverage = horizontalCoverage;
+benchmark.coverage = horizontalCoverage; % backwards-compatible alias
+benchmark.grade = grade_of(logRmse, mean(coverageFraction));
 benchmark.perMethod = perMethod;
 benchmark.methodNames = methodNames;
 benchmark.reference = reference;
@@ -168,8 +176,14 @@ order = zeros(size(values));
 order(sorted) = 1:numel(values);
 end
 
-function grade = grade_of(logRmse)
-if isempty(logRmse) || isnan(logRmse)
+function grade = grade_of(logRmse, coverageFraction)
+% Grade with the SNR coverage requirement: an A/B claim needs at least
+% half of the reference SNR points covered; otherwise the evidence is
+% insufficient and the grade is downgraded to D.
+if nargin < 2 || isempty(coverageFraction)
+    coverageFraction = 1;
+end
+if isempty(logRmse) || isnan(logRmse) || coverageFraction < 0.5
     grade = "D";
 elseif logRmse <= 0.15
     grade = "A";

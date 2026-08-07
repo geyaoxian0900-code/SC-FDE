@@ -75,7 +75,7 @@ run_all_simulations                       % 全部 11 个实验（quick 档）
 run_all_simulations(struct("profile","full"))
 ```
 
-### 均衡器即插即用（36 个）
+### 均衡器即插即用（37 个）
 
 所有 6 章均衡器统一契约为 `receiver = equalizer(channel, source, cfg)`，通过 `cfg.equalizers` 任意选择/混用：
 
@@ -195,7 +195,7 @@ source(cfg) → channel(tx,cfg) → receiverBank(channel,source,cfg) → metric(
     移除经验系数 0.03）
   - subband_equivalent_channel 回退分支数与前端一致（含无 branches 时
     单分支回退 max(1, ...)）
-  - list_simulations 补全 11 项实验；根与 papers/README 均衡器数量均为 36
+  - list_simulations 补全 11 项实验；根与 papers/README 均衡器数量均为 37
   - 新增 test_audit_round3_fixes 单元测试：FD-DFE 频变前馈、毫秒时延、
     无 branches PTR 回退、CCK/CSK bit 级统计、双 UW 帧结构
 - **仍为工程近似**（非逐式原样）：HTFDE 可靠度缩放、BLMS 用循环块替代 overlap-save、

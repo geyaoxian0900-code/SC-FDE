@@ -21,9 +21,16 @@ epsilon = field_default(cfg, "fblmsEpsilon", 1e-6);
 trainLength = field_default(cfg, "trainingSymbols", ...
     min(round(numel(reference) / 2), numel(reference)));
 useDecisionFeedback = field_default(cfg, "fblmsDecisionDirected", true);
+if isfield(cfg, "fblmsDecisionFcn")
+    decisionFcn = cfg.fblmsDecisionFcn;
+elseif isfield(cfg, "modulation") && strcmpi(cfg.modulation, "qpsk")
+    decisionFcn = @qpsk_slice;
+else
+    decisionFcn = @bpsk_slice;
+end
 [output, ~, trace] = scfde.equalizers.fblms_equalizer(received, ...
     reference, trainLength, filterLength, blockLength, step, epsilon, ...
-    useDecisionFeedback);
+    useDecisionFeedback, decisionFcn);
 % Align the output length with the reference.
 n = min(numel(output), numel(reference));
 decisions = output(1:n);
@@ -37,4 +44,15 @@ if isfield(cfg, name)
 else
     value = defaultValue;
 end
+end
+
+function symbols = qpsk_slice(values)
+% 4-quadrant unit-energy QPSK hard decision.
+symbols = ((1 - 2 * (real(values) < 0)) + ...
+    1j * (1 - 2 * (imag(values) < 0))) / sqrt(2);
+end
+
+function symbols = bpsk_slice(values)
+symbols = sign(real(values));
+symbols(symbols == 0) = 1;
 end
