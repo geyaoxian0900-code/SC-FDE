@@ -7,7 +7,12 @@ end
 
 function setupOnce(testCase)
 papersDir = fileparts(fileparts(mfilename("fullpath")));
+addpath(papersDir); % run_unified_equalizer and other root entry points
 addpath(fullfile(papersDir, "modules"));
+addpath(fullfile(papersDir, "common"));
+addpath(fullfile(papersDir, "engineering_simulation"));
+addpath(fullfile(papersDir, "examples"));
+testCase.TestData.papersDir = papersDir;
 end
 
 function testFblmsMatchesLinearConvolutionNoiseless(testCase)
@@ -67,6 +72,27 @@ refseg = signal(startIdx:startIdx + numel(seg) - 1);
 decisions = qpskSlicer(seg);
 verifyEqual(testCase, decisions, refseg, ...
     "QPSK decisions must match the reference symbols");
+end
+
+function testFblmsPartialTrainingBlockUsesReference(testCase)
+% A partial final training block must still use the reference symbols
+% for its in-frame training samples (per-sample trainingMask), even
+% when useDecisionFeedback is false - flipping those reference symbols
+% must change the learned weights.
+N = 64;
+Nf = 8;
+trainLength = 700; % last block spans 641-704, 60 in-frame training
+signal = randi([0 1], 1, 700) * 2 - 1;
+step = 0.3;
+epsilon = 1e-6;
+[~, w1, ~] = scfde.equalizers.fblms_equalizer(signal, signal, ...
+    trainLength, Nf, N, step, epsilon, false);
+flipped = signal;
+flipped(641:700) = -flipped(641:700); % flip the partial-block training
+[~, w2, ~] = scfde.equalizers.fblms_equalizer(signal, flipped, ...
+    trainLength, Nf, N, step, epsilon, false);
+verifyGreaterThan(testCase, norm(w1 - w2), 0, ...
+    "partial training block reference must affect the learned weights");
 end
 
 function testFblmsPartialFinalBlockNoPaddingUpdate(testCase)
@@ -277,4 +303,28 @@ verifyEqual(testCase, benchmark.grade, "D", ...
     "low coverage must downgrade the grade to D");
 verifyEqual(testCase, benchmark.perMethod.grade(1), "D", ...
     "per-method grade must be downgraded to D");
+end
+
+function testFblmsProductionEntryReproducible(testCase)
+% The unified production entry with the QPSK scenario must reproduce
+% the documented result for a fixed configuration: symbols=8,
+% frameCount=10, snrDb=18, randomSeed=42 gives BER ~ 0.0107
+% (12 errors / 1120 bits) with the 4-quadrant decision function.
+% This pins the production configuration that produced the reported
+% improvement over the old BPSK-slicing BER of 0.0295.
+addpath(fullfile(testCase.TestData.papersDir, "engineering_simulation"));
+opts = struct("equalizers", {"fblms"}, "scenario", "qpsk", ...
+    "snrDb", 18, "symbols", 8, "frameCount", 10, ...
+    "makePlot", false, "randomSeed", 42);
+r = run_unified_equalizer(opts);
+verifyEqual(testCase, r.totalBits, 1120, ...
+    "production configuration must count 1120 bits");
+verifyEqual(testCase, r.errorBits, 12, ...
+    "production configuration must reproduce 12 bit errors");
+verifyLessThan(testCase, abs(r.ber - 0.01071), 1e-4, ...
+    "production BER must reproduce the documented value");
+verifyGreaterThan(testCase, r.berLower95, 0.005, ...
+    "95% CI lower bound must be consistent");
+verifyLessThan(testCase, r.berUpper95, 0.02, ...
+    "95% CI upper bound must be consistent");
 end

@@ -84,15 +84,22 @@ for block = 0:numBlocks - 1
     % -- error ---------------------------------------------------------
     sampleIndex = block * N + (1:N);
     inFrame = sampleIndex <= totalSamples;
-    if block * N + N <= trainLength
-        desired = zeros(1, N);
-        desired(inFrame) = reference(sampleIndex(inFrame));
-    elseif useDecisionFeedback
-        % Modulation-matched hard decision (QPSK 4-quadrant unit-energy
-        % or BPSK sign(real(...)) per the caller).
-        desired = decisionFcn(validSegment);
-    else
-        desired = validSegment;
+    % Per-sample training mask: a partial block whose tail lies inside
+    % the training region still uses the reference symbols for those
+    % in-frame training samples.
+    trainingMask = inFrame & sampleIndex <= trainLength;
+    desired = zeros(1, N);
+    desired(trainingMask) = reference(sampleIndex(trainingMask));
+    if ~all(trainingMask)
+        % Samples outside the training region: decision-directed when
+        % enabled, otherwise freeze the error (no update for those
+        % samples; only the in-frame training contribution remains).
+        if useDecisionFeedback
+            decisions = decisionFcn(validSegment);
+            desired(~trainingMask) = decisions(~trainingMask);
+        else
+            desired(~trainingMask) = validSegment(~trainingMask);
+        end
     end
     errorSegment = desired - validSegment;
     % Zero-padded samples of the final partial block must not

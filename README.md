@@ -96,7 +96,7 @@ cfg.equalizers = @my_equalizer;
 
 - 第2章（10）：dfe, lms-dfe, nlms-dfe, rls-dfe, dpll-dfe, mc-lms-dfe, mc-nlms-dfe, mc-rls-dfe, ptr-dfe, subband-ptr-dfe
 - 第3章（7）：mmse-fde, zf-fde, htfde, sd-ibdfe, hd-ibdfe, ice-sd-ibdfe, ice-hd-ibdfe
-- 第4章（9）：td-turbo, fd-dfe, fd-turbo, tf-turbo, bitf-turbo, blms-tf-turbo, tdda-teq, fdda-teq, fdda-dfe-teq
+- 第4章（10）：td-turbo, fd-dfe, fd-turbo, tf-turbo, bitf-turbo, blms-tf-turbo, fblms, tdda-teq, fdda-teq, fdda-dfe-teq
 - 第5章（7）：cck-rake, cck-dfe, cck-bidfe, cck-bidfe2, cck-tr-diversity, cck-fde, cck-mfb
 - 第6章（3）：csk-matched-filter, csk-soft-sic, csk-ese
 

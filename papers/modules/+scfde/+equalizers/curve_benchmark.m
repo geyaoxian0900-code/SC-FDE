@@ -25,7 +25,11 @@ arguments
     methodNames (1, :) string = []
 end
 berSim = max(berSim, eps);
-reference.ber = max(reference.ber, eps);
+% NaN in reference.ber marks missing data points and MUST be preserved
+% (max(x, eps) would silently turn NaN into eps, fabricating a
+% near-zero reference).  Only finite non-positive values are clipped.
+finiteRef = isfinite(reference.ber);
+reference.ber(finiteRef) = max(reference.ber(finiteRef), eps);
 if isvector(berSim) && size(berSim, 1) == 1
     berSim = berSim(:).'; % keep 1 x S for a single method
 end
@@ -48,6 +52,9 @@ end
 % are excluded and flagged, and a too-low coverage downgrades the grade.
 snrCoverage = refSnr >= min(snrSim) & refSnr <= max(snrSim);
 snrCoverage = repmat(snrCoverage, numMethods, 1);
+% Coverage fraction is relative to the number of FINITE reference
+% points actually present (NaN = missing data point, not a BER of eps).
+numRefPoints = sum(any(isfinite(refBer), 1));
 
 % -- log10(BER) RMSE over covered reference SNR points ------------------
 logSim = interp1(snrSim, log10(berSim).', refSnr, "linear").';
@@ -122,9 +129,10 @@ if numMethods >= 2
 end
 
 % -- per-method metrics and grade ---------------------------------------
-% Coverage fraction = covered points / TOTAL reference points (a
-% low fraction means insufficient evidence over the full reference).
-coverageFraction = sum(valid, 2) / max(numel(refSnr), 1);
+% Coverage fraction = covered points / finite reference points (a
+% low fraction means insufficient evidence; NaN reference points do
+% not count against coverage).
+coverageFraction = sum(valid, 2) / max(numRefPoints, 1);
 perMethod.logRmse = nan(1, numMethods);
 perMethod.grade = strings(1, numMethods);
 for method = 1:numMethods
