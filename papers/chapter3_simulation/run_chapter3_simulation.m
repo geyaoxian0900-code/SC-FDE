@@ -9,6 +9,7 @@ rng(20260722, "twister");
 
 rootDir = fileparts(mfilename("fullpath"));
 addpath(fullfile(rootDir, "..", "common"));
+addpath(fullfile(rootDir, "..", "modules"));
 resultDir = fullfile(rootDir, "results");
 if ~exist(resultDir, "dir")
     mkdir(resultDir);
@@ -267,14 +268,11 @@ end
 
 function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
         trueDoppler, multipath)
-    % One frame of blockCount data blocks.  Each block carries its own
-    % four segments [pre-UW; pre-UW; data; post-UW] and the WHOLE block
-    % (including both pre-UWs and the post-UW) is stretched and
-    % carrier-shifted by that block's trueDoppler, so the estimator's
-    % pre-UWs and post-UW of one block always experience the same
-    % Doppler.  Blocks are not shared: the post-UW of block b is the
-    % trailing UW of block b, and block b+1 starts with its own pre-UW.
+    % One frame of blockCount data blocks; delegates to the shared
+    % tracking_frame package function so tests exercise the same code.
     samplesPerSymbol = round(cfg.fs * cfg.Ts);
+    tracking = scfde.equalizers.tracking_frame(uw, trueDoppler, ...
+        cfg.fs, cfg.fc, samplesPerSymbol, cfg.dataLength);
     hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
     delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
     phases = [0, 0.45, -0.90, 1.35];
@@ -285,130 +283,19 @@ function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
         hSamples(1) = gains(1);
     end
     hSamples = hSamples / norm(hSamples);
-    blockCount = numel(trueDoppler);
-    uwSamples = repelem(uw, samplesPerSymbol);
-    preSamples = numel(uwSamples);                 % one pre-UW
-    dataSamples = cfg.dataLength * samplesPerSymbol;
-    % Block layout in samples (per block): pre, pre, data, post.
-    blockLayout = [preSamples, preSamples, dataSamples, preSamples];
-    % Build the frame block by block: each block is stretched by its own
-    % Doppler and its carrier phase continues from the previous block.
-    stretched = zeros(0, 1);
-    cumulativePhase = 0;
-    for block = 1:blockCount
-        doppler = trueDoppler(block);
-        data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
-        blockSymbols = [uw; uw; data; uw];
-        blockSamples = repelem(blockSymbols, samplesPerSymbol);
-        segmentLength = floor((numel(blockSamples) - 1) * ...
-            (1 + doppler)) + 1;
-        sourcePosition = (0:segmentLength-1).' / ...
-            (1 + doppler) + 1;
-        blockStretched = interp1((1:numel(blockSamples)).', ...
-            blockSamples, sourcePosition, "linear", 0);
-        % Carrier phase: continues from the previous block's final
-        % phase, so the phase is continuous across the whole frame.
-        % The saved phase is the NEXT sample's phase (one carrier
-        % frequency step beyond the last sample), so the first sample of
-        % the next block advances by exactly one sample interval instead
-        % of duplicating the boundary sample.
-        n = (0:numel(blockStretched)-1).';
-        phase = cumulativePhase + 2 * pi * cfg.fc * doppler ./ ...
-            cfg.fs .* n;
-        blockStretched = blockStretched .* exp(1j * phase);
-        cumulativePhase = phase(end) + 2 * pi * cfg.fc * doppler ./ ...
-            cfg.fs;
-        stretched = [stretched; blockStretched]; %#ok<AGROW>
-    end
-    % The post-UW of the last block is included in its own block, so no
-    % extra tail UW is needed.
-    received = conv(stretched, hSamples);
+    received = conv(tracking.received, hSamples);
     received = add_awgn(received, snrDb);
     tracking.received = received;
     tracking.downsample = samplesPerSymbol;
-    tracking.trueDoppler = trueDoppler(:);
-    tracking.blockLayout = blockLayout;
 end
 
 function estimates = cross_correlation_tracker(cfg, received, samplesPerSymbol)
-    % UW cross-correlation Doppler tracker (Eq. 3-8 form).  Each block b
-    % is [pre-UW; pre-UW; data; post-UW] with its own Doppler a_b.  Both
-    % the pre-UW correlation peak and the post-UW correlation peak are
-    % located INSIDE block b, and the Doppler follows from their
-    % in-block spacing:
-    %   a_b = (postPeak_b - prePeak_b - postOffset) / postOffset
-    % with postOffset = 2*uwLength + dataLength samples.  Because both
-    % peaks belong to the same block, the estimate is fully independent
-    % of the other blocks (no mixing of neighbouring Doppler values).
-    uwLength = cfg.uwLength;
-    uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
-    blockSamples = cfg.blockLength * samplesPerSymbol;
-    blockStride = blockSamples + numel(uwSamples); % one full block
-    postOffset = blockSamples; % post-UW sits 2*uw+data after block start
-    blockCount = 5;
-    prePeaks = zeros(blockCount, 1);
-    postPeaks = zeros(blockCount, 1);
-    nominalBlock = zeros(blockCount, 1);
-    nominalBlock(1) = 1;
-    for block = 1:blockCount
-        if block > 1
-            nominalBlock(block) = nominalBlock(block - 1) + blockStride;
-        end
-        windowHalf = round(numel(uwSamples) / 2);
-        % Pre-UW peak: around the block start (drift covers the
-        % accumulated stretch of the earlier blocks).
-        drift = round((block - 1) * blockStride * 2e-3);
-        preRange = nominalBlock(block) + (-drift - windowHalf:...
-            drift + windowHalf);
-        preRange = preRange(preRange >= 1 & ...
-            preRange <= numel(received) - numel(uwSamples));
-        correlation = zeros(size(preRange));
-        for index = 1:numel(preRange)
-            window = received(preRange(index):preRange(index) + ...
-                numel(uwSamples) - 1);
-            correlation(index) = abs(sum(window .* conj(uwSamples)));
-        end
-        [~, peakOffset] = max(correlation);
-        prePeaks(block) = preRange(peakOffset);
-        % Sub-sample refinement by parabolic interpolation around the
-        % integer peak so the in-block spacing resolves Doppler steps
-        % below one sample (postOffset ~ 6912 samples, 1 sample = 1.45e-4).
-        if peakOffset > 1 && peakOffset < numel(correlation)
-            y0 = correlation(peakOffset - 1);
-            y1 = correlation(peakOffset);
-            y2 = correlation(peakOffset + 1);
-            denom = y0 - 2 * y1 + y2;
-            if abs(denom) > eps
-                prePeaks(block) = preRange(peakOffset) + ...
-                    0.5 * (y0 - y2) / denom;
-            end
-        end
-        % Post-UW peak: postOffset samples after the pre-UW peak, with a
-        % window covering the block-internal stretch.
-        postRange = prePeaks(block) + postOffset + ...
-            (-windowHalf:windowHalf);
-        postRange = postRange(round(postRange) >= 1 & ...
-            round(postRange) <= numel(received) - numel(uwSamples));
-        correlation = zeros(size(postRange));
-        for index = 1:numel(postRange)
-            window = received(round(postRange(index)):round(postRange(index)) + ...
-                numel(uwSamples) - 1);
-            correlation(index) = abs(sum(window .* conj(uwSamples)));
-        end
-        [~, peakOffset] = max(correlation);
-        postPeaks(block) = postRange(peakOffset);
-        if peakOffset > 1 && peakOffset < numel(correlation)
-            y0 = correlation(peakOffset - 1);
-            y1 = correlation(peakOffset);
-            y2 = correlation(peakOffset + 1);
-            denom = y0 - 2 * y1 + y2;
-            if abs(denom) > eps
-                postPeaks(block) = postRange(peakOffset) + ...
-                    0.5 * (y0 - y2) / denom;
-            end
-        end
-    end
-    estimates = (postPeaks - prePeaks - postOffset) / postOffset;
+    % UW cross-correlation Doppler tracker (Eq. 3-8 form); delegates to
+    % the shared cross_peak_tracker package function so tests exercise
+    % the same code.
+    estimates = scfde.equalizers.cross_peak_tracker(received, ...
+        chu_sequence(cfg.uwLength), samplesPerSymbol, ...
+        cfg.blockLength, 5);
 end
 
 function estimates = two_d_tracker(cfg, received, samplesPerSymbol)

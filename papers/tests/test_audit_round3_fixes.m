@@ -152,44 +152,91 @@ verifyEqual(testCase, blockStart, 129);
 end
 
 function testCrossTrackerInBlockAlgebra(testCase)
-% The Eq. 3-8 tracker must give an independent per-block estimate from
-% the in-block pre/post UW spacing:
-%   a_b = (postPeak_b - prePeak_b - postOffset) / postOffset
-% with postOffset = blockLength * samplesPerSymbol.  A pure (noiseless,
-% single-path) block stretched by a must show the spacing
-%   postPeak - prePeak = round(postOffset * (1 + a))
-% so the estimate equals a up to the integer-sample quantization.
+% End-to-end: build a noiseless 5-block frame with distinct per-block
+% Doppler values through the PRODUCTION tracking_frame, run the
+% PRODUCTION cross_peak_tracker, and check each block's estimate is
+% independent (close to its own true Doppler, not mixed with neighbours).
+fs = 48000; fc = 10000;
 samplesPerSymbol = 12;
-uwLength = 64;
-dataLength = 448;
+uwLength = 64; dataLength = 448;
 blockLength = 2 * uwLength + dataLength;
+uw = exp(1j * pi * (0:uwLength-1).'.^2 / uwLength);
+trueD = [0.933, 1.000, 0.9533, 1.067, 1.033] * 1e-3;
+tracking = scfde.equalizers.tracking_frame(uw, trueD, fs, fc, ...
+    samplesPerSymbol, dataLength);
+estimates = scfde.equalizers.cross_peak_tracker(tracking.received, ...
+    uw, samplesPerSymbol, blockLength, numel(trueD));
+verifyEqual(testCase, size(estimates), [5, 1]);
+% Each estimate must be within a few samples of its own true Doppler
+% (parabolic interpolation gives sub-sample resolution on a noiseless
+% single-path frame; allow 2 samples of quantization slack).
+quantizationSlack = 2 / (blockLength * samplesPerSymbol);
+verifyEqual(testCase, estimates, trueD(:), "AbsTol", quantizationSlack, ...
+    "per-block estimate must track its own Doppler");
+% The old adjacent-peak formula mixes neighbouring Dopplers:
+%   a'_1 = (D/L) a_1,  a'_b = (U/L) a_(b-1) + (D/L) a_b
+% with D = postOffset, U = uwLength*samplesPerSymbol, L = blockStride.
+% It must NOT reproduce the true per-block values (regression guard).
 postOffset = blockLength * samplesPerSymbol;
-a = 0.933e-3;
-idealSpacing = postOffset * (1 + a);
-verifyEqual(testCase, idealSpacing, 6918.4489, "AbsTol", 1e-3);
-verifyEqual(testCase, round(idealSpacing), 6918, ...
-    "one-sample quantization floor of the spacing");
-% The estimator formula must reduce the quantized spacing back to a
-spacing = round(idealSpacing);
-estimate = (spacing - postOffset) / postOffset;
-verifyEqual(testCase, estimate, (6918 - 6912) / 6912, "AbsTol", 1e-15);
-verifyLessThan(testCase, abs(estimate - a), 1.5 / postOffset, ...
-    "quantization error bounded by one sample");
+blockStride = postOffset + uwLength * samplesPerSymbol;
+uFrac = uwLength * samplesPerSymbol / blockStride;
+dFrac = postOffset / blockStride;
+oldFormula = zeros(5, 1);
+oldFormula(1) = dFrac * trueD(1);
+for b = 2:5
+    oldFormula(b) = uFrac * trueD(b - 1) + dFrac * trueD(b);
+end
+verifyGreaterThan(testCase, norm(estimates - oldFormula), 1e-8, ...
+    "estimates must not match the adjacent-peak mixing formula");
 end
 
 function testCarrierPhaseBoundaryAdvance(testCase)
-% The per-block carrier phase must advance by exactly one sample
-% interval at the block boundary: the saved phase is the next sample's
-% phase (phase(end) + 2*pi*fc*d/fs), so the first sample of the next
-% block differs from the last sample of the previous block.
-cfg.fs = 48000;
-cfg.fc = 10000;
+% The PRODUCTION tracking_frame must advance the carrier phase by
+% exactly one sample interval at every block boundary.  Verify by
+% reconstructing the phase ramp of block 2 from the waveform of a
+% constant-magnitude reference: send a frame whose data symbols are all
+% +1 so the received phase equals the carrier phase (up to the UW
+% pattern, which is handled by using UW-only blocks below).  Instead,
+% compare the production waveform against a manual re-build with the
+% documented next-sample-phase rule: the phase of the last sample of
+% block 1 plus the step of block 2 must equal the phase of the first
+% sample of block 2.
+fs = 48000; fc = 10000;
+samplesPerSymbol = 12;
+uwLength = 64; dataLength = 448;
+uw = exp(1j * pi * (0:uwLength-1).'.^2 / uwLength);
 doppler = 0.933e-3;
-step = 2 * pi * cfg.fc * doppler / cfg.fs;
-verifyEqual(testCase, step, 0.0012214, "AbsTol", 1e-6);
-% previous block last-sample phase at n = L-1; next block first sample
-% at n = 0 must be phase(L-1) + step.
-lastSamplePhase = step * 10;
-nextFirstSamplePhase = lastSamplePhase + step;
-verifyEqual(testCase, nextFirstSamplePhase, step * 11, "AbsTol", 1e-15);
+trueD = [doppler, 1.5 * doppler];
+tracking = scfde.equalizers.tracking_frame(uw, trueD, fs, fc, ...
+    samplesPerSymbol, dataLength);
+blockLayout = tracking.blockLayout;
+blockStride = sum(blockLayout);
+L1 = floor((blockStride - 1) * (1 + doppler)) + 1;
+% Phase ramp inside block 1 (production): the last block-1 sample
+phaseEnd1 = angle(tracking.received(L1));
+% Phase ramp inside block 2: first sample
+phaseStart2 = angle(tracking.received(L1 + 1));
+% The carrier phase of block 2 at n = 0 is cumulativePhase1 + 0 and at
+% n = 1 it is cumulativePhase1 + step2.  But angle() of the data symbols
+% is polluted by the UW symbol phases, so instead verify the ramp of the
+% UW-only segments: block 1's last UW symbol has a known phase from the
+% UW sequence, and the carrier adds doppler*2*pi*fc/fs per sample.
+% Equivalent check: the production phase at L1 (block 1) and at L1+1
+% (block 2) must satisfy
+%   phase2(n=0) - phase1(n=L1-1) = step2  (mod 2*pi)
+% after removing the data-symbol phase.  Use the UW pattern: both
+% boundary samples lie inside the block-1 post-UW / block-2 pre-UW,
+% whose symbol phases are uw(end) and uw(1); remove them.
+uwSamples = repelem(uw, samplesPerSymbol);
+% block 1 post-UW occupies the last uwLength symbols of block 1; its
+% last sample phase = angle(uw(end)) + carrierPhase(L1)
+% block 2 pre-UW first sample phase = angle(uw(1)) + carrierPhase(L1+1)
+carrierAtL1 = mod(angle(tracking.received(L1)) - angle(uwSamples(end)), 2*pi);
+carrierAtL1p1 = mod(angle(tracking.received(L1 + 1)) - angle(uwSamples(1)), 2*pi);
+diff = mod(carrierAtL1p1 - carrierAtL1, 2 * pi);
+% The saved phase is the NEXT sample's phase computed with block 1's
+% Doppler, so the boundary advance equals block 1's carrier step.
+step = 2 * pi * fc * trueD(1) / fs;
+verifyEqual(testCase, diff, step, "AbsTol", 1e-6, ...
+    "block boundary must advance by one carrier sample step");
 end

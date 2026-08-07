@@ -176,10 +176,11 @@ source(cfg) → channel(tx,cfg) → receiverBank(channel,source,cfg) → metric(
   - 图 3.6 单帧 5 块时变跟踪（30 dB）：每块独立构造
     [pre-UW; pre-UW; data; post-UW]，整块（含双前置 UW 与后置 UW）经历同一
     多普勒并携波相位持续累积（无共享 UW 属性错位）；
-    UW 互相关估计器按式 (3-8) 形式：每块内部独立检测
-    pre/post 双峰，a_b = (postPeak−prePeak−postOffset)/postOffset（含抛物线
-    亚采样精化），不混合相邻块多普勒；载波相位在块边界
-    推进一个采样间隔（保存下一采样相位）；二维估计器按式
+    UW 互相关估计器按式 (3-8) 形式（包函数
+    scfde.equalizers.cross_peak_tracker）：每块内部独立检测 pre/post 双峰，
+    a_b = (postPeak−prePeak−postOffset)/postOffset（含抛物线亚采样精化），
+    不混合相邻块多普勒；帧构造与载波相位为包函数
+    scfde.equalizers.tracking_frame（块边界推进一个采样间隔）；二维估计器按式
     (3-9)-(3-15)（λ=4 搜索）；
     图 3.7-3.9 的 cross 曲线与图 3.10 的 mode3 均用式 (3-8) 峰间距估计器
   - 图 3.10 为完整同帧同步-补偿链路：帧结构 [UW;UW;data;UW;...] 与估计器
