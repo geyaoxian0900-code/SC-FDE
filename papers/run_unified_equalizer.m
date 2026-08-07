@@ -182,9 +182,12 @@ for frame = 1:cfg.frameCount
             % codeword in Euclidean distance.  The output is a row of
             % (symbols * chips) chips; reshape column-major keeps each
             % codeword contiguous per column, then transpose so each row
-            % is one codeword.
-            detected = hard_qpsk(recv.outputs{eq}(:).');
-            detected = reshape(detected, size(book, 2), []).';
+            % is one codeword.  CCK chips live on the axial QPSK phases
+            % {1, j, -1, -j}, so the soft chips are matched directly
+            % against the codebook without slicing to the diagonal
+            % constellation (hard_qpsk would merge codewords).
+            detected = reshape(recv.outputs{eq}(:).', ...
+                size(book, 2), []).';
             distance = abs(book - reshape(detected.', 1, ...
                 size(book, 2), []));
             distance = squeeze(sum(distance .^ 2, 2));

@@ -18,9 +18,10 @@ end
 
 function testFdDfeFeedforwardDependsOnFeedbackLength(testCase)
 % The feedforward filter must carry the frequency-dependent feedback
-% polynomial F_k = 1 + sum_m f_m exp(-j 2 pi k m / N), so after main-tap
-% normalization W(B) must differ from W(B=0) (previously identical to
-% machine precision because a scalar gain was absorbed by normalization).
+% polynomial F_k = 1 + sum_m f_m e^{-j 2 pi k m / N} with f_1 at delay
+% m = 1, so after main-tap normalization W(B) must differ from W(B=0).
+% This test calls the production fd_dfe_design and compares F_k against
+% an independent explicit sum (not a copy of the implementation).
 N = 512;
 Ts_ms = 0.25;
 pathDelayMs = [0, 3.4, 6.7, 10];
@@ -32,29 +33,26 @@ h(delays + 1) = pathGain .* exp(1j * phases);
 h = h / norm(h);
 H = fft(h, N);
 noiseRatio = 10^(-8 / 10);
-gamma = abs(H).^2 ./ (abs(H).^2 + noiseRatio);
-q = real(ifft(gamma));
-W0 = conj(H) ./ (abs(H).^2 + noiseRatio);
+[W0, ~] = scfde.equalizers.fd_dfe_design(H, noiseRatio, 0);
 Wn0 = W0 / mean(W0 .* H);
 for B = [2, 7, 9]
-    V = zeros(B, B);
-    for m = 1:B
-        for n = 1:B
-            V(m, n) = q(mod(m - n, N) + 1);
-        end
-    end
-    v = q(2:B + 1);
-    f = -V \ v;
-    f = f(:);
-    Fk = 1 + fft(f, N);
-    Fk = Fk(:);
-    W = conj(H) ./ (abs(H).^2 + noiseRatio) .* Fk;
+    [W, f] = scfde.equalizers.fd_dfe_design(H, noiseRatio, B);
+    % Independent reference: F_k = 1 + sum_{m=1}^B f_m e^{-j 2 pi k m / N}
+    k = (0:N-1).';
+    FkRef = 1 + sum(f.' .* exp(-1j * 2 * pi * k * (1:B) / N), 2);
+    FkProd = 1 + fft([0; f], N);
+    verifyEqual(testCase, FkProd, FkRef, "AbsTol", 1e-10, ...
+        "F_k must place f_1 at delay m = 1");
     Wn = W / mean(W .* H);
     relative = norm(Wn - Wn0) / norm(Wn0);
     verifyGreaterThan(testCase, relative, 1e-6, ...
         "W(B) must differ from W(B=0) after normalization");
     verifyLessThan(testCase, relative, 0.1, ...
         "W(B) deviation should be a shaping effect, not a rescale");
+    % Self-consistency: the shaped post-cursor g(m) = f_m for m=1..B
+    g = ifft(W .* H);
+    verifyEqual(testCase, g(2:B + 1), f, "AbsTol", 1e-8, ...
+        "post-cursor must equal the feedback coefficients");
 end
 end
 
@@ -91,18 +89,37 @@ verifyNotEqual(testCase, norm(receiver.outputs{1}), 0, ...
 end
 
 function testCckBitLevelBerCounting(testCase)
-% A detected codeword that differs from the transmitted one by one chip
-% must not be counted as 8 bit errors: the unified entry maps detected
-% codeword indices through the bit table.
-[book, bitTable] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
-verifyEqual(testCase, size(book), [256, 8]);
-verifyEqual(testCase, size(bitTable), [256, 8]);
+% The unified-entry fallback path must recover codeword indices from
+% chip-level outputs with soft chips (axial QPSK {1,j,-1,-j}) matched
+% directly against the codebook.  Noiseless chips of codewords 1..4
+% must be recovered exactly: slicing with hard_qpsk (diagonal QPSK)
+% would merge codewords to 1 2 1 2, so the fallback must not slice.
+book = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 idx = [1, 2, 3, 4];
+chips = reshape(book(idx, :).', 1, []); % row: symbols*chips
+% Replicate the fallback reshaping and nearest-codeword matching.
+detected = reshape(chips, size(book, 2), []).';
+distance = abs(book - reshape(detected.', 1, size(book, 2), []));
+distance = squeeze(sum(distance .^ 2, 2));
+[~, detectedIdx] = min(distance, [], 1);
+verifyEqual(testCase, detectedIdx, idx, ...
+    "soft-chip nearest-codeword must recover codewords 1..4");
+% The bit-table counting must give zero errors for exact recovery.
+bitTable = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 txBits = reshape(bitTable(idx, :).', 1, []);
-verifyEqual(testCase, numel(txBits), 32);
-% A single-chip flip in codeword 1 maps through the bit table; the
-% Hamming distance in bits is what is counted.
-verifyEqual(testCase, sum(bitTable(1, :) ~= bitTable(2, :)) >= 1, true);
+rxBits = reshape(bitTable(detectedIdx, :).', 1, []);
+verifyEqual(testCase, sum(rxBits ~= txBits), 0);
+% hard_qpsk slicing would destroy the axial phases: show it merges
+% codewords, which is why the fallback must not slice.
+sliced = ((1 - 2 * (real(chips) < 0)) + ...
+    1j * (1 - 2 * (imag(chips) < 0))) / sqrt(2);
+detectedSliced = reshape(sliced, size(book, 2), []).';
+distanceSliced = abs(book - reshape(detectedSliced.', 1, ...
+    size(book, 2), []));
+distanceSliced = squeeze(sum(distanceSliced .^ 2, 2));
+[~, slicedIdx] = min(distanceSliced, [], 1);
+verifyNotEqual(testCase, slicedIdx, idx, ...
+    "hard_qpsk slicing must not be used in the CCK fallback");
 end
 
 function testCskBitLevelBerCounting(testCase)

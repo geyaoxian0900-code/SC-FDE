@@ -9,6 +9,7 @@ rng(20260722, "twister");
 
 rootDir = fileparts(mfilename("fullpath"));
 addpath(fullfile(rootDir, "..", "common"));
+addpath(fullfile(rootDir, "..", "modules"));
 resultDir = fullfile(rootDir, "results");
 if ~exist(resultDir, "dir")
     mkdir(resultDir);
@@ -216,10 +217,15 @@ function [fdfeBer, predictionBer] = simulate_uncoded_equalizers( ...
 
         for feedbackIndex = 1:numel(cfg.fdfeFeedback)
             feedbackLength = cfg.fdfeFeedback(feedbackIndex);
-            [Wf, ~] = fd_dfe_design(H, noiseRatio, feedbackLength);
+            [Wf, feedback] = scfde.equalizers.fd_dfe_design(H, noiseRatio, feedbackLength);
             mainTap = mean(Wf .* H);
             filtered = ifft(Wf .* R) / mainTap;
-            estimate = hard_qpsk(filtered(1:cfg.dataLength));
+            % Decision-feedback loop (Eq. 4-18): subtract the feedback
+            % terms of the already-decided symbols from the feedforward
+            % output.  The self-consistent f makes the shaped post-cursor
+            % g(m) = f_m, so this cancellation removes it exactly.
+            estimate = fdfe_symbols(filtered, feedback / mainTap, uw, ...
+                cfg.dataLength);
             errorFdfe(feedbackIndex) = errorFdfe(feedbackIndex) + ...
                 sum(qpsk_demodulate(estimate) ~= bits);
         end
@@ -269,7 +275,7 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         errorsPrediction = errorsPrediction + ...
             sum(decodedPrediction(1:ldpc.K) ~= info);
 
-        [Wf, feedback] = fd_dfe_design(H, noiseRatio, 1);
+        [Wf, feedback] = scfde.equalizers.fd_dfe_design(H, noiseRatio, 1);
         mainTap = mean(Wf .* H);
         WfNorm = Wf / mainTap;
         % FDE-FDFE (book 4.3.1): feedforward MMSE decode first, then
@@ -342,39 +348,28 @@ function nv = equalized_noise_variance(W, H, noiseRatio)
     nv = thermal + residualIsi;
 end
 
-function [W, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength)
-    % FD-DFE coefficients per the book's MMSE derivation
-    % (Eqs. 4-10..4-18): the feedforward filter carries the
-    % frequency-dependent feedback polynomial
-    %   F_k = 1 + sum_{m=1}^B f_m e^{-j*2*pi*k*m/N}
-    % with the feedback coefficients solved from the correlation matrix
-    %   q(n)   = 1/N * sum_k |H_k|^2/(|H_k|^2+sigma^2) * exp(j*2*pi*k*n/N)
-    %   V(m,n) = q(m-n mod N)      (circular feedback correlation matrix)
-    %   v(m)   = q(m)              (post-cursor ISI vector, m=1..B)
-    %   f      = -V^{-1} v
-    %   W_k    = H_k*/(|H_k|^2+sigma^2) * F_k
-    % so W depends on B and the joint MMSE design shapes the post-cursor
-    % ISI into the feedforward filter (no separate time-domain loop).
-    N = numel(H);
-    if feedbackLength == 0
-        feedback = zeros(0, 1);
-        W = conj(H) ./ (abs(H).^2 + noiseRatio);
-        return;
-    end
-    gamma = abs(H).^2 ./ (abs(H).^2 + noiseRatio);
-    q = real(ifft(gamma));
-    V = zeros(feedbackLength, feedbackLength);
-    for m = 1:feedbackLength
-        for n = 1:feedbackLength
-            V(m, n) = q(mod(m - n, N) + 1);
+function decisions = fdfe_symbols(feedforwardOutput, feedback, uw, ...
+        dataLength)
+    % Decision-feedback loop (Eq. 4-18): subtract the feedback terms of
+    % the already-decided symbols from the feedforward output.  The
+    % UW acts as the cyclic prefix for symbols before the block start.
+    N = numel(feedforwardOutput);
+    feedbackLength = numel(feedback);
+    decisions = zeros(dataLength, 1);
+    for symbolIndex = 1:dataLength
+        value = feedforwardOutput(symbolIndex);
+        for lag = 1:min(feedbackLength, N - 1)
+            previousIndex = symbolIndex - lag;
+            if previousIndex >= 1
+                previous = decisions(previousIndex);
+            else
+                wrappedIndex = N + previousIndex;
+                previous = uw(wrappedIndex - dataLength);
+            end
+            value = value - feedback(lag) * previous;
         end
+        decisions(symbolIndex) = hard_qpsk(value);
     end
-    v = q(2:feedbackLength + 1);
-    feedback = -V \ v;
-    feedback = feedback(:); % ensure column so fft(feedback, N) is N x 1
-    Fk = 1 + fft(feedback, N);
-    Fk = Fk(:); % scalar feedback (B=1) makes fft return a row
-    W = conj(H) ./ (abs(H).^2 + noiseRatio) .* Fk;
 end
 
 function refined = fdfe_symbols_decoded(feedforwardOutput, feedback, ...

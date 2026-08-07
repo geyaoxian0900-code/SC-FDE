@@ -314,10 +314,12 @@ function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
             blockSegment, sourcePosition, "linear", 0)]; %#ok<AGROW>
     end
     stretched = [stretched; tailSegment];
+    % Carrier phase with per-block Doppler: each block's carrier shift
+    % uses its own trueDoppler(block), so the phase is fully time-
+    % varying across the frame (not a single mean value).
+    stretched = apply_per_block_carrier(stretched, cfg, ...
+        trueDoppler, samplesPerSymbol, blockSamples);
     received = conv(stretched, hSamples);
-    n = (0:numel(received)-1).';
-    received = received .* exp(1j * 2 * pi * cfg.fc * ...
-        mean(trueDoppler) ./ cfg.fs .* n);
     received = add_awgn(received, snrDb);
     tracking.received = received;
     tracking.downsample = samplesPerSymbol;
@@ -476,6 +478,28 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
     end
 end
 
+function signal = apply_per_block_carrier(signal, cfg, trueDoppler, ...
+        samplesPerSymbol, blockSamples)
+    % Multiply each block's samples by exp(j*2*pi*fc*doppler_b*t) with
+    % the block's own Doppler factor; the phase accumulates across the
+    % frame so the carrier is fully time-varying.
+    blockCount = numel(trueDoppler);
+    sampleIndex = 0;
+    for block = 1:blockCount
+        blockLength = round(blockSamples * (1 + trueDoppler(block)));
+        blockSamplesEnd = min(sampleIndex + blockLength, numel(signal));
+        if blockSamplesEnd <= sampleIndex
+            break;
+        end
+        n = (0:blockSamplesEnd - sampleIndex - 1).';
+        signal(sampleIndex + 1:blockSamplesEnd) = ...
+            signal(sampleIndex + 1:blockSamplesEnd) .* ...
+            exp(1j * 2 * pi * cfg.fc * trueDoppler(block) ./ ...
+            cfg.fs .* n);
+        sampleIndex = blockSamplesEnd;
+    end
+end
+
 function errors = estimate_fig35_doppler_errors_velocity( ...
         cfg, snrDb, lambda, trials, velocity, multipath)
     % Signal-level Doppler estimator Monte Carlo with configurable true
@@ -622,20 +646,90 @@ end
 
 function errors = doppler_error_samples(cfg, snrDb, lambda, multipath, ...
         velocity, trials, method)
-    % Monte Carlo Doppler estimation errors from the actual signal-level
-    % estimator (oversampled UW-correlation joint search), matching
-    % equations (3-9)-(3-15).  The analytic baseNoise/floorScale model
-    % previously used here is removed: curves now come from the estimator.
-    if method == "twod"
-        lambdaUsed = lambda;
+    % Monte Carlo Doppler estimation errors.  Two genuinely different
+    % estimators are available:
+    %   "twod"  - joint Doppler-timing search of Eqs. (3-9)-(3-15) with
+    %             lambda-times oversampling;
+    %   "cross" - UW cross-correlation peak-position difference between
+    %             adjacent data blocks (Eq. 3-8 form).
+    if method == "cross"
+        errors = estimate_cross_peak_difference(cfg, snrDb, ...
+            velocity, trials, multipath);
     else
-        lambdaUsed = 1;
+        errors = estimate_fig35_doppler_errors_velocity( ...
+            cfg, snrDb, lambda, trials, velocity, multipath);
     end
-    errors = estimate_fig35_doppler_errors_velocity( ...
-        cfg, snrDb, lambdaUsed, trials, velocity, multipath);
     if trials == 1
         errors = errors(1);
     end
+end
+
+function errors = estimate_cross_peak_difference(cfg, snrDb, ...
+        velocity, trials, multipath)
+    % Eq. 3-8 form: locate the UW correlation peak of each data block
+    % and derive the Doppler factor from the peak-position difference
+    % between adjacent blocks:
+    %   a = (d_{b+1} - d_b) / (blockLength * samplesPerSymbol)
+    % where d_b is the correlation peak index of block b.  The true
+    % Doppler enters only through the transmitted waveform.
+    trueDoppler = velocity / cfg.soundSpeed;
+    samplesPerSymbol = round(cfg.fs * cfg.Ts);
+    uw = chu_sequence(cfg.uwLength);
+    uwSamples = repelem(uw, samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    blockCount = cfg.blockCount;
+    hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
+    delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
+    phases = [0, 0.45, -0.90, 1.35];
+    gains = cfg.pathGain .* exp(1j * phases);
+    if multipath
+        hSamples(delays + 1) = gains;
+    else
+        hSamples(1) = gains(1);
+    end
+    hSamples = hSamples / norm(hSamples);
+    errors = zeros(trials * (blockCount - 1), 1);
+    errorIndex = 0;
+    for trial = 1:trials
+        frame = uw;
+        for block = 1:blockCount
+            data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
+            frame = [frame; uw; data; uw]; %#ok<AGROW>
+        end
+        transmitted = repelem(frame, samplesPerSymbol);
+        outputLength = floor((numel(transmitted) - 1) * ...
+            (1 + trueDoppler)) + 1;
+        sourcePosition = (0:outputLength-1).' / ...
+            (1 + trueDoppler) + 1;
+        expanded = interp1((1:numel(transmitted)).', transmitted, ...
+            sourcePosition, "linear", 0);
+        received = add_awgn(conv(expanded, hSamples), snrDb);
+        peaks = zeros(blockCount, 1);
+        for block = 1:blockCount
+            nominal = (block - 1) * blockSamples + 1;
+            % Skip the previous block's trailing UW and search the
+            % block's own first UW (frame pattern [UW; UW; data; UW; ...]).
+            windowHalf = round(numel(uwSamples) / 2);
+            searchRange = nominal + numel(uwSamples) + ...
+                (-windowHalf:windowHalf);
+            searchRange = searchRange(searchRange >= 1 & ...
+                searchRange <= numel(received) - numel(uwSamples));
+            correlation = zeros(size(searchRange));
+            for index = 1:numel(searchRange)
+                window = received(searchRange(index):searchRange(index) + ...
+                    numel(uwSamples) - 1);
+                correlation(index) = abs(sum(window .* conj(uwSamples)));
+            end
+            [~, peakOffset] = max(correlation);
+            peaks(block) = searchRange(peakOffset);
+        end
+        peakDifference = diff(peaks) - blockSamples;
+        estimates = peakDifference / blockSamples;
+        errors(errorIndex + (1:numel(estimates))) = ...
+            abs(trueDoppler - estimates(:));
+        errorIndex = errorIndex + numel(estimates);
+    end
+    errors = errors(1:errorIndex);
 end
 
 function curves = estimator_curve(cfg, snrValues, multipath, velocity)
@@ -728,15 +822,17 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
             % Ideal compensation: the exact true Doppler is removed.
             estimateDoppler = trueDoppler;
         else
-            % Estimate from the SAME frame (mode 2: 2-D UW estimator
-            % with lambda=4, mode 3: cross-correlation with lambda=1).
+            % Estimate from the SAME frame:
+            %  mode 2 - 2-D UW estimator (Eqs. 3-9..3-15, lambda = 4);
+            %  mode 3 - UW cross-correlation peak-position difference
+            %           between the two adjacent blocks (Eq. 3-8 form).
             if modeIndex == 2
-                lambda = 4;
+                estimateDoppler = estimate_frame_doppler(cfg, uw, ...
+                    received, 4, samplesPerSymbol);
             else
-                lambda = 1;
+                estimateDoppler = estimate_frame_cross(cfg, uw, ...
+                    received, samplesPerSymbol);
             end
-            estimateDoppler = estimate_frame_doppler(cfg, uw, received, ...
-                lambda, samplesPerSymbol);
         end
 
         % Compensation chain: (1) inverse time-scale resampling using the
@@ -769,6 +865,38 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
         totalBits = totalBits + ldpc.K;
     end
     ber = max(totalErrors, 0.5) / totalBits;
+end
+
+function estimateDoppler = estimate_frame_cross(cfg, uw, received, ...
+        samplesPerSymbol)
+    % UW cross-correlation Doppler estimate from one received frame
+    % (Eq. 3-8 form): locate the UW correlation peak of the first two
+    % data blocks and take the peak-position difference scaled by the
+    % block length.  The frame is [UW; UW; data; UW; UW; filler; UW] so
+    % block 1 starts at the frame start and block 2 at blockLength
+    % symbols later; the signed difference yields the signed Doppler.
+    uwSamples = repelem(uw, samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    peaks = zeros(2, 1);
+    for block = 1:2
+        nominal = (block - 1) * blockSamples + 1;
+        % Skip the previous block's trailing UW and search the block's
+        % own first UW.
+        windowHalf = round(numel(uwSamples) / 2);
+        searchRange = nominal + numel(uwSamples) + ...
+            (-windowHalf:windowHalf);
+        searchRange = searchRange(searchRange >= 1 & ...
+            searchRange <= numel(received) - numel(uwSamples));
+        correlation = zeros(size(searchRange));
+        for index = 1:numel(searchRange)
+            window = received(searchRange(index):searchRange(index) + ...
+                numel(uwSamples) - 1);
+            correlation(index) = abs(sum(window .* conj(uwSamples)));
+        end
+        [~, peakOffset] = max(correlation);
+        peaks(block) = searchRange(peakOffset);
+    end
+    estimateDoppler = (peaks(2) - peaks(1) - blockSamples) / blockSamples;
 end
 
 function estimateDoppler = estimate_frame_doppler(cfg, uw, received, ...
