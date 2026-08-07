@@ -58,8 +58,70 @@ switch lower(cfg.scenario)
             "scenario must be qpsk, turbo, cck, csk, or auto.");
 end
 
+% BER statistics metadata: total bits, error bits and the 95%
+% Clopper-Pearson interval per equalizer.  A zero-error result is
+% reported as an interval, not as an exact BER = 0.
+if isfield(results, "totalBits")
+    results.errorBits = round(results.ber .* results.totalBits);
+    [ciLo, ciHi] = clopper_pearson_95(results.errorBits, results.totalBits);
+    results.berLower95 = ciLo;
+    results.berUpper95 = ciHi;
+    results.totalBits = results.totalBits;
+    results.reachedTarget = results.totalBits >= 1;
+end
+results.gitCommit = git_commit_short();
+results.matlabVersion = version;
+results.timestamp = datetime("now");
+results.rngSeed = rng_seed();
+
 if cfg.makePlot && numel(results.ids) > 1
     results.figurePath = plot_unified(results);
+end
+end
+
+function [lo95, hi95] = clopper_pearson_95(errors, bits)
+% Exact 95% Clopper-Pearson binomial interval (0 when errors = 0).
+errors = double(errors(:));
+bits = double(bits(:));
+alpha = 0.05;
+lo95 = zeros(size(errors));
+hi95 = zeros(size(errors));
+for index = 1:numel(errors)
+    x = errors(index);
+    n = bits(index);
+    if x == 0
+        lo95(index) = 0;
+        hi95(index) = 1 - (alpha / 2)^(1 / max(n, 1));
+    elseif x == n
+        lo95(index) = (alpha / 2)^(1 / max(n, 1));
+        hi95(index) = 1;
+    else
+        lo95(index) = betainv(alpha / 2, x, n - x + 1);
+        hi95(index) = betainv(1 - alpha / 2, x + 1, n - x);
+    end
+end
+end
+
+function commit = git_commit_short()
+commit = "";
+try
+    [status, out] = system("git -C " + ...
+        string(fileparts(fileparts(mfilename("fullpath")))) + ...
+        " rev-parse --short HEAD 2>nul");
+    if status == 0
+        commit = strtrim(string(out));
+    end
+catch
+    commit = "";
+end
+end
+
+function seed = rng_seed()
+state = rng;
+if isfield(state, "Seed")
+    seed = state.Seed;
+else
+    seed = [];
 end
 end
 
@@ -138,6 +200,7 @@ for frame = 1:cfg.frameCount
     end
 end
 results.ber = totalErrors ./ totalBits;
+results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
 results.scenario = "qpsk";
@@ -200,6 +263,7 @@ for frame = 1:cfg.frameCount
     totalBits = totalBits + numel(txBits);
 end
 results.ber = totalErrors / totalBits;
+results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
 results.scenario = "cck";
@@ -271,6 +335,7 @@ for frame = 1:cfg.frameCount
     totalBits = totalBits + numel(txBits);
 end
 results.ber = totalErrors / totalBits;
+results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
 results.scenario = "csk";
@@ -343,6 +408,7 @@ for frame = 1:cfg.frameCount
     totalBits = totalBits + numel(ref);
 end
 results.ber = totalErrors / totalBits;
+results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
 results.scenario = "turbo";

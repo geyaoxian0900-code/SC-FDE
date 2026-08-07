@@ -23,6 +23,9 @@ registry = simulation_registry();
 selected = select_experiments(registry, cfg.experiments);
 summary.profile = string(cfg.profile);
 summary.startedAt = datetime("now");
+summary.gitCommit = git_commit();
+summary.matlabVersion = version;
+summary.rngSeed = rng_seed();
 summary.entries = struct("id", {}, "status", {}, "elapsedSeconds", {}, ...
     "outputPath", {}, "message", {});
 
@@ -60,6 +63,29 @@ end
 summary.summaryPath = fullfile(resultDir, "all_simulations_summary.mat");
 save(summary.summaryPath, "summary");
 fprintf("Summary: %s\n", summary.summaryPath);
+end
+
+function commit = git_commit()
+commit = "";
+try
+    [status, out] = system("git -C " + ... 
+        string(fileparts(mfilename("fullpath"))) + ...
+        " rev-parse --short HEAD 2>nul");
+    if status == 0
+        commit = strtrim(string(out));
+    end
+catch
+    commit = "";
+end
+end
+
+function seed = rng_seed()
+state = rng;
+if isfield(state, "Seed")
+    seed = state.Seed;
+else
+    seed = [];
+end
 end
 
 function registry = simulation_registry()

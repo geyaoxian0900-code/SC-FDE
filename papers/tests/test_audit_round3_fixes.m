@@ -268,3 +268,27 @@ step = 2 * pi * fc * trueD(1) / fs;
 verifyEqual(testCase, diff, step, "AbsTol", 1e-6, ...
     "block boundary must advance by one carrier sample step");
 end
+
+function testPtrEquivalentChannelHasNoCrossTerms(testCase)
+% The subarray PTR equivalent channel must be the SUM OF PER-BRANCH
+% AUTOCORRELATIONS g = sum_k h_k*(-n) * h_k.  The aggregate
+% autocorrelation conv(conj(fliplr(sum_k h_k)), sum_k h_k) contains
+% cross-branch terms h_i* * h_j (i ~= j) and must NOT equal the
+% production equivalent channel (negative regression guard).
+h1 = [1, 0.5 * exp(1j * 0.7), 0.3 * exp(1j * 1.2)];
+h2 = [0.9, 0.6 * exp(1j * 1.4), 0.2 * exp(-1j * 0.9)];
+L = max(numel(h1), numel(h2));
+h1 = [h1, zeros(1, L - numel(h1))];
+h2 = [h2, zeros(1, L - numel(h2))];
+branchImpulses = [h1; h2];
+impulse = sum(branchImpulses, 1);
+correct = conv(conj(fliplr(h1)), h1) + conv(conj(fliplr(h2)), h2);
+wrongAggregate = conv(conj(fliplr(impulse)), impulse);
+production = scfde.equalizers.subband_equivalent_channel( ...
+    impulse, branchImpulses, 2);
+verifyEqual(testCase, production, correct, "AbsTol", 1e-12, ...
+    "production equivalent channel must equal the per-branch sum");
+verifyGreaterThan(testCase, norm(production - wrongAggregate) / ...
+    norm(correct), 0.1, ...
+    "aggregate autocorrelation (cross terms) must NOT match production");
+end
