@@ -105,10 +105,19 @@ distance = squeeze(sum(distance .^ 2, 2));
 verifyEqual(testCase, detectedIdx, idx, ...
     "soft-chip nearest-codeword must recover codewords 1..4");
 % The bit-table counting must give zero errors for exact recovery.
-bitTable = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
+[~, bitTable] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 txBits = reshape(bitTable(idx, :).', 1, []);
 rxBits = reshape(bitTable(detectedIdx, :).', 1, []);
 verifyEqual(testCase, sum(rxBits ~= txBits), 0);
+% A known codeword mis-detection must count the true bit errors: the
+% bit Hamming distance between codeword 1 and codeword 2 is what the
+% unified entry reports (not the chip distance), so an error mapping
+% codeword 1 to codeword 2 contributes exactly that many bit errors.
+mappedErrors = sum(bitTable(1, :) ~= bitTable(2, :));
+verifyGreaterThan(testCase, mappedErrors, 0, ...
+    "codewords 1 and 2 must differ in their bit mapping");
+verifyLessThan(testCase, mappedErrors, 8, ...
+    "a single codeword error must not count as 8 bit errors");
 % hard_qpsk slicing would destroy the axial phases: show it merges
 % codewords, which is why the fallback must not slice.
 sliced = ((1 - 2 * (real(chips) < 0)) + ...

@@ -267,8 +267,13 @@ end
 
 function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
         trueDoppler, multipath)
-    % One frame of blockCount data blocks; block b is time-stretched by
-    % 1/(1+trueDoppler(b)) so the Doppler varies across the frame.
+    % One frame of blockCount data blocks.  Each block carries its own
+    % four segments [pre-UW; pre-UW; data; post-UW] and the WHOLE block
+    % (including both pre-UWs and the post-UW) is stretched and
+    % carrier-shifted by that block's trueDoppler, so the estimator's
+    % pre-UWs and post-UW of one block always experience the same
+    % Doppler.  Blocks are not shared: the post-UW of block b is the
+    % trailing UW of block b, and block b+1 starts with its own pre-UW.
     samplesPerSymbol = round(cfg.fs * cfg.Ts);
     hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
     delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
@@ -280,73 +285,71 @@ function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
         hSamples(1) = gains(1);
     end
     hSamples = hSamples / norm(hSamples);
-    blockSamples = cfg.blockLength * samplesPerSymbol;
     blockCount = numel(trueDoppler);
-    outputLength = round(blockCount * blockSamples * ...
-        (1 + mean(trueDoppler)));
-    frame = uw;
-    for block = 1:blockCount
-        frame = [frame; uw; qpsk_symbols(randi([0, 1], ...
-            2 * cfg.dataLength, 1)); uw]; %#ok<AGROW>
-    end
-    transmitted = repelem(frame, samplesPerSymbol);
-    % One extra stretched UW is appended after the last block so the
-    % last block's post-data UW window stays inside the frame.
-    tailLength = floor((numel(uw) * samplesPerSymbol - 1) * ...
-        (1 + trueDoppler(end))) + 1;
-    tailPosition = (0:tailLength-1).' / ...
-        (1 + trueDoppler(end)) + 1;
-    tailSegment = interp1((1:numel(uw) * samplesPerSymbol).', ...
-        repelem(uw, samplesPerSymbol), tailPosition, "linear", 0);
-    % Per-block time-varying stretch: block b is stretched by
-    % (1 + trueDoppler(b)); the overall waveform is assembled with the
-    % block boundaries scaled accordingly.
+    uwSamples = repelem(uw, samplesPerSymbol);
+    preSamples = numel(uwSamples);                 % one pre-UW
+    dataSamples = cfg.dataLength * samplesPerSymbol;
+    % Block layout in samples (per block): pre, pre, data, post.
+    blockLayout = [preSamples, preSamples, dataSamples, preSamples];
+    % Build the frame block by block: each block is stretched by its own
+    % Doppler and its carrier phase continues from the previous block.
     stretched = zeros(0, 1);
-    symbolBlockSamples = cfg.blockLength * samplesPerSymbol;
+    cumulativePhase = 0;
     for block = 1:blockCount
-        blockSegment = transmitted((block - 1) * symbolBlockSamples + ...
-            1:block * symbolBlockSamples);
         doppler = trueDoppler(block);
-        segmentLength = floor((numel(blockSegment) - 1) * ...
+        data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
+        blockSymbols = [uw; uw; data; uw];
+        blockSamples = repelem(blockSymbols, samplesPerSymbol);
+        segmentLength = floor((numel(blockSamples) - 1) * ...
             (1 + doppler)) + 1;
-        sourcePosition = (0:segmentLength-1).' / (1 + doppler) + 1;
-        stretched = [stretched; interp1((1:numel(blockSegment)).', ...
-            blockSegment, sourcePosition, "linear", 0)]; %#ok<AGROW>
+        sourcePosition = (0:segmentLength-1).' / ...
+            (1 + doppler) + 1;
+        blockStretched = interp1((1:numel(blockSamples)).', ...
+            blockSamples, sourcePosition, "linear", 0);
+        % Carrier phase: continues from the previous block's final
+        % phase, so the phase is continuous across the whole frame.
+        n = (0:numel(blockStretched)-1).';
+        phase = cumulativePhase + 2 * pi * cfg.fc * doppler ./ ...
+            cfg.fs .* n;
+        blockStretched = blockStretched .* exp(1j * phase);
+        cumulativePhase = phase(end);
+        stretched = [stretched; blockStretched]; %#ok<AGROW>
     end
-    stretched = [stretched; tailSegment];
-    % Carrier phase with per-block Doppler: each block's carrier shift
-    % uses its own trueDoppler(block), so the phase is fully time-
-    % varying across the frame (not a single mean value).
-    stretched = apply_per_block_carrier(stretched, cfg, ...
-        trueDoppler, samplesPerSymbol, blockSamples);
+    % The post-UW of the last block is included in its own block, so no
+    % extra tail UW is needed.
     received = conv(stretched, hSamples);
     received = add_awgn(received, snrDb);
     tracking.received = received;
     tracking.downsample = samplesPerSymbol;
     tracking.trueDoppler = trueDoppler(:);
+    tracking.blockLayout = blockLayout;
 end
 
 function estimates = cross_correlation_tracker(cfg, received, samplesPerSymbol)
-    % UW cross-correlation Doppler tracker (Eq. 3-8 form): locate the UW
-    % correlation peak of each data block and derive the Doppler factor
-    % from the peak-position difference between adjacent blocks:
-    %   a = (d_{b+1} - d_b) / (blockLength * samplesPerSymbol)
-    % where d_b is the correlation peak index of block b.
+    % UW cross-correlation Doppler tracker (Eq. 3-8 form).  Each block b
+    % is [pre-UW; pre-UW; data; post-UW]; the post-UW correlation peak
+    % p_b of block b is located and the Doppler factor follows from the
+    % peak deviation from the nominal position:
+    %   a_b = (p_b - nominalPost_b) / (blockLength * samplesPerSymbol)
+    % where nominalPost_b = 1 + (b-1)*blockStride + 2*uwLength + dataLength
+    % with blockStride = blockLength + uwLength symbols (each block
+    % carries its own post-UW).  Every block gets an independent
+    % estimate; block 1 uses the frame start as its reference.
     uwLength = cfg.uwLength;
     uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
     blockSamples = cfg.blockLength * samplesPerSymbol;
+    blockStride = blockSamples + numel(uwSamples); % one full block
+    postOffset = blockSamples; % post-UW sits 2*uw+data after block start
     blockCount = 5;
     peaks = zeros(blockCount, 1);
-    % Frame pattern [UW; UW; data; UW; ...]: the block start is at
-    % nominal, but the previous block's trailing UW occupies the first
-    % uwLength samples, so the block's own first UW sits in a narrow
-    % window right after it.
+    nominalPost = zeros(blockCount, 1);
+    nominalPost(1) = 1 + postOffset;
     for block = 1:blockCount
-        nominal = (block - 1) * blockSamples + 1;
-        % Skip the previous block's trailing UW (uwLength samples at the
-        % block start) and search the block's own first UW right after.
+        if block > 1
+            nominalPost(block) = nominalPost(block - 1) + blockStride;
+        end
         windowHalf = round(numel(uwSamples) / 2);
-        searchRange = nominal + numel(uwSamples) + (-windowHalf:windowHalf);
+        searchRange = nominalPost(block) + (-windowHalf:windowHalf);
         searchRange = searchRange(searchRange >= 1 & ...
             searchRange <= numel(received) - numel(uwSamples));
         correlation = zeros(size(searchRange));
@@ -358,18 +361,27 @@ function estimates = cross_correlation_tracker(cfg, received, samplesPerSymbol)
         [~, peakOffset] = max(correlation);
         peaks(block) = searchRange(peakOffset);
     end
-    peakDifference = diff(peaks) - blockSamples;
-    estimates = peakDifference / blockSamples;
-    estimates = [estimates(1); estimates(:)];
+    estimates = zeros(blockCount, 1);
+    % Adjacent peak-position difference (Eq. 3-8): the deviation of the
+    % inter-block peak spacing from the nominal stride cancels the
+    % accumulated stretch of the earlier blocks.  Block 1 has no
+    % predecessor; its post-UW sits postOffset samples after the frame
+    % start, which serves as the reference.
+    references = [1 + postOffset; peaks(1:end - 1) + blockStride];
+    estimates = (peaks - references) / blockStride;
 end
 
 function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
     % 2-D UW estimator (Eqs. 3-9..3-15): joint Doppler-timing search with
-    % lambda = 4 oversampling on the same received frame.
+    % lambda = 4 oversampling on the same received frame.  Each block b
+    % is [pre-UW; pre-UW; data; post-UW] with its own Doppler; the block
+    % start sits at 1 + (b-1)*blockStride samples and the post-UW at
+    % + blockSamples, all inside the block (no cross-block windows).
     lambda = 4;
     uwLength = cfg.uwLength;
     uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
     blockSamples = cfg.blockLength * samplesPerSymbol;
+    blockStride = blockSamples + numel(uwSamples); % one full block
     delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
     maxPriorDoppler = 1 / (2 * samplesPerSymbol);
     priorHalfSpan = maxPriorDoppler;
@@ -388,15 +400,15 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
         blockDoppler = 0;
         coarseBest = 0;
         coarseScore = -inf;
+        nominalBlock = 1 + round((block - 1) * blockStride * lambda);
         for candidateDoppler = (-coarseSteps:coarseSteps) * coarseDelta
             windowLength = round(numel(uwSamples) * lambda * ...
                 (1 + candidateDoppler));
             postUwOffset = round(blockSamples * lambda * ...
                 (1 + candidateDoppler));
-            nominal = 1 + round((block - 1) * blockSamples * ...
-                lambda * (1 + blockDoppler));
+            nominal = nominalBlock;
             score = -inf;
-            drift = round(block * blockSamples * 2e-3 * lambda);
+            drift = round(block * blockStride * 2e-3 * lambda);
             timingRange = nominal + (-drift:drift);
             timingRange = timingRange(timingRange >= 1);
             for coarseTiming = timingRange
@@ -406,18 +418,11 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
                 if postFirst > fineLength || secondLast > fineLength
                     continue;
                 end
-                % Clamp the post-UW window to the frame end (the last
-                % block's post-UW may run past the received tail); the
-                % pre-UW windows are truncated to the same length.
-                if postLast > fineLength
-                    postLast = fineLength;
-                end
-                postSegment = postFirst:postLast;
                 firstUw = receivedFine(coarseTiming:coarseTiming + ...
-                    numel(postSegment) - 1);
+                    windowLength - 1);
                 secondUw = receivedFine(coarseTiming + windowLength: ...
-                    coarseTiming + windowLength + numel(postSegment) - 1);
-                postUw = receivedFine(postSegment);
+                    secondLast);
+                postUw = receivedFine(postFirst:postLast);
                 phi1 = sum(firstUw .* conj(postUw));
                 phi2 = sum(secondUw .* conj(postUw));
                 phi3 = sum(abs(postUw).^2);
@@ -435,8 +440,7 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
         fineCandidates = dopplerCenter + (-2:2) * delta;
         bestScore = -inf;
         bestDoppler = dopplerCenter;
-        nominal = 1 + round((block - 1) * blockSamples * ...
-            lambda * (1 + blockDoppler));
+        nominal = nominalBlock;
         for candidateDoppler = fineCandidates
             windowLength = round(numel(uwSamples) * lambda * ...
                 (1 + candidateDoppler));
@@ -450,20 +454,11 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
                 postFirst = timing + postUwOffset;
                 postLast = postFirst + windowLength - 1;
                 if timing < 1 || postLast > fineLength
-                    % Last block: the post-UW window runs past the frame
-                    % end; clamp it to the available samples so the
-                    % correlation still sees a valid (shorter) post-UW.
-                    if ~(block == blockCount && postFirst <= fineLength)
-                        continue;
-                    end
-                    postLast = fineLength;
+                    continue;
                 end
-                postSegment = postFirst:postLast;
-                firstUw = receivedFine(timing:timing + ...
-                    numel(postSegment) - 1);
-                secondUw = receivedFine(secondFirst:secondFirst + ...
-                    numel(postSegment) - 1);
-                postUw = receivedFine(postSegment);
+                firstUw = receivedFine(timing:firstLast);
+                secondUw = receivedFine(secondFirst:secondLast);
+                postUw = receivedFine(postFirst:postLast);
                 phi1 = sum(firstUw .* conj(postUw));
                 phi2 = sum(secondUw .* conj(postUw));
                 phi3 = sum(abs(postUw).^2);
@@ -475,28 +470,6 @@ function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
             end
         end
         estimates(block) = bestDoppler;
-    end
-end
-
-function signal = apply_per_block_carrier(signal, cfg, trueDoppler, ...
-        samplesPerSymbol, blockSamples)
-    % Multiply each block's samples by exp(j*2*pi*fc*doppler_b*t) with
-    % the block's own Doppler factor; the phase accumulates across the
-    % frame so the carrier is fully time-varying.
-    blockCount = numel(trueDoppler);
-    sampleIndex = 0;
-    for block = 1:blockCount
-        blockLength = round(blockSamples * (1 + trueDoppler(block)));
-        blockSamplesEnd = min(sampleIndex + blockLength, numel(signal));
-        if blockSamplesEnd <= sampleIndex
-            break;
-        end
-        n = (0:blockSamplesEnd - sampleIndex - 1).';
-        signal(sampleIndex + 1:blockSamplesEnd) = ...
-            signal(sampleIndex + 1:blockSamplesEnd) .* ...
-            exp(1j * 2 * pi * cfg.fc * trueDoppler(block) ./ ...
-            cfg.fs .* n);
-        sampleIndex = blockSamplesEnd;
     end
 end
 
