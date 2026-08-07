@@ -18,7 +18,10 @@ function tracking = tracking_frame(uw, trueDoppler, fs, fc, ...
 if nargin < 7
     rngSeed = 1;
 end
-rng(rngSeed, "twister");
+% Use a local RandStream so the caller's global RNG state is not
+% overwritten (the simulation entry sets its own seed and the Monte
+% Carlo trials after the tracking frame must keep their sequence).
+localStream = RandStream("twister", "Seed", rngSeed);
 blockCount = numel(trueDoppler);
 uwSamples = repelem(uw(:), samplesPerSymbol);
 preSamples = numel(uwSamples);                 % one pre-UW
@@ -28,7 +31,7 @@ stretched = zeros(0, 1);
 cumulativePhase = 0;
 for block = 1:blockCount
     doppler = trueDoppler(block);
-    bits = randi([0, 1], 2 * dataLength, 1);
+    bits = randi(localStream, [0, 1], 2 * dataLength, 1);
     bitMatrix = reshape(bits, 2, []);
     data = ((1 - 2 * bitMatrix(1, :)) + ...
         1j * (1 - 2 * bitMatrix(2, :))).' / sqrt(2);

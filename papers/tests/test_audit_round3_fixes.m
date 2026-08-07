@@ -152,16 +152,19 @@ verifyEqual(testCase, blockStart, 129);
 end
 
 function testCrossTrackerInBlockAlgebra(testCase)
-% End-to-end: build a noiseless 5-block frame with distinct per-block
-% Doppler values through the PRODUCTION tracking_frame, run the
-% PRODUCTION cross_peak_tracker, and check each block's estimate is
-% independent (close to its own true Doppler, not mixed with neighbours).
+% End-to-end: build a noiseless 5-block frame with strongly alternating
+% per-block Doppler values (0 / 4e-3) through the PRODUCTION
+% tracking_frame, run the PRODUCTION cross_peak_tracker, and check each
+% block's estimate is independent (close to its own true Doppler).  The
+% strong alternation makes the old adjacent-peak mixing formula deviate
+% (0.1 * 4e-3 = 4e-4) beyond the 2-sample quantization slack
+% (2.89e-4), so the regression guard is decisive.
 fs = 48000; fc = 10000;
 samplesPerSymbol = 12;
 uwLength = 64; dataLength = 448;
 blockLength = 2 * uwLength + dataLength;
 uw = exp(1j * pi * (0:uwLength-1).'.^2 / uwLength);
-trueD = [0.933, 1.000, 0.9533, 1.067, 1.033] * 1e-3;
+trueD = [0, 4e-3, 0, 4e-3, 0];
 tracking = scfde.equalizers.tracking_frame(uw, trueD, fs, fc, ...
     samplesPerSymbol, dataLength);
 estimates = scfde.equalizers.cross_peak_tracker(tracking.received, ...
@@ -176,7 +179,10 @@ verifyEqual(testCase, estimates, trueD(:), "AbsTol", quantizationSlack, ...
 % The old adjacent-peak formula mixes neighbouring Dopplers:
 %   a'_1 = (D/L) a_1,  a'_b = (U/L) a_(b-1) + (D/L) a_b
 % with D = postOffset, U = uwLength*samplesPerSymbol, L = blockStride.
-% It must NOT reproduce the true per-block values (regression guard).
+% With the 0/4e-3 alternation the mixing produces 0.4e-3 cross-talk on
+% the zero-Doppler blocks, beyond the 2-sample slack (2.89e-4), so the
+% old implementation would FAIL the per-block assertion above (regression
+% guard by construction).  Assert the reference formula really deviates.
 postOffset = blockLength * samplesPerSymbol;
 blockStride = postOffset + uwLength * samplesPerSymbol;
 uFrac = uwLength * samplesPerSymbol / blockStride;
@@ -186,8 +192,30 @@ oldFormula(1) = dFrac * trueD(1);
 for b = 2:5
     oldFormula(b) = uFrac * trueD(b - 1) + dFrac * trueD(b);
 end
-verifyGreaterThan(testCase, norm(estimates - oldFormula), 1e-8, ...
+% The old formula's worst-case deviation must exceed the slack that the
+% production estimate must satisfy - i.e. the guard is decisive.
+verifyGreaterThan(testCase, ...
+    max(abs(oldFormula - trueD(:))), quantizationSlack, ...
+    "old mixing formula must fail the per-block tolerance");
+% And the production estimate must not equal the old formula.
+verifyGreaterThan(testCase, norm(estimates - oldFormula), ...
+    quantizationSlack, ...
     "estimates must not match the adjacent-peak mixing formula");
+end
+
+function testTrackingFramePreservesRngState(testCase)
+% The production tracking_frame must not overwrite the caller's global
+% RNG state: it must use a local RandStream for its data symbols.
+rng(123, "twister");
+before = rng;
+scfde.equalizers.tracking_frame( ...
+    exp(1j * pi * (0:63).'.^2 / 64), [1e-3, 2e-3], ...
+    48000, 10000, 12, 448);
+after = rng;
+verifyEqual(testCase, after.Seed, before.Seed, ...
+    "global RNG seed must be preserved by tracking_frame");
+verifyEqual(testCase, after.State, before.State, ...
+    "global RNG state must be preserved by tracking_frame");
 end
 
 function testCarrierPhaseBoundaryAdvance(testCase)
