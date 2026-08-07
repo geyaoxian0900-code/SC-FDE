@@ -52,9 +52,11 @@ end
 % are excluded and flagged, and a too-low coverage downgrades the grade.
 snrCoverage = refSnr >= min(snrSim) & refSnr <= max(snrSim);
 snrCoverage = repmat(snrCoverage, numMethods, 1);
-% Coverage fraction is relative to the number of FINITE reference
-% points actually present (NaN = missing data point, not a BER of eps).
-numRefPoints = sum(any(isfinite(refBer), 1));
+% Coverage fraction is PER METHOD, relative to the number of FINITE
+% reference points of that method (NaN = missing data point).  Methods
+% digitized with fewer valid points must not be penalized by the union
+% over all methods.
+numRefPoints = sum(isfinite(refBer), 2);
 
 % -- log10(BER) RMSE over covered reference SNR points ------------------
 logSim = interp1(snrSim, log10(berSim).', refSnr, "linear").';
@@ -129,10 +131,10 @@ if numMethods >= 2
 end
 
 % -- per-method metrics and grade ---------------------------------------
-% Coverage fraction = covered points / finite reference points (a
-% low fraction means insufficient evidence; NaN reference points do
-% not count against coverage).
-coverageFraction = sum(valid, 2) / max(numRefPoints, 1);
+% Per-method coverage fraction = covered points / that method's finite
+% reference points.  The overall grade uses the CONSERVATIVE minimum
+% over methods (a claim is only as strong as its weakest method).
+coverageFraction = sum(valid, 2) ./ max(numRefPoints, 1);
 perMethod.logRmse = nan(1, numMethods);
 perMethod.grade = strings(1, numMethods);
 for method = 1:numMethods
@@ -153,7 +155,7 @@ benchmark.snrCoverage = snrCoverage;
 benchmark.coverageFraction = coverageFraction;
 benchmark.horizontalCoverage = horizontalCoverage;
 benchmark.coverage = horizontalCoverage; % backwards-compatible alias
-benchmark.grade = grade_of(logRmse, mean(coverageFraction));
+benchmark.grade = grade_of(logRmse, min(coverageFraction));
 benchmark.perMethod = perMethod;
 benchmark.methodNames = methodNames;
 benchmark.reference = reference;

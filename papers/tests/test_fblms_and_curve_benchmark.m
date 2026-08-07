@@ -261,6 +261,33 @@ verifyTrue(testCase, all(isfinite(benchmark.coverage(:))), ...
     "coverage must be finite");
 end
 
+function testCurveBenchmarkHeterogeneousNaN(testCase)
+% Per-method coverage: method A has 6 finite reference points, method B
+% only 2 (the rest NaN).  When B's 2 points are fully inside the
+% simulation range, B's coverage fraction must be 1 (2/2), not 2/6,
+% and B must not be downgraded because of A's extra points.
+snrSim = 0:2:10;
+reference.snrDb = 0:2:10;
+reference.ber = [
+    1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3          % A: 6 points
+    3e-2, NaN, NaN, 1e-3, NaN, NaN              % B: 2 points
+];
+berSim = reference.ber; % both methods match exactly on their points
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, ["A", "B"]);
+verifyEqual(testCase, benchmark.coverageFraction(1), 1, ...
+    "AbsTol", 1e-10, "method A covers all its 6 finite points");
+verifyEqual(testCase, benchmark.coverageFraction(2), 1, ...
+    "AbsTol", 1e-10, ...
+    "method B must cover all its 2 finite points (2/2, not 2/6)");
+verifyEqual(testCase, benchmark.perMethod.logRmse(1), 0, ...
+    "AbsTol", 1e-10, "method A matches exactly");
+verifyEqual(testCase, benchmark.perMethod.logRmse(2), 0, ...
+    "AbsTol", 1e-10, "method B matches exactly on its 2 points");
+verifyTrue(testCase, ismember(benchmark.perMethod.grade(2), ["A", "B"]), ...
+    "method B must not be downgraded by A's extra points");
+end
+
 function testCurveBenchmarkCoverageExclusion(testCase)
 % Reference points outside the simulation SNR range must be excluded
 % from the horizontal SNR deviation (and flagged in coverage), not
