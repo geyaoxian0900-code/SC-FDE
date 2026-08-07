@@ -165,22 +165,28 @@ source(cfg) → channel(tx,cfg) → receiverBank(channel,source,cfg) → metric(
   - LDPC 输入方差为解析残余方差 sigma_w^2*mean(|W|^2) + mean(|W*H-1|^2)
     （热噪声 + 残余 ISI），无经验缩放下限
 - **第三轮审计修复（2026-08）**：
-  - FD-DFE 按 MMSE 推导实现：反馈系数 f 由相关矩阵 V（等效信道含噪自相关的
-    Toeplitz 形式）与向量 v 解出，前馈频域系数 W = (1+sum f)·H*/(|H|^2+sigma^2)
-    随反馈长度 B 变化；编码 FD-DFE 采用解码符号反馈（FDE-FDFE 结构），
-    4 dB 下不再劣于 MMSE（0.0705 → 0.0092）
-  - 图 3.6 块级多普勒跟踪改用信号级 UW 估计器（不再手工叠加固定误差）
-  - 图 3.10 为完整同帧同步-补偿链路：同帧估计、带符号残差、逆时间伸缩
-    重采样 + 载波相位补偿（不再是独立帧绝对误差的窄带近似）
-  - CCK/CSK 统一入口按码本 bit table 统计真实比特错误（此前为码片/符号
-    错误率误标为 BER）
+  - FD-DFE 按原文 (4-10)-(4-18) 完整实现：反馈系数 f = -V^-1 v（V 为等效信道
+    含噪自相关的循环 Toeplitz 矩阵），前馈系数携带频变反馈多项式
+    F_k = 1+sum_m f_m e^{-j*2*pi*k*m/N}，归一化后 W(B) 随 B 变化；
+    信道时延恢复为 round(pathDelayMs/Ts_ms) = [0,14,27,40]；
+    编码 FD-DFE 采用解码符号反馈（FDE-FDFE 结构），4 dB ≈ MMSE
+  - 图 3.6 单帧 5 块时变跟踪（30 dB）：UW 互相关估计器按式 (3-8) 形式
+    （相邻块相关峰位置差），二维估计器按式 (3-9)-(3-15)（λ=4 搜索），
+    两种方法为不同算法；固定误差数组已删除
+  - 图 3.10 为完整同帧同步-补偿链路：帧结构 [UW;UW;data;UW;...] 与估计器
+    双前置 UW 窗口一致，同帧估计、带符号残差、逆时间伸缩重采样 +
+    载波相位补偿
+  - CCK/CSK 统一入口按码本 bit table 统计真实比特错误（内置 trace.indices
+    与自定义输出回退均正确重排码字）
   - SC-TDE 论文复现：RLS 训练长度提高至覆盖 450 系数（512 → 1500），
-    quick 档 trials=2/dataSymbols=1500；Frobenius 相对误差 1.31 → 0.76，
-    方法排序与数字化原图一致（PTR > PTR-DFE > McDFE/Sub-PTR > BiMcDFE）
+    quick 档 trials=2/dataSymbols=1500；Frobenius 相对误差 1.31 → 0.76；
+    方法整体趋势与数字化原图一致（PTR 最差、BiMcDFE 最优），中间方法在低 SNR 存在部分顺序差异
   - known_dfe_core 正则项改为严格 MMSE 推导（噪声方差 = 接收功率·10^(-SNR/10)，
     移除经验系数 0.03）
-  - subband_equivalent_channel 回退时按前端实际分支数复制聚合冲激响应
-    （此前双分支回退前后级不一致，相对误差 0.5）
-  - list_simulations 补全 11 项实验；README 均衡器数量更新为 36
+  - subband_equivalent_channel 回退分支数与前端一致（含无 branches 时
+    单分支回退 max(1, ...)）
+  - list_simulations 补全 11 项实验；根与 papers/README 均衡器数量均为 36
+  - 新增 test_audit_round3_fixes 单元测试：FD-DFE 频变前馈、毫秒时延、
+    无 branches PTR 回退、CCK/CSK bit 级统计、双 UW 帧结构
 - **仍为工程近似**（非逐式原样）：HTFDE 可靠度缩放、BLMS 用循环块替代 overlap-save、
   CCK Turbo 外码用重复码替代完整编码、5.5 节合成 11 径信道、PIC/ESE 阻尼系数。

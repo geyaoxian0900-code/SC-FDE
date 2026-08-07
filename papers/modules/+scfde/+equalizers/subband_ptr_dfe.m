@@ -14,7 +14,9 @@ if isfield(channel, "branchImpulses")
 end
 subband = scfde.equalizers.subband_ptr(channel.received, channel.impulse, ...
     cfg.numSubbands, cfg.ptrRegularization, branches, branchImpulses);
-branchCount = size(branches, 1);
+% The front end falls back to a single branch when branches is missing;
+% the equivalent channel must use the same effective branch count.
+branchCount = max(1, size(branches, 1));
 equivalent = scfde.equalizers.subband_equivalent_channel( ...
     channel.impulse, branchImpulses, branchCount);
 [decisions, mse, estimates, trace] = scfde.equalizers.known_dfe_core( ...

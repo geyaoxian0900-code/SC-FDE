@@ -86,27 +86,31 @@ exportgraphics(fig, fullfile(resultDir, "fig3_5_lambda_mse.png"), ...
 close(fig);
 
 %% Figure 3.6: block-wise Doppler tracking
-% Each block is generated with its own true Doppler factor and the
-% Doppler is estimated from that block's received samples by the same
-% signal-level UW estimator used for Figures 3.5/3.7-3.10 (fixed prior
-% range, coarse acquisition, local refinement).  No truth information
-% enters the estimator.
+% A single frame of five data blocks is transmitted with a time-varying
+% per-block Doppler factor; both estimators run on that same frame.
+%  - The UW cross-correlation estimator (Eq. 3-8 form): the UW correlation
+%    peak position of successive blocks is located and the Doppler factor
+%    follows from the peak-position difference between adjacent blocks.
+%  - The 2-D UW estimator: the joint Doppler-timing search of
+%    Eqs. (3-9)-(3-15) with lambda = 4 oversampling.
+% The true Doppler is only used to generate the frame, never by either
+% estimator.  SNR follows the figure caption (30 dB).
 trueDoppler = [0.933, 1.000, 0.9533, 1.067, 1.033] * 1e-3;
-trackingSnrDb = 6;
+trackingSnrDb = 30;
 trackingMultipath = true;
-crossTrack = block_doppler_tracking(cfg, uw, h, trackingSnrDb, ...
-    trueDoppler, 1, trackingMultipath);
-twoDTrack = block_doppler_tracking(cfg, uw, h, trackingSnrDb, ...
-    trueDoppler, 4, trackingMultipath);
-crossEstimate = crossTrack.estimates;
-twoDEstimate = twoDTrack.estimates;
+tracking = simulate_tracking_frame(cfg, uw, h, trackingSnrDb, ...
+    trueDoppler, trackingMultipath);
+crossEstimate = cross_correlation_tracker(cfg, tracking.received, ...
+    tracking.downsample);
+twoDEstimate = two_d_tracker(cfg, tracking.received, ...
+    tracking.downsample);
 
 fig = figure("Color", "w", "Position", [100, 100, 760, 500]);
 plot(1:5, trueDoppler, "-o", "LineWidth", 1.4); hold on;
 plot(1:5, twoDEstimate, "-*", "LineWidth", 1.4);
 plot(1:5, crossEstimate, "-s", "LineWidth", 1.4);
 grid on; xlabel("Data block"); ylabel("Doppler factor");
-title("Figure 3.6: block-wise Doppler tracking");
+title("Figure 3.6: block-wise Doppler tracking (30 dB)");
 legend("True", "2-D UW estimator", "UW cross-correlation estimator", ...
     "Location", "southeast");
 exportgraphics(fig, fullfile(resultDir, "fig3_6_block_doppler_tracking.png"), ...
@@ -261,23 +265,11 @@ function errors = estimate_fig35_doppler_errors( ...
         cfg, snrDb, lambda, trials, cfg.defaultVelocity, true);
 end
 
-function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
-        trueDoppler, lambda, multipath)
-    % Block-wise Doppler tracking: each data block is transmitted with
-    % its own true Doppler factor; the per-block Doppler is then
-    % estimated from the received samples by the same signal-level UW
-    % estimator used for Figures 3.5 and 3.7-3.10 (fixed prior range,
-    % coarse acquisition, local refinement).  The true Doppler is only
-    % used to generate the transmitted waveform, never by the estimator.
+function tracking = simulate_tracking_frame(cfg, uw, h, snrDb, ...
+        trueDoppler, multipath)
+    % One frame of blockCount data blocks; block b is time-stretched by
+    % 1/(1+trueDoppler(b)) so the Doppler varies across the frame.
     samplesPerSymbol = round(cfg.fs * cfg.Ts);
-    uwSamples = repelem(uw, samplesPerSymbol);
-    blockSamples = cfg.blockLength * samplesPerSymbol;
-    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
-    maxPriorDoppler = 1 / (2 * samplesPerSymbol);
-    priorHalfSpan = maxPriorDoppler;
-    coarseDelta = min(2 * priorHalfSpan / 5, 4 * delta);
-    coarseSteps = max(5, ceil(priorHalfSpan / max(coarseDelta, eps)));
-    timingRadius = max(1, lambda);
     hSamples = zeros(round(max(cfg.pathDelayMs) * 1e-3 * cfg.fs) + 1, 1);
     delays = round(cfg.pathDelayMs * 1e-3 * cfg.fs);
     phases = [0, 0.45, -0.90, 1.35];
@@ -288,28 +280,110 @@ function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
         hSamples(1) = gains(1);
     end
     hSamples = hSamples / norm(hSamples);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
     blockCount = numel(trueDoppler);
-    estimates = zeros(blockCount, 1);
+    outputLength = round(blockCount * blockSamples * ...
+        (1 + mean(trueDoppler)));
+    frame = uw;
     for block = 1:blockCount
-        data = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
-        frame = uw;
-        for repeatBlock = 1:cfg.blockCount
-            frame = [frame; uw; data; uw]; %#ok<AGROW>
+        frame = [frame; uw; qpsk_symbols(randi([0, 1], ...
+            2 * cfg.dataLength, 1)); uw]; %#ok<AGROW>
+    end
+    transmitted = repelem(frame, samplesPerSymbol);
+    % One extra stretched UW is appended after the last block so the
+    % last block's post-data UW window stays inside the frame.
+    tailLength = floor((numel(uw) * samplesPerSymbol - 1) * ...
+        (1 + trueDoppler(end))) + 1;
+    tailPosition = (0:tailLength-1).' / ...
+        (1 + trueDoppler(end)) + 1;
+    tailSegment = interp1((1:numel(uw) * samplesPerSymbol).', ...
+        repelem(uw, samplesPerSymbol), tailPosition, "linear", 0);
+    % Per-block time-varying stretch: block b is stretched by
+    % (1 + trueDoppler(b)); the overall waveform is assembled with the
+    % block boundaries scaled accordingly.
+    stretched = zeros(0, 1);
+    symbolBlockSamples = cfg.blockLength * samplesPerSymbol;
+    for block = 1:blockCount
+        blockSegment = transmitted((block - 1) * symbolBlockSamples + ...
+            1:block * symbolBlockSamples);
+        doppler = trueDoppler(block);
+        segmentLength = floor((numel(blockSegment) - 1) * ...
+            (1 + doppler)) + 1;
+        sourcePosition = (0:segmentLength-1).' / (1 + doppler) + 1;
+        stretched = [stretched; interp1((1:numel(blockSegment)).', ...
+            blockSegment, sourcePosition, "linear", 0)]; %#ok<AGROW>
+    end
+    stretched = [stretched; tailSegment];
+    received = conv(stretched, hSamples);
+    n = (0:numel(received)-1).';
+    received = received .* exp(1j * 2 * pi * cfg.fc * ...
+        mean(trueDoppler) ./ cfg.fs .* n);
+    received = add_awgn(received, snrDb);
+    tracking.received = received;
+    tracking.downsample = samplesPerSymbol;
+    tracking.trueDoppler = trueDoppler(:);
+end
+
+function estimates = cross_correlation_tracker(cfg, received, samplesPerSymbol)
+    % UW cross-correlation Doppler tracker (Eq. 3-8 form): locate the UW
+    % correlation peak of each data block and derive the Doppler factor
+    % from the peak-position difference between adjacent blocks:
+    %   a = (d_{b+1} - d_b) / (blockLength * samplesPerSymbol)
+    % where d_b is the correlation peak index of block b.
+    uwLength = cfg.uwLength;
+    uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    blockCount = 5;
+    peaks = zeros(blockCount, 1);
+    % Frame pattern [UW; UW; data; UW; ...]: the block start is at
+    % nominal, but the previous block's trailing UW occupies the first
+    % uwLength samples, so the block's own first UW sits in a narrow
+    % window right after it.
+    for block = 1:blockCount
+        nominal = (block - 1) * blockSamples + 1;
+        % Skip the previous block's trailing UW (uwLength samples at the
+        % block start) and search the block's own first UW right after.
+        windowHalf = round(numel(uwSamples) / 2);
+        searchRange = nominal + numel(uwSamples) + (-windowHalf:windowHalf);
+        searchRange = searchRange(searchRange >= 1 & ...
+            searchRange <= numel(received) - numel(uwSamples));
+        correlation = zeros(size(searchRange));
+        for index = 1:numel(searchRange)
+            window = received(searchRange(index):searchRange(index) + ...
+                numel(uwSamples) - 1);
+            correlation(index) = abs(sum(window .* conj(uwSamples)));
         end
-        transmitted = repelem(frame, samplesPerSymbol);
-        trueValue = trueDoppler(block);
-        outputLength = floor((numel(transmitted) - 1) * ...
-            (1 + trueValue)) + 1;
-        sourcePosition = (0:outputLength-1).' / ...
-            (1 + trueValue) + 1;
-        expanded = interp1((1:numel(transmitted)).', transmitted, ...
-            sourcePosition, "linear", 0);
-        received = add_awgn(conv(expanded, hSamples), snrDb);
-        basePosition = (1:numel(received)).';
-        finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
-            / lambda + (1 - 1 / lambda);
-        receivedFine = interp1(basePosition, received, finePosition, ...
-            "linear", 0);
+        [~, peakOffset] = max(correlation);
+        peaks(block) = searchRange(peakOffset);
+    end
+    peakDifference = diff(peaks) - blockSamples;
+    estimates = peakDifference / blockSamples;
+    estimates = [estimates(1); estimates(:)];
+end
+
+function estimates = two_d_tracker(cfg, received, samplesPerSymbol)
+    % 2-D UW estimator (Eqs. 3-9..3-15): joint Doppler-timing search with
+    % lambda = 4 oversampling on the same received frame.
+    lambda = 4;
+    uwLength = cfg.uwLength;
+    uwSamples = repelem(chu_sequence(uwLength), samplesPerSymbol);
+    blockSamples = cfg.blockLength * samplesPerSymbol;
+    delta = 1 / (lambda * cfg.fs * cfg.blockLength * cfg.Ts);
+    maxPriorDoppler = 1 / (2 * samplesPerSymbol);
+    priorHalfSpan = maxPriorDoppler;
+    coarseDelta = min(2 * priorHalfSpan / 5, 4 * delta);
+    coarseSteps = max(5, ceil(priorHalfSpan / max(coarseDelta, eps)));
+    timingRadius = max(1, lambda);
+    basePosition = (1:numel(received)).';
+    finePosition = (1:(numel(received) - 1) * lambda + 1).' ...
+        / lambda + (1 - 1 / lambda);
+    receivedFine = interp1(basePosition, received, finePosition, ...
+        "linear", 0);
+    blockCount = 5;
+    estimates = zeros(blockCount, 1);
+    fineLength = numel(receivedFine);
+    for block = 1:blockCount
+        blockDoppler = 0;
         coarseBest = 0;
         coarseScore = -inf;
         for candidateDoppler = (-coarseSteps:coarseSteps) * coarseDelta
@@ -317,10 +391,39 @@ function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
                 (1 + candidateDoppler));
             postUwOffset = round(blockSamples * lambda * ...
                 (1 + candidateDoppler));
-            nominal = 1 + round(0 * blockSamples * ...
-                lambda * (1 + candidateDoppler));
-            score = uw_correlation_score(receivedFine, ...
-                nominal, windowLength, postUwOffset, 0);
+            nominal = 1 + round((block - 1) * blockSamples * ...
+                lambda * (1 + blockDoppler));
+            score = -inf;
+            drift = round(block * blockSamples * 2e-3 * lambda);
+            timingRange = nominal + (-drift:drift);
+            timingRange = timingRange(timingRange >= 1);
+            for coarseTiming = timingRange
+                postFirst = coarseTiming + postUwOffset;
+                postLast = postFirst + windowLength - 1;
+                secondLast = coarseTiming + 2 * windowLength - 1;
+                if postFirst > fineLength || secondLast > fineLength
+                    continue;
+                end
+                % Clamp the post-UW window to the frame end (the last
+                % block's post-UW may run past the received tail); the
+                % pre-UW windows are truncated to the same length.
+                if postLast > fineLength
+                    postLast = fineLength;
+                end
+                postSegment = postFirst:postLast;
+                firstUw = receivedFine(coarseTiming:coarseTiming + ...
+                    numel(postSegment) - 1);
+                secondUw = receivedFine(coarseTiming + windowLength: ...
+                    coarseTiming + windowLength + numel(postSegment) - 1);
+                postUw = receivedFine(postSegment);
+                phi1 = sum(firstUw .* conj(postUw));
+                phi2 = sum(secondUw .* conj(postUw));
+                phi3 = sum(abs(postUw).^2);
+                value = abs((phi1 + phi2) / max(phi3, eps));
+                if value > score
+                    score = value;
+                end
+            end
             if score > coarseScore
                 coarseScore = score;
                 coarseBest = candidateDoppler;
@@ -330,8 +433,8 @@ function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
         fineCandidates = dopplerCenter + (-2:2) * delta;
         bestScore = -inf;
         bestDoppler = dopplerCenter;
-        nominal = 1 + round(0 * blockSamples * ...
-            lambda * (1 + dopplerCenter));
+        nominal = 1 + round((block - 1) * blockSamples * ...
+            lambda * (1 + blockDoppler));
         for candidateDoppler = fineCandidates
             windowLength = round(numel(uwSamples) * lambda * ...
                 (1 + candidateDoppler));
@@ -344,12 +447,21 @@ function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
                 secondLast = secondFirst + windowLength - 1;
                 postFirst = timing + postUwOffset;
                 postLast = postFirst + windowLength - 1;
-                if timing < 1 || postLast > numel(receivedFine)
-                    continue;
+                if timing < 1 || postLast > fineLength
+                    % Last block: the post-UW window runs past the frame
+                    % end; clamp it to the available samples so the
+                    % correlation still sees a valid (shorter) post-UW.
+                    if ~(block == blockCount && postFirst <= fineLength)
+                        continue;
+                    end
+                    postLast = fineLength;
                 end
-                firstUw = receivedFine(timing:firstLast);
-                secondUw = receivedFine(secondFirst:secondLast);
-                postUw = receivedFine(postFirst:postLast);
+                postSegment = postFirst:postLast;
+                firstUw = receivedFine(timing:timing + ...
+                    numel(postSegment) - 1);
+                secondUw = receivedFine(secondFirst:secondFirst + ...
+                    numel(postSegment) - 1);
+                postUw = receivedFine(postSegment);
                 phi1 = sum(firstUw .* conj(postUw));
                 phi2 = sum(secondUw .* conj(postUw));
                 phi3 = sum(abs(postUw).^2);
@@ -362,9 +474,6 @@ function tracking = block_doppler_tracking(cfg, uw, h, snrDb, ...
         end
         estimates(block) = bestDoppler;
     end
-    tracking.trueDoppler = trueDoppler(:);
-    tracking.estimates = estimates(:);
-    tracking.errors = abs(tracking.trueDoppler - tracking.estimates);
 end
 
 function errors = estimate_fig35_doppler_errors_velocity( ...
@@ -587,11 +696,13 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
         info = randi([0, 1], ldpc.K, 1);
         codeword = scfde_ldpc_encode(info, ldpc);
         data = qpsk_symbols(codeword);
-        % Two-block frame: the estimator's UW correlation needs a
-        % post-data UW, so the payload block is followed by a filler
-        % block with the same [UW; data; UW] structure.
+        % Frame structure matches the estimator's UW windows
+        % (Eqs. 3-12..3-15): two consecutive pre-data UWs are read from
+        % the frame start, then the data block, then a post-data UW.
+        % A filler block keeps the post-data UW inside the received
+        % waveform for the estimator window.
         filler = qpsk_symbols(randi([0, 1], 2 * cfg.dataLength, 1));
-        transmitted = [uw; data; uw; uw; filler; uw];
+        transmitted = [uw; uw; data; uw; uw; filler; uw];
         % Oversampled transmission with true Doppler: time-scale
         % compression/expansion plus carrier frequency shift, then the
         % oversampled multipath channel (same model as the estimator).
@@ -607,7 +718,7 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
         phases = [0, 0.45, -0.90, 1.35];
         hSamples(delays + 1) = cfg.pathGain .* exp(1j * phases);
         hSamples = hSamples / norm(hSamples);
-        received = conv(stretched, hSamples);
+    received = conv(stretched, hSamples);
         n = (0:numel(received)-1).';
         received = received .* exp(1j * 2 * pi * cfg.fc * ...
             trueDoppler ./ cfg.fs .* n);
@@ -646,7 +757,7 @@ function ber = simulate_coded_sync_ber(cfg, uw, h, ldpc, snrDb, modeIndex)
         % Downsample to symbol rate, keep the [data; UW] block (the UW
         % acts as the cyclic prefix) and equalize in the frequency domain.
         symbolSamples = compensated(1:samplesPerSymbol:end);
-        blockStart = cfg.uwLength + 1;
+        blockStart = 2 * cfg.uwLength + 1;
         block = symbolSamples(blockStart:blockStart + cfg.fftLength - 1);
         estimate = ifft(equalizer .* fft(block));
         dataEstimate = estimate(1:cfg.dataLength);

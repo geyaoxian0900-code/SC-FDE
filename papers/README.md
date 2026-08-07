@@ -77,7 +77,7 @@ receiver = equalizer(channel, source, cfg)
 ```
 
 返回值只需包含 `outputs{1}`（与 `source.tx` 对齐的符号估计）、`ids`、
-`names`；`traces`/`learningMse`/`estimates` 可选。内置 10 个均衡器注册在
+`names`；`traces`/`learningMse`/`estimates` 可选。内置 36 个均衡器注册在
 `modules/+scfde/equalizer_registry.m`，实现位于 `+scfde/+equalizers/`。
 
 通过 `cfg.equalizers` 选择要运行的均衡器：

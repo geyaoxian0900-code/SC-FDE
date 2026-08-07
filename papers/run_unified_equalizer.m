@@ -179,10 +179,14 @@ for frame = 1:cfg.frameCount
             detectedIdx = detectedIdx(1:cfg.symbols);
         else
             % Recover indices from the chip-level output by nearest
-            % codeword in Euclidean distance.
-            detected = reshape(recv.outputs{eq}(:).', size(book, 2), []);
-            detected = hard_qpsk(detected).';
-            distance = abs(book - reshape(detected, 1, size(book, 2), []));
+            % codeword in Euclidean distance.  The output is a row of
+            % (symbols * chips) chips; reshape column-major keeps each
+            % codeword contiguous per column, then transpose so each row
+            % is one codeword.
+            detected = hard_qpsk(recv.outputs{eq}(:).');
+            detected = reshape(detected, size(book, 2), []).';
+            distance = abs(book - reshape(detected.', 1, ...
+                size(book, 2), []));
             distance = squeeze(sum(distance .^ 2, 2));
             [~, detectedIdx] = min(distance, [], 1);
         end
@@ -245,8 +249,11 @@ for frame = 1:cfg.frameCount
             % soft-SIC history: (iterations, symbols, users)
             det = squeeze(trace.history(end, :, 1)).';
         else
+            % Column-major reshape keeps each symbol's code-length
+            % segment contiguous; transpose so each row is one symbol.
             det = reshape(recv.outputs{eq}(:), codeLength, []).';
-            distance = abs(book - reshape(det, 1, size(book, 2), []));
+            distance = abs(book - reshape(det.', 1, ...
+                size(book, 2), []));
             distance = squeeze(sum(distance .^ 2, 2));
             [~, det] = min(distance, [], 1);
             det = det(:);

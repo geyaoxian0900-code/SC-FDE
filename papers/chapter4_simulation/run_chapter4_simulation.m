@@ -185,10 +185,9 @@ function bits = qpsk_demodulate(symbols)
 end
 
 function h = chapter4_channel(cfg)
-    % Delays are given in symbol intervals (pathDelayMs values are treated
-    % as integer symbol delays); the FD-DFE feedback length B in
-    % cfg.fdfeFeedback then spans the main post-cursor ISI taps.
-    delays = round(cfg.pathDelayMs);
+    % Delays are in milliseconds and cfg.Ts_ms is the symbol interval,
+    % so the taps are at round(pathDelayMs / Ts_ms) symbol samples.
+    delays = round(cfg.pathDelayMs / cfg.Ts_ms);
     phases = [0, 0.45, -0.90, 1.35];
     gains = cfg.pathGain .* exp(1j * phases);
     h = zeros(max(delays) + 1, 1);
@@ -217,11 +216,10 @@ function [fdfeBer, predictionBer] = simulate_uncoded_equalizers( ...
 
         for feedbackIndex = 1:numel(cfg.fdfeFeedback)
             feedbackLength = cfg.fdfeFeedback(feedbackIndex);
-            [Wf, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength);
+            [Wf, ~] = fd_dfe_design(H, noiseRatio, feedbackLength);
             mainTap = mean(Wf .* H);
             filtered = ifft(Wf .* R) / mainTap;
-            estimate = fdfe_symbols(filtered, feedback / mainTap, uw, ...
-                cfg.dataLength);
+            estimate = hard_qpsk(filtered(1:cfg.dataLength));
             errorFdfe(feedbackIndex) = errorFdfe(feedbackIndex) + ...
                 sum(qpsk_demodulate(estimate) ~= bits);
         end
@@ -275,8 +273,10 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         mainTap = mean(Wf .* H);
         WfNorm = Wf / mainTap;
         % FDE-FDFE (book 4.3.1): feedforward MMSE decode first, then
-        % re-encode and cancel post-cursor ISI with decoded symbols,
-        % then decode again.  Uses decoded (not hard-sliced) feedback.
+        % re-encode and cancel the residual post-cursor ISI with decoded
+        % symbols, then decode again.  The feedforward carries the
+        % feedback polynomial F_k; the residual cancellation uses the
+        % decoded (not hard-sliced) symbols.
         fdfeFeedforward = ifft(Wf .* R) / mainTap;
         [decodedFdfe, ~] = decode_symbol_estimate( ...
             fdfeFeedforward(1:cfg.dataLength), ...
@@ -285,7 +285,8 @@ function result = simulate_coded_equalizers(cfg, uw, H, ldpc, snrDb)
         fdfeRefined = fdfe_symbols_decoded(fdfeFeedforward, ...
             feedback / mainTap, uw, cfg.dataLength, feedbackSymbols);
         [decodedFdfe, ~] = decode_symbol_estimate(fdfeRefined, ...
-            noiseRatio, ldpc, cfg.ldpcIterations);
+            equalized_noise_variance(WfNorm, H, noiseRatio), ...
+            ldpc, cfg.ldpcIterations);
         errorsFdfe = errorsFdfe + sum(decodedFdfe(1:ldpc.K) ~= info);
 
         feedbackCodeword = decoded;
@@ -343,14 +344,18 @@ end
 
 function [W, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength)
     % FD-DFE coefficients per the book's MMSE derivation
-    % (Eqs. 4-10..4-18 / textbook p.90, 4-56..4-58 form):
-    %   q(n)     = 1/N * sum_k |H_k|^2/(|H_k|^2+sigma^2) * exp(j*2*pi*k*n/N)
-    %   V(m,n)   = q(|m-n|)     (feedback correlation matrix, Toeplitz)
-    %   v(m)     = q(m)         (post-cursor ISI vector, m=1..B)
-    %   f        = V^{-1} v     (time-domain feedback coefficients)
-    %   W_k      = (1 + sum_m f_m) * H_k*/(|H_k|^2+sigma^2)
-    % so the feedforward filter depends on the feedback coefficients,
-    % which themselves follow from the correlation matrix V and vector v.
+    % (Eqs. 4-10..4-18): the feedforward filter carries the
+    % frequency-dependent feedback polynomial
+    %   F_k = 1 + sum_{m=1}^B f_m e^{-j*2*pi*k*m/N}
+    % with the feedback coefficients solved from the correlation matrix
+    %   q(n)   = 1/N * sum_k |H_k|^2/(|H_k|^2+sigma^2) * exp(j*2*pi*k*n/N)
+    %   V(m,n) = q(m-n mod N)      (circular feedback correlation matrix)
+    %   v(m)   = q(m)              (post-cursor ISI vector, m=1..B)
+    %   f      = -V^{-1} v
+    %   W_k    = H_k*/(|H_k|^2+sigma^2) * F_k
+    % so W depends on B and the joint MMSE design shapes the post-cursor
+    % ISI into the feedforward filter (no separate time-domain loop).
+    N = numel(H);
     if feedbackLength == 0
         feedback = zeros(0, 1);
         W = conj(H) ./ (abs(H).^2 + noiseRatio);
@@ -358,35 +363,18 @@ function [W, feedback] = fd_dfe_design(H, noiseRatio, feedbackLength)
     end
     gamma = abs(H).^2 ./ (abs(H).^2 + noiseRatio);
     q = real(ifft(gamma));
-    V = toeplitz(q(1:feedbackLength));
-    v = q(2:feedbackLength + 1);
-    feedback = V \ v;
-    W = (1 + sum(feedback)) * conj(H) ./ (abs(H).^2 + noiseRatio);
-end
-
-function decisions = fdfe_symbols(feedforwardOutput, feedback, uw, ...
-        dataLength)
-    % Time-domain feedback cancellation on the feedforward-filtered
-    % (IFFT of W .* R) block; the UW acts as the cyclic prefix.
-    % The main-tap normalization is applied here so that the output
-    % scale matches the unit-energy QPSK constellation.
-    N = numel(feedforwardOutput);
-    feedbackLength = numel(feedback);
-    decisions = zeros(dataLength, 1);
-    for symbolIndex = 1:dataLength
-        value = feedforwardOutput(symbolIndex);
-        for lag = 1:min(feedbackLength, N - 1)
-            previousIndex = symbolIndex - lag;
-            if previousIndex >= 1
-                previous = decisions(previousIndex);
-            else
-                wrappedIndex = N + previousIndex;
-                previous = uw(wrappedIndex - dataLength);
-            end
-            value = value - feedback(lag) * previous;
+    V = zeros(feedbackLength, feedbackLength);
+    for m = 1:feedbackLength
+        for n = 1:feedbackLength
+            V(m, n) = q(mod(m - n, N) + 1);
         end
-        decisions(symbolIndex) = hard_qpsk(value);
     end
+    v = q(2:feedbackLength + 1);
+    feedback = -V \ v;
+    feedback = feedback(:); % ensure column so fft(feedback, N) is N x 1
+    Fk = 1 + fft(feedback, N);
+    Fk = Fk(:); % scalar feedback (B=1) makes fft return a row
+    W = conj(H) ./ (abs(H).^2 + noiseRatio) .* Fk;
 end
 
 function refined = fdfe_symbols_decoded(feedforwardOutput, feedback, ...
