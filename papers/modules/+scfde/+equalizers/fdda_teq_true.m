@@ -7,12 +7,17 @@ function receiver = fdda_teq_true(channel, source, cfg)
 % The book simulation parameters are mu_f=0.2, mu_b=0.01, N_c=32,
 % N_f=32, N_b=10, I_inner=1, I_outer=3.  The kernel updates W and B on
 % EVERY block (training mode and decision-directed mode, Eq. 4-82)
-% with the exponential forgetting factor gamma^m (m = global block
-% counter), and inherits the filters across outer iterations
-% (Eq. 4-81).  The feedback/error reference of the data segment is the
-% decision (default, the book's decision-directed mode) or the
-% previous outer iteration's soft symbols (cfg.fddaSoftFeedback);
-% the BCJR soft decoding is applied to the FINAL output only.
+% with the exponential forgetting factors gamma_f^i and gamma_b^i
+% (i = outer iteration index; all blocks inside the same outer
+% iteration share the same scale), and inherits the filters across
+% outer iterations (Eq. 4-81).  The feedback block follows Eq. (4-75):
+% [past estimates; 0_N; future estimates] (the current block's own
+% positions are zero; outer=1 has no prior information and feeds zero
+% back on the data segment).  The feedback/error reference of the data
+% segment is the decision (default, the book's decision-directed mode)
+% or the previous outer iteration's soft symbols
+% (cfg.fddaSoftFeedback); the BCJR soft decoding is applied to the
+% FINAL output only.
 %
 % The frame must be [training; data] (see run_turbo_scenario).  The
 % interleaver is supplied by the scenario (cfg.permutation); the module

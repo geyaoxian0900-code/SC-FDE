@@ -511,12 +511,25 @@ verifyTrue(testCase, numel(mseTrajectory) == 3 && ...
 verifyLessThanOrEqual(testCase, max(mseTrajectory), ...
     1.5 * mseTrajectory(1), ...
     "outer iterations must not diverge (same true-data reference)");
-% The data segment must genuinely adapt W/B (Eq. 4-82): a mu_b change
-% must change the per-block weight traces beyond the training segment.
-rMuMid = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.02, 1));
+% The DATA segment must genuinely adapt B (Eq. 4-82): with I_outer=3
+% the feedback is non-zero from outer 2 (Eq. 4-75), so a mu_b change
+% must change the feedbackNorm of the DATA blocks (block index >=
+% trainBlocks) and the final B.  With I_outer=1 the data feedback is
+% forced to zero, so this check would be vacuous.
+trainBlocks = ceil(256 / 32);
+rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 3));
+rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(100, 3));
+dataFbNorm0 = rMu0.traces{1}.feedbackNorm(:, trainBlocks + 1:end);
+dataFbNormBig = rMuBig.traces{1}.feedbackNorm(:, trainBlocks + 1:end);
+verifyGreaterThan(testCase, norm(dataFbNormBig - dataFbNorm0), 0, ...
+    "data-segment B adaptation must make mu_b visible after training");
+% The data-segment B must actually evolve block by block (not frozen
+% at the trained value): the feedbackNorm of the last outer iteration
+% must differ between the end of training and the end of the data.
+lastOuter = rMuBig.traces{1}.feedbackNorm(end, :);
 verifyGreaterThan(testCase, ...
-    norm(rMuMid.traces{1}.weightNorm - r1.traces{1}.weightNorm), 0, ...
-    "data-segment W/B adaptation must make mu_b visible in the traces");
+    abs(lastOuter(end) - lastOuter(trainBlocks)), 0, ...
+    "B must keep adapting across the data blocks of an outer iteration");
 end
 
 function testEseDampingDefaultsConsistent(testCase)
@@ -536,51 +549,73 @@ verifyEqual(testCase, cfg2.config.eseDamping, 0.58, ...
     "spread-spectrum suite must default to damping 0.58");
 end
 
-function testFddaEquationDenominatorSingleBlock(testCase)
+function testFddaEquationDenominatorThreeBlocks(testCase)
 % The default denominator must be the book Eq. (4-82) scalar
-% delta + R^H R; a single training block must produce W and B
-% EXACTLY equal to a manual evaluation of Eq. (4-82).
+% delta + R^H R with the Eq. (4-75) feedback window; THREE training
+% blocks are used so the middle block has past AND future neighbours
+% (non-zero feedback Xb), and every block's W and B update is compared
+% against a manual block-by-block evaluation of Eq. (4-82).
 Nc = 32; Nf = 32; Nb = 10;
 fftLength = Nc + 2 * max(Nf, Nb);
+numBlocks = 3;
 rng(7, "twister");
-training = (1 - 2 * randi([0 1], 1, Nc));
+training = (1 - 2 * randi([0 1], 1, Nc * numBlocks));
 imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
-received = ifft(fft([imp, zeros(1, Nc - numel(imp))]).' .* ...
+received = ifft(fft([imp, zeros(1, numel(training) - numel(imp))]).' .* ...
     fft(training).');
 received = received + 0.1 * (randn(size(received)) + 1j * randn(size(received)));
 received = received.';
 params = struct("blockLength", Nc, "ffLength", Nf, "fbLength", Nb, ...
     "stepFf", 0.2, "stepFb", 0.01, "outerIterations", 1, ...
-    "forgetting", 0.97, "denomMode", "equation", ...
-    "trainLength", Nc, "referenceData", training);
+    "forgettingF", 0.97, "denomMode", "equation", ...
+    "trainLength", Nc * numBlocks, "referenceData", training);
 params.decisionFn = @(x) sign(real(x));
 [~, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
     received, training, params, @(o, d) d);
 Wk = trace.finalW; Bk = trace.finalB;
-% Manual Eq. (4-82)
-inputBlock = [zeros(1, Nf), received, zeros(1, Nf)];
-R = fft(inputBlock, fftLength);
+% Manual block-by-block Eq. (4-82) with the Eq. (4-75) window.
 W = ones(fftLength, 1); B = zeros(fftLength, 1);
-% Book Eq. (4-75) feedback block: [past; 0_N; future] of the training
-% sequence (single training block: no past/future, middle zero).
-fbBlock = scfde.equalizers.ch4_fdda_feedback_block(training, 0, Nc, Nf);
-Xb = fft(fbBlock, fftLength);
-filtered = ifft(W .* R.' - B .* Xb.').';
-valid = filtered(Nf + 1:Nf + Nc);
-err = training - valid;
-errorBlock = zeros(1, fftLength);
-errorBlock(Nf + 1:Nf + Nc) = err;
-E = fft(errorBlock, fftLength);
-denomF = 1e-6 + real(R * R');
-Wm = W + 0.2 * (conj(R.') .* E.') / denomF;
-wT = ifft(Wm); wT(Nf + 1:end) = 0; Wm = fft(wT);
-denomB = 1e-6 + real(Xb * Xb');
-Bm = B + 0.01 * (conj(Xb.') .* E.') / denomB;
-bT = ifft(Bm); bT(Nb + 1:end) = 0; Bm = fft(bT);
-verifyEqual(testCase, Wk, Wm, "AbsTol", 1e-12, ...
-    "kernel W must equal the manual Eq. (4-82) update");
-verifyEqual(testCase, Bk, Bm, "AbsTol", 1e-12, ...
-    "kernel B must equal the manual Eq. (4-82) update");
+frontTail = zeros(1, Nf);
+xNorm = zeros(1, numBlocks);
+for block = 0:numBlocks - 1
+    blockStart = block * Nc + 1;
+    current = received(blockStart:blockStart + Nc - 1);
+    rearStart = blockStart + Nc;
+    rearEnd = min(rearStart + Nf - 1, numel(received));
+    rear = zeros(1, Nf);
+    if rearStart <= numel(received)
+        rear(1:rearEnd - rearStart + 1) = received(rearStart:rearEnd);
+    end
+    inputBlock = [frontTail, current, rear];
+    R = fft(inputBlock, fftLength);
+    % Eq. (4-75) window over the training sequence.
+    fbBlock = scfde.equalizers.ch4_fdda_feedback_block( ...
+        training, blockStart - 1, Nc, Nf);
+    Xb = fft(fbBlock, fftLength);
+    xNorm(block + 1) = norm(Xb);
+    filtered = ifft(W .* R.' - B .* Xb.').';
+    valid = filtered(Nf + 1:Nf + Nc);
+    desired = training(blockStart:blockStart + Nc - 1);
+    err = desired - valid;
+    errorBlock = zeros(1, fftLength);
+    errorBlock(Nf + 1:Nf + Nc) = err;
+    E = fft(errorBlock, fftLength);
+    denomF = 1e-6 + real(R * R');
+    W = W + 0.2 * (conj(R.') .* E.') / denomF;
+    wT = ifft(W); wT(Nf + 1:end) = 0; W = fft(wT);
+    denomB = 1e-6 + real(Xb * Xb');
+    B = B + 0.01 * (conj(Xb.') .* E.') / denomB;
+    bT = ifft(B); bT(Nb + 1:end) = 0; B = fft(bT);
+    frontTail = current(end - Nf + 1:end);
+end
+verifyGreaterThan(testCase, xNorm(2), 0, ...
+    "the middle block must have a non-zero feedback spectrum");
+verifyGreaterThan(testCase, norm(B), 0, ...
+    "the feedback filter must be non-zero after three training blocks");
+verifyEqual(testCase, Wk, W, "AbsTol", 1e-12, ...
+    "kernel W must equal the manual Eq. (4-82) updates");
+verifyEqual(testCase, Bk, B, "AbsTol", 1e-12, ...
+    "kernel B must equal the manual Eq. (4-82) updates");
 verifyEqual(testCase, trace.stepScale(1, 1), 1, ...
     "first block step scale must be gamma^0 = 1");
 end
