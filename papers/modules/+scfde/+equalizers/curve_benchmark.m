@@ -155,7 +155,21 @@ benchmark.snrCoverage = snrCoverage;
 benchmark.coverageFraction = coverageFraction;
 benchmark.horizontalCoverage = horizontalCoverage;
 benchmark.coverage = horizontalCoverage; % backwards-compatible alias
-benchmark.grade = grade_of(logRmse, min(coverageFraction));
+% Conservative overall grade: the pooled logRmse can be diluted by a
+% well-fitted method with many points, masking a sparse but badly
+% fitted method.  The overall grade therefore uses the WORST method's
+% logRmse together with the MINIMUM coverage fraction (a claim is only
+% as strong as its weakest method).
+finiteMethods = numRefPoints > 0;
+if any(finiteMethods)
+    overallRmse = max(perMethod.logRmse(finiteMethods));
+    overallCoverage = min(coverageFraction(finiteMethods));
+else
+    overallRmse = nan;
+    overallCoverage = 0;
+end
+benchmark.overallRmse = overallRmse;
+benchmark.grade = grade_of(overallRmse, overallCoverage);
 benchmark.perMethod = perMethod;
 benchmark.methodNames = methodNames;
 benchmark.reference = reference;

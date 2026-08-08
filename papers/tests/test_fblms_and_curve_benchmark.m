@@ -288,6 +288,36 @@ verifyTrue(testCase, ismember(benchmark.perMethod.grade(2), ["A", "B"]), ...
     "method B must not be downgraded by A's extra points");
 end
 
+function testCurveBenchmarkOverallGradeConservative(testCase)
+% The overall grade must not be diluted by a well-fitted method with
+% many points: method A has 101 exact points, method B has only 1 point
+% that is 1 decade off.  The pooled RMSE is small (~0.099) but the
+% overall grade must reflect the worst method (B => C), not A.
+snrSim = 0:0.1:10;              % 101 points
+reference.snrDb = snrSim;
+reference.ber = [
+    logspace(-1, -5, 101)                % A: exact
+    3e-2, NaN(1, 100)                    % B: 1 point, 1 decade off
+];
+berSim = [
+    logspace(-1, -5, 101)                % A matches
+    3e-1, NaN(1, 100)                    % B is 1 decade worse
+];
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, ["A", "B"]);
+verifyEqual(testCase, benchmark.perMethod.grade(1), "A", ...
+    "method A is exact and must be grade A");
+verifyEqual(testCase, benchmark.perMethod.grade(2), "C", ...
+    "method B is 1 decade off and must be grade C");
+verifyLessThan(testCase, benchmark.logRmse, 0.15, ...
+    "pooled RMSE is diluted below the A threshold");
+verifyEqual(testCase, benchmark.overallRmse, ...
+    benchmark.perMethod.logRmse(2), "AbsTol", 1e-12, ...
+    "overall RMSE must equal the worst method's RMSE");
+verifyEqual(testCase, benchmark.grade, "C", ...
+    "overall grade must reflect the worst method, not the pooled RMSE");
+end
+
 function testCurveBenchmarkCoverageExclusion(testCase)
 % Reference points outside the simulation SNR range must be excluded
 % from the horizontal SNR deviation (and flagged in coverage), not
