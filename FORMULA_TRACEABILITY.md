@@ -80,19 +80,13 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
-注：dda-teq为原文图4-25 真自适应 Turbo 均衡器（dda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
+注： dda-teq为原文图4-25 真自适应 Turbo 均衡器（ dda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
 式(4-82) 完整执行：外迭代内 **每个数据块都更新 W 和 B**（训练模式用已知训练符号、决策引导模式用判决/软符号误差），带指数遗忘因子 gamma^m（m=跨外迭代全局块索引，步长不重置）；式(4-81) 外迭代继承 W/B；
-参数与原文一致：mu_f=0.2、mu_b=0.01、Nc=32、Nf=32、Nb=10、I_inner=1、I_outer=3（无 80-epochs 训练放大）；遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1），已记录；
+参数与原文一致：mu_f=0.2、mu_b=0.01、Nc=32、Nf=32、Nb=10、I_inner=1、I_outer=3（无 80-epochs 训练放大）；分母默认为原文式(4-82) 标量 delta+R^H R（denomMode='equation'，非逐频点/时域工程变体），单块数值等价测试证实 W/B 与手动式(4-82) 完全一致；反馈默认为原文决策引导模式（ddaSoftFeedback='decision'，bcjr/equalized 为工程扩展，分别记录），软符号同时进反馈谱与误差 E(k)；遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1），已记录；
 反馈参考默认为均衡输出（软，cfg.fddaSoftFeedback 可选 decision/bcjr）；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
 诊断轨迹对同一真值：iterationMse/决策 BER 均以发送数据符号为参考，外迭代不发散；
 图4-31 工程趋势基准（ch4_fdda_teq_uncoded_qpsk.m 调用与生产共享的核心）：uncoded QPSK、I_outer=3、256+1024、Eb/N0，100 帧/SNR=204800 bit，零误码 0 个，Clopper-Pearson 95% 上界审删；logRmse=1.67、maxSnrDev=6.03dB、等级 C；绝对偏移归因合成 3 仲信道（原文 3km 参数未披露），趋势/排序一致。
-前馈 W/反馈 B 频域自适应更新（mu_f=2.0/mu_b=0.05、Nc=32/Nf=32/Nb=10、G 时域约束、标量分母），W 从单位冲击起、B=0，训练段用 source.training；
-反馈参考真实有效：训练块用已知训练符号 FFT（B 的梯度非零，训练后 norm(B)>0），数据块第一外迭代用块间判决，后续外迭代用 BCJR 软符号反馈；
-真 I_outer 外循环：训练 80 epochs 收敛到 MMSE 残差→ 数据段固定 W/B 软反馈输出（避免低 SNR 判决污染），外迭代间 BCJR 软符号反馈；cfg.iterations 与 cfg.fddaIterations 均读取，生产配置 I_outer=3 真正生效（轨迹 1.46→0.72→0.71 单调改善）；
-帧为 [256 独立训练; 1024 数据]，交织器由场景生成传入，模块不重置 RNG；
-图4-31 基准与原文同条件（ch4_fdda_teq_uncoded_qpsk.m + ch4_fig431_fdda_teq_benchmark_run.m：uncoded QPSK、I_outer=3、256 训练+1024 数据、Eb/N0 轴），100 帧/SNR=204800 bit，零误码用 Clopper-Pearson 95% 上界审删；结果：16 点全单调、零误码 0 个、logRmse=1.67、maxSnrDev=6.09dB、等级 C；绝对偏移归因于项目合成 3 仲信道（原文 3km 信道参数未披露，0dB 0.127 vs 0.03、10dB 6.1e-4 vs 1.5e-6），趋势/排序与参考一致。
-
-## 已知缺口（对应 README 审计说明）
+已知缺口（对应 README 审计说明）
 
 1. **HTFDE 可靠度缩放**（第3章）：工程设置，未按原文逐式（待办 P1）
 2. **BLMS overlap-save**（第4章）：已新增严格 overlap-save 的 `fblms_equalizer`（图4-25 语义，含重叠缓存/G 约束/污染丢弃/负向回归），现有 Turbo 融合版保留；原文步长量级与图 4-25 曲线数字化待办

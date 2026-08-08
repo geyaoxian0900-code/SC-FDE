@@ -93,20 +93,21 @@ end
 
 function softData = make_soft_feedback(outer, dataOut, cfg, ...
     trainLength, nData, source)
-% Feedback reference for the next outer iteration (Eq. 4-82 Xtilde):
-%   'equalized' (default) - the equalized data segment itself (soft;
-%                           stable, verified to improve across outer
-%                           iterations)
-%   'decision'            - hard decisions (book decision-directed
-%                           mode; can amplify decision errors at low
-%                           SNR)
-%   'bcjr'                - BCJR soft symbols (extrinsic tanh)
+% Feedback/error reference for the next outer iteration (Eq. 4-82
+% Xtilde): the output feeds BOTH the feedback spectrum and the data
+% error E(k) of the next outer iteration (see the kernel).
+%   'decision' (default) - hard decisions, the book's decision-directed
+%                          mode
+%   'equalized'          - engineering extension: the raw equalized
+%                          data segment (soft)
+%   'bcjr'               - engineering extension: BCJR extrinsic-tanh
+%                          soft symbols
 % The BCJR soft decoding is always applied to the FINAL output
 % ("the last inner iteration output is fed to the demodulator for soft
-% decoding"), not fed back into the adaptation.
-mode = field_default(cfg, "fddaSoftFeedback", "equalized");
-if strcmpi(mode, "decision")
-    softData = sign(real(dataOut));
+% decoding").
+mode = field_default(cfg, "fddaSoftFeedback", "decision");
+if strcmpi(mode, "equalized")
+    softData = dataOut;
 elseif strcmpi(mode, "bcjr") && isfield(cfg, "permutation") && ...
         ~isempty(cfg.permutation)
     permutation = cfg.permutation;
@@ -121,7 +122,8 @@ elseif strcmpi(mode, "bcjr") && isfield(cfg, "permutation") && ...
     extrinsic = codedDecoded - equalizerInput;
     softData = tanh(extrinsic(permutation) / 2);
 else
-    softData = dataOut;
+    % 'decision' (default): the book decision-directed mode.
+    softData = sign(real(dataOut));
 end
 end
 

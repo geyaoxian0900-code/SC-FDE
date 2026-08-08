@@ -58,7 +58,14 @@ muF = field_default(params, "stepFf", 0.2);
 muB = field_default(params, "stepFb", 0.01);
 outerIterations = field_default(params, "outerIterations", 1);
 gamma = field_default(params, "forgetting", 0.995);
-denomMode = field_default(params, "denomMode", "bin");
+denomMode = field_default(params, "denomMode", "equation");
+% 'equation' (default) - the book Eq. (4-82) scalar denominator
+%                       delta + R^H R (full spectral block energy, no
+%                       fftLength division, no empirical term)
+% 'block'              - engineering variant: time-domain block energy
+%                       (spectral energy / fftLength)
+% 'bin'                - engineering variant: per-frequency-bin power
+%                       (normalized LMS), fastest but noise-sensitive
 decisionFn = field_default(params, "decisionFn", ...
     @(x) sign(real(x)));
 if isfield(params, "referenceData")
@@ -81,10 +88,12 @@ trainSegments = reshape(trainingRef, Nc, []).';   % numBlocks x Nc
 
 W = ones(fftLength, 1);      % unit-impulse start (no channel knowledge)
 B = zeros(fftLength, 1);
-trace.weightNorm = zeros(1, numBlocks);
-trace.feedbackNorm = zeros(1, numBlocks);
-trace.errorPower = zeros(1, numBlocks);
+trace.weightNorm = zeros(outerIterations, numBlocks);
+trace.feedbackNorm = zeros(outerIterations, numBlocks);
+trace.errorPower = zeros(outerIterations, numBlocks);
+trace.stepScale = zeros(outerIterations, numBlocks);
 trace.iterationMse = zeros(1, outerIterations);
+trace.decisionBer = zeros(1, outerIterations);
 softData = zeros(1, nData);
 lastDataBlockOut = zeros(1, Nc);
 globalBlock = 0;
@@ -151,9 +160,17 @@ for outer = 1:outerIterations
         desired(trainingMask) = training(sampleIndex(trainingMask));
         dataMask = inFrame & ~trainingMask;
         if any(dataMask)
-            % Decision-directed error reference (stable); the soft
-            % symbols enter through the feedback reference Xtilde.
-            desired(dataMask) = decisionFn(validSegment(dataMask));
+            % Error reference on the data segment: the soft symbols of
+            % the previous outer iteration (softFn output) for outer>1,
+            % the decision otherwise.  The soft symbols enter BOTH the
+            % feedback reference Xtilde and the error E(k) of Eq. (4-82).
+            dataOffset = block * Nc - trainLength;
+            if outer > 1 && dataOffset + Nc <= nData
+                desired(dataMask) = ...
+                    softData(dataOffset + (1:sum(dataMask)));
+            else
+                desired(dataMask) = decisionFn(validSegment(dataMask));
+            end
         end
         errorSegment = desired - validSegment;
         errorSegment(~inFrame) = 0;
@@ -171,8 +188,14 @@ for outer = 1:outerIterations
             binF = abs(inputSpectrum.').^2;
             denomF = binF + 0.05 * mean(binF) + 1e-6;
             W = W + stepScale * muF * gradF ./ denomF;
-        else
+        elseif strcmpi(denomMode, "block")
             denomF = 1e-6 + epsilon_norm(inputSpectrum) / fftLength;
+            W = W + stepScale * muF * gradF / denomF;
+        else
+            % 'equation' (default): the book Eq. (4-82) scalar
+            % denominator  delta + R^H R  with the FULL spectral block
+            % energy (no fftLength division, no empirical term).
+            denomF = 1e-6 + epsilon_norm(inputSpectrum);
             W = W + stepScale * muF * gradF / denomF;
         end
         W = time_constrain(W, fftLength, Nf);
@@ -181,16 +204,21 @@ for outer = 1:outerIterations
             binB = abs(feedbackSpectrum.').^2;
             denomB = binB + 0.05 * mean(binB) + 1e-6;
             B = B + stepScale * muB * gradB ./ denomB;
-        else
+        elseif strcmpi(denomMode, "block")
             denomB = 1e-6 + epsilon_norm(feedbackSpectrum) / fftLength;
+            B = B + stepScale * muB * gradB / denomB;
+        else
+            denomB = 1e-6 + epsilon_norm(feedbackSpectrum);
             B = B + stepScale * muB * gradB / denomB;
         end
         B = time_constrain(B, fftLength, Nb);
 
         frontTail = current(end - Nf + 1:end);
-        trace.weightNorm(block + 1) = norm(W) + norm(B);
-        trace.feedbackNorm(block + 1) = norm(B);
-        trace.errorPower(block + 1) = mean(abs(errorSegment(inFrame)).^2);
+        trace.weightNorm(outer, block + 1) = norm(W) + norm(B);
+        trace.feedbackNorm(outer, block + 1) = norm(B);
+        trace.errorPower(outer, block + 1) = ...
+            mean(abs(errorSegment(inFrame)).^2);
+        trace.stepScale(outer, block + 1) = stepScale;
         globalBlock = globalBlock + 1;
     end
     dataOut = output(trainLength + 1:min(trainLength + nData, numel(output)));
@@ -208,6 +236,8 @@ for outer = 1:outerIterations
         end
     end
 end
+trace.finalW = W;
+trace.finalB = B;
 end
 
 function constrained = time_constrain(spectrum, fftLength, lengthKeep)

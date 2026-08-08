@@ -54,7 +54,7 @@ benchmark.censorMethod = "Clopper-Pearson 95% upper bound";
 benchmark.framesPerSnr = framesPerSnr;
 benchmark.bitsPerSnr = totBits(1);
 benchmark.conditions = reference.parameters;
-benchmark.notes = "Book-identical uncoded QPSK FDDA-TEQ; grade C (trend matches, absolute offset from the 3-km channel realization and adaptation specifics not disclosed by the book)";
+benchmark.notes = "Shared-kernel FDDA-TEQ with the book Eq. (4-82) scalar denominator (denomMode=equation, mu_f=0.2, mu_b=0.01, I_outer=3) on the project synthetic 3-tap channel; the absolute offsets and the high-SNR plateau are the mathematical consequence of the book's small step under the full spectral block energy, plus the undisclosed 3-km channel realization; trend and ordering match, grade C";
 save(fullfile(pwd, "ch4_fig431_fdda_teq_true_benchmark.mat"), ...
     "berSim", "censored", "errBits", "totBits", "benchmark", "reference");
 fprintf("Saved ch4_fig431_fdda_teq_true_benchmark.mat\n");

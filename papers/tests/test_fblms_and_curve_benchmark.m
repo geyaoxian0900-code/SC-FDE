@@ -482,7 +482,7 @@ ch = struct("received", received, "impulse", imp, ...
     "branches", [received; received]);
 src = struct("data", 1 - 2 * info, "tx", tx, "training", training);
 r1 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 1));
-verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm), 0, ...
+verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm(:)), 0, ...
     "feedback filter B must be non-zero after training");
 rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 1));
 rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.05, 1));
@@ -528,6 +528,52 @@ cfg2 = scfde.run_chapter6_spread_spectrum_suite(struct( ...
     "frameCount", 1, "makePlot", false, "exportData", false), simulationDir);
 verifyEqual(testCase, cfg2.config.eseDamping, 0.58, ...
     "spread-spectrum suite must default to damping 0.58");
+end
+
+function testFddaEquationDenominatorSingleBlock(testCase)
+% The default denominator must be the book Eq. (4-82) scalar
+% delta + R^H R; a single training block must produce W and B
+% EXACTLY equal to a manual evaluation of Eq. (4-82).
+Nc = 32; Nf = 32; Nb = 10;
+fftLength = Nc + 2 * max(Nf, Nb);
+rng(7, "twister");
+training = (1 - 2 * randi([0 1], 1, Nc));
+imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+received = ifft(fft([imp, zeros(1, Nc - numel(imp))]).' .* ...
+    fft(training).');
+received = received + 0.1 * (randn(size(received)) + 1j * randn(size(received)));
+received = received.';
+params = struct("blockLength", Nc, "ffLength", Nf, "fbLength", Nb, ...
+    "stepFf", 0.2, "stepFb", 0.01, "outerIterations", 1, ...
+    "forgetting", 0.97, "denomMode", "equation", ...
+    "trainLength", Nc, "referenceData", training);
+params.decisionFn = @(x) sign(real(x));
+[~, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
+    received, training, params, @(o, d) d);
+Wk = trace.finalW; Bk = trace.finalB;
+% Manual Eq. (4-82)
+inputBlock = [zeros(1, Nf), received, zeros(1, Nf)];
+R = fft(inputBlock, fftLength);
+W = ones(fftLength, 1); B = zeros(fftLength, 1);
+Xb = fft([zeros(1, Nf), training, zeros(1, Nf)], fftLength);
+filtered = ifft(W .* R.' - B .* Xb.').';
+valid = filtered(Nf + 1:Nf + Nc);
+err = training - valid;
+errorBlock = zeros(1, fftLength);
+errorBlock(Nf + 1:Nf + Nc) = err;
+E = fft(errorBlock, fftLength);
+denomF = 1e-6 + real(R * R');
+Wm = W + 0.2 * (conj(R.') .* E.') / denomF;
+wT = ifft(Wm); wT(Nf + 1:end) = 0; Wm = fft(wT);
+denomB = 1e-6 + real(Xb * Xb');
+Bm = B + 0.01 * (conj(Xb.') .* E.') / denomB;
+bT = ifft(Bm); bT(Nb + 1:end) = 0; Bm = fft(bT);
+verifyEqual(testCase, Wk, Wm, "AbsTol", 1e-12, ...
+    "kernel W must equal the manual Eq. (4-82) update");
+verifyEqual(testCase, Bk, Bm, "AbsTol", 1e-12, ...
+    "kernel B must equal the manual Eq. (4-82) update");
+verifyEqual(testCase, trace.stepScale(1, 1), 1, ...
+    "first block step scale must be gamma^0 = 1");
 end
 
 function testCh5ChannelInputValidation(testCase)
