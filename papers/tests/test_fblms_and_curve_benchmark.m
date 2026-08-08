@@ -414,6 +414,62 @@ verifyGreaterThan(testCase, norm(ch - chPerturbed), 1e-3, ...
     "tap-phase perturbation must change the channel");
 end
 
+function testHtfdeReliabilityModes(testCase)
+% The HTFDE reliability weighting must be selectable via
+% cfg.htfdeReliabilityMode: posterior (default), none, or a user
+% function handle; the module must run in all modes and the posterior
+% and none modes must produce different weightings.
+dataSymbols = 192;
+N = 256;  % 192 data + 64 UW
+imp = [1, 0.4 * exp(1j * 0.3), 0.2 * exp(-1j * 0.6)];
+H = fft([imp, zeros(1, N - numel(imp))]);
+bits = randi([0 1], 2 * dataSymbols, 1);
+bitMatrix = reshape(bits, 2, []);
+data = ((1 - 2 * bitMatrix(1, :)) + ...
+    1j * (1 - 2 * bitMatrix(2, :))).' / sqrt(2);
+uw = exp(1j * pi * (0:63).'.^2 / 64);
+tx = [data; uw];
+received = ifft(H(:) .* fft(tx));
+received = received + 0.1 * (randn(size(received)) + 1j * randn(size(received)));
+received = received(:).';
+ch = struct("received", received, "impulse", imp, ...
+    "branches", [received; received]);
+src = struct("data", data.', "tx", tx.', "training", tx(1:32).');
+baseCfg = struct("noiseVariance", 0.01, "dataSymbols", dataSymbols, ...
+    "uwLength", 64, "fftSize", N, "htfdeBranches", 2, ...
+    "htfdeIterations", 2, "channelEstimateLength", numel(imp));
+cfgP = baseCfg; cfgP.htfdeReliabilityMode = "posterior";
+cfgN = baseCfg; cfgN.htfdeReliabilityMode = "none";
+cfgF = baseCfg;
+cfgF.htfdeReliabilityMode = @(s, nv) 0.5;
+r1 = scfde.equalizers.htfde(ch, src, cfgP);
+r2 = scfde.equalizers.htfde(ch, src, cfgN);
+r3 = scfde.equalizers.htfde(ch, src, cfgF);
+verifyTrue(testCase, all(isfinite(r1.outputs{1})) && ...
+    all(isfinite(r2.outputs{1})) && all(isfinite(r3.outputs{1})), ...
+    "all three reliability modes must produce finite outputs");
+verifyNotEqual(testCase, r1.traces{1}.symbolsByIteration(1, :), ...
+    r2.traces{1}.symbolsByIteration(1, :), ...
+    "posterior and none modes must differ in the first iteration");
+end
+
+function testCh5ChannelInputValidation(testCase)
+% The parameterized chapter-5 channel must reject invalid inputs:
+% duplicate delays, negative power, mismatched lengths.
+ch = scfde.equalizers.ch5_long_uwa_channel();
+verifyEqual(testCase, norm(ch), 1, "AbsTol", 1e-12, ...
+    "unit-energy channel");
+verifyError(testCase, ...
+    @() scfde.equalizers.ch5_long_uwa_channel([0, 0], [1, 1], [0, 0]), ...
+    "SCFDE:Channel", "duplicate delays must be rejected");
+verifyError(testCase, ...
+    @() scfde.equalizers.ch5_long_uwa_channel([0, 1], [-1, 1], [0, 0]), ...
+    "SCFDE:Channel", "negative power must be rejected");
+verifyError(testCase, ...
+    @() scfde.equalizers.ch5_long_uwa_channel([0, 1, 2], [1, 1], [0, 0]), ...
+    "SCFDE:Channel", "length mismatch must be rejected");
+end
+
 function testFblmsProductionEntryReproducible(testCase)
 % The unified production entry with the QPSK scenario must be
 % DETERMINISTIC for a fixed configuration: the same seed must reproduce
