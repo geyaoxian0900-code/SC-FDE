@@ -46,9 +46,10 @@ function [dataOut, trace] = ch4_fdda_teq_core(received, training, params, softFn
 % outer iteration.  For outer iteration 1 the kernel uses decisionFn.
 %
 % TRACE fields:
-%   weightNorm    norm(W)+norm(B) per block
+%   weightNorm    norm(W)+norm(B) per block (outerIterations x numBlocks)
 %   feedbackNorm  norm(B) per block
 %   errorPower    per-block error power
+%   stepScale/stepScaleF/stepScaleB - per-block forgetting scales
 %   iterationMse  per-outer-iteration data MSE against the true data
 %                 symbols passed in params.referenceData (if provided)
 
@@ -92,10 +93,6 @@ end
 trainBlocks = min(ceil(trainLength / Nc), numBlocks);
 nData = totalSamples - trainLength;
 
-trainingRef = zeros(1, numBlocks * Nc);
-trainingRef(1:trainLength) = training;
-trainSegments = reshape(trainingRef, Nc, []).';   % numBlocks x Nc
-
 W = ones(fftLength, 1);      % unit-impulse start (no channel knowledge)
 B = zeros(fftLength, 1);
 trace.weightNorm = zeros(outerIterations, numBlocks);
@@ -107,7 +104,6 @@ trace.stepScaleB = zeros(outerIterations, numBlocks);
 trace.iterationMse = zeros(1, outerIterations);
 trace.decisionBer = zeros(1, outerIterations);
 softData = zeros(1, nData);
-lastDataBlockOut = zeros(1, Nc);
 
 for outer = 1:outerIterations
     % Eq. (4-81): the filters are inherited from the previous outer
@@ -131,37 +127,36 @@ for outer = 1:outerIterations
         inputSpectrum = fft(inputBlock, fftLength);
 
         % -- feedback reference Xtilde (Eq. 4-82) ----------------------
+        % Book Eq. (4-75): the feedback block is
+        %   Xtilde0(k) = [ decided symbols before block k ; 0_N ; decided
+        %                  symbols after block k ]
+        % with the current block's own N positions ZERO (the feedback
+        % cancels inter-block interference from neighbouring blocks
+        % only).  The first turbo equalization (outer=1, no prior
+        % information) feeds ZERO back on the data segment.
         if block < trainBlocks
-            xhatPrev = trainSegments(block + 1, :);
+            % Training mode: the neighbouring training symbols are known
+            % (Eq. 4-75 window with the training sequence).
+            feedbackBlock = scfde.equalizers.ch4_fdda_feedback_block( ...
+                training, block * Nc, Nc, Nf);
         elseif outer == 1
-            if block == trainBlocks
-                xhatPrev = lastDataBlockOut;
-            else
-                xhatPrev = output((block - 1) * Nc + (1:Nc));
-            end
-            xhatPrev = decisionFn(xhatPrev);
+            feedbackBlock = zeros(1, Nc + 2 * Nf);
         else
-            dataOffset = block * Nc - trainLength;
-            if dataOffset + Nc <= nData
-                xhatPrev = softData(dataOffset + 1:dataOffset + Nc);
-            elseif dataOffset < nData
-                xhatPrev = [softData(dataOffset + 1:end), ...
-                    zeros(1, dataOffset + Nc - nData)];
-            else
-                xhatPrev = zeros(1, Nc);
-            end
+            % Data mode: build the window from the previous outer
+            % iteration's decided/soft data sequence placed at its
+            % global frame offsets (training placeholder zeros).
+            estimatesFrame = zeros(1, totalSamples);
+            estimatesFrame(trainLength + 1:trainLength + nData) = softData;
+            feedbackBlock = scfde.equalizers.ch4_fdda_feedback_block( ...
+                estimatesFrame, block * Nc, Nc, Nf);
         end
-        feedbackSpectrum = fft([zeros(1, Nf), xhatPrev, zeros(1, Nf)], ...
-            fftLength);
+        feedbackSpectrum = fft(feedbackBlock, fftLength);
 
         % -- output: xhat = IFFT(W.*Y - B.*Xtilde) ---------------------
         filteredSpectrum = W .* inputSpectrum.' - B .* feedbackSpectrum.';
         filtered = ifft(filteredSpectrum, fftLength).';
         validSegment = filtered(Nf + 1:Nf + Nc);
         output(block * Nc + 1:(block + 1) * Nc) = validSegment;
-        if block >= trainBlocks
-            lastDataBlockOut = validSegment;
-        end
 
         % -- error: e = d - xhat ----------------------------------------
         sampleIndex = block * Nc + (1:Nc);

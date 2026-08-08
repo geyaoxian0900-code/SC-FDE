@@ -484,8 +484,11 @@ src = struct("data", 1 - 2 * info, "tx", tx, "training", training);
 r1 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 1));
 verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm(:)), 0, ...
     "feedback filter B must be non-zero after training");
-rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 1));
-rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(100, 1));
+% The feedback filter participates in the data-segment output only
+% from outer iteration 2 onward (Eq. 4-75: outer=1 feeds zero back),
+% so the mu_b sensitivity must be checked with I_outer=3.
+rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 3));
+rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(100, 3));
 verifyGreaterThan(testCase, ...
     norm(rMu0.outputs{1} - rMuBig.outputs{1}), 1e-6, ...
     "changing mu_b must change the output");
@@ -558,7 +561,10 @@ Wk = trace.finalW; Bk = trace.finalB;
 inputBlock = [zeros(1, Nf), received, zeros(1, Nf)];
 R = fft(inputBlock, fftLength);
 W = ones(fftLength, 1); B = zeros(fftLength, 1);
-Xb = fft([zeros(1, Nf), training, zeros(1, Nf)], fftLength);
+% Book Eq. (4-75) feedback block: [past; 0_N; future] of the training
+% sequence (single training block: no past/future, middle zero).
+fbBlock = scfde.equalizers.ch4_fdda_feedback_block(training, 0, Nc, Nf);
+Xb = fft(fbBlock, fftLength);
 filtered = ifft(W .* R.' - B .* Xb.').';
 valid = filtered(Nf + 1:Nf + Nc);
 err = training - valid;
@@ -659,6 +665,34 @@ verifyEqual(testCase, ss(2, 2), ss(2, 1), "AbsTol", 1e-12, ...
 verifyEqual(testCase, trace.stepScaleF, trace.stepScaleB, ...
     "AbsTol", 1e-12, ...
     "default gamma_f = gamma_b assumption must hold");
+end
+
+function testFddaFeedbackBlockWindow(testCase)
+% Book Eq. (4-75): the feedback block is [past estimates; 0_N; future
+% estimates] -- the current block's own N positions must be ZERO and
+% the front/rear windows must equal the neighbouring estimates.
+N = 8; Nf = 4;
+rng(5, "twister");
+estimates = (1 - 2 * randi([0 1], 1, 3 * N));   % 3 blocks of 8
+% block 1 (0-based index 1, sample offset 8): middle must be zero,
+% front = estimates(5:8), rear = estimates(17:20)
+fb = scfde.equalizers.ch4_fdda_feedback_block(estimates, N, N, Nf);
+verifyEqual(testCase, fb(1:Nf), estimates(N - Nf + 1:N), ...
+    "front window must equal the previous estimates");
+verifyEqual(testCase, fb(Nf + 1:Nf + N), zeros(1, N), ...
+    "current block positions must be strictly zero");
+verifyEqual(testCase, fb(N + Nf + 1:end), estimates(2 * N + 1:2 * N + Nf), ...
+    "rear window must equal the following estimates");
+% frame edge: block 0 has no past -> front padded with zeros
+fb0 = scfde.equalizers.ch4_fdda_feedback_block(estimates, 0, N, Nf);
+verifyEqual(testCase, fb0(1:Nf), zeros(1, Nf), ...
+    "edge block front must be zero (no past estimates)");
+verifyEqual(testCase, fb0(Nf + 1:Nf + N), zeros(1, N), ...
+    "edge block middle must be zero");
+% first turbo equalization: no prior information -> whole block zero
+verifyEqual(testCase, ...
+    scfde.equalizers.ch4_fdda_feedback_block(zeros(1, 3 * N), N, N, Nf), ...
+    zeros(1, N + 2 * Nf), "no-prior feedback must be all zero");
 end
 
 function testCh5ChannelInputValidation(testCase)

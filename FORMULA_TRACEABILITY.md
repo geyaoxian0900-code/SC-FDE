@@ -81,10 +81,11 @@
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
 注： fdda-teq 为原文图4-25 真自适应 Turbo 均衡器（ fdda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
+- 式(4-75) 反馈块窗口：Xtilde0(k)=[前部判决; 0_N; 后部判决]，中间当前块 N 个位置严格为零（反馈只消除相邻块间干扰）；训练段用已知训练符号构窗口，数据段 outer=1 无先验反馈全零，outer>1 用上一轮判决/软符号构窗口（ch4_fdda_feedback_block，三项独立测试）；
 - 式(4-82) 完整执行：外迭代内 **每个数据块都更新 W 和 B**（训练模式用已知训练符号、决策引导模式用判决/软符号误差），带指数遗忘因子 gamma_f^i/gamma_b^i（i=外迭代编号，同一外迭代内所有块缩放相同；默认 gamma_f=gamma_b=0.97，为参数假设已记录）；式(4-81) 外迭代继承 W/B；
 - 参数与原文一致：mu_f=0.2、mu_b=0.01、Nc=32、Nf=32、Nb=10、I_inner=1、I_outer=3（无 80-epochs 训练放大）；
 - 分母默认为原文式(4-82) 标量 delta+R^H R（denomMode='equation'，生产包装器与核心默认一致，包装器级回归测试确认）；'block'/'bin'为工程变体；单块数值等价测试证实 W/B 与手动式(4-82) 完全一致；
-- 反馈/误差参考默认为原文决策引导模式（ ffddaSoftFeedback='decision'），软符号同时进反馈谱 Xtilde 与误差 E(k)；bcjr/equalized 为工程扩展分别记录；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
+- 反馈/误差参考默认为原文决策引导模式（ fddaSoftFeedback='decision'），软符号同时进反馈谱 Xtilde 与误差 E(k)；bcjr/equalized 为工程扩展分别记录；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
 - 诊断轨迹对同一真值：iterationMse/决策 BER 均以发送数据符号为参考，外迭代不发散；轨迹为 outerIterations x numBlocks 矩阵（stepScale/W/B 逐块记录）；
 - 遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1）；
 - 图4-31 工程趋势基准（ch4_fdda_teq_uncoded_qpsk.m 调用与生产共享的核心，同样 equation 分母）：uncoded QPSK、I_outer=3、256+1024、Eb/N0，100 帧/SNR=204800 bit，零误码 0 个，Clopper-Pearson 95% 上界审删；logRmse=2.30、maxSnrDev=4.74dB、等级 C；绝对偏移与高 SNR 平台为原文标量分母下小步长的数学后果加合成 3 仲信道（原文 3km 参数未披露），趋势/排序一致。
