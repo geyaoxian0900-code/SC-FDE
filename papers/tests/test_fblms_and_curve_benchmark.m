@@ -453,6 +453,67 @@ verifyNotEqual(testCase, r1.traces{1}.symbolsByIteration(1, :), ...
     "posterior and none modes must differ in the first iteration");
 end
 
+function testFddaFeedbackAndOuterLoop(testCase)
+% Decisive checks requested by the review: the feedback filter B must
+% be non-zero after the training segment, changing mu_b must change the
+% output, and I_outer=1 vs 3 must produce different iteration
+% trajectories.
+infoBits = 512;
+trainingSymbols = 256;
+imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+nv = 10^(0/10);
+rng(42, "twister");
+permutation = randperm(2 * infoBits);
+info = randi([0 1], 1, infoBits);
+coded = scfde.equalizers.ch4_convolutional_encode(info);
+dataSymbols = 1 - 2 * coded(permutation);
+training = 1 - 2 * randi([0 1], 1, trainingSymbols);
+tx = [training, dataSymbols];
+N = numel(tx);
+H = fft([imp, zeros(1, N - numel(imp))]);
+received = ifft(H .* fft(tx));
+received = received + sqrt(nv/2) * (randn(size(received)) + 1j * randn(size(received)));
+mkCfg = @(muB, iters) struct("noiseVariance", nv, ...
+    "trainingSymbols", trainingSymbols, "fddaBlockLength", 32, ...
+    "fddaFfLength", 32, "fddaFbLength", 10, "fddaStepFf", 0.2, ...
+    "fddaStepFb", muB, "iterations", iters, ...
+    "permutation", permutation, "turboDecoderMode", "Log-MAP");
+ch = struct("received", received, "impulse", imp, ...
+    "branches", [received; received]);
+src = struct("data", 1 - 2 * info, "tx", tx, "training", training);
+r1 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 1));
+verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm), 0, ...
+    "feedback filter B must be non-zero after training");
+rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 1));
+rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.05, 1));
+verifyGreaterThan(testCase, ...
+    norm(rMu0.outputs{1} - rMuBig.outputs{1}), 1e-6, ...
+    "changing mu_b must change the output");
+rOuter3 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 3));
+verifyGreaterThan(testCase, ...
+    norm(rOuter3.traces{1}.iterationError - r1.traces{1}.iterationError(1)), ...
+    1e-6, "I_outer=3 must produce a different iteration trajectory");
+verifyEqual(testCase, numel(rOuter3.traces{1}.iterationError), 3, ...
+    "I_outer=3 must record three outer iterations");
+end
+
+function testEseDampingDefaultsConsistent(testCase)
+% Both chapter-6 production entries must default to the same ESE/PIC
+% damping (0.58); the review found 0.65 vs 0.58 inconsistency.
+% Lightweight invocations: the default calls would run the full
+% end-to-end simulation; pass minimal options to read the defaults.
+simulationDir = fullfile(fileparts(mfilename("fullpath")), "..");
+cfg1 = scfde.run_chapter6_paper_full_chain(struct( ...
+    "frameCount", 1, "runLoadStudy", false, "runComparison", false, ...
+    "makePlot", false, "exportData", false), simulationDir);
+verifyEqual(testCase, cfg1.config.eseDamping, 0.58, ...
+    "paper full chain must default to damping 0.58");
+cfg2 = scfde.run_chapter6_spread_spectrum_suite(struct( ...
+    "frameCount", 1, "makePlot", false, "exportData", false), simulationDir);
+verifyEqual(testCase, cfg2.config.eseDamping, 0.58, ...
+    "spread-spectrum suite must default to damping 0.58");
+end
+
 function testCh5ChannelInputValidation(testCase)
 % The parameterized chapter-5 channel must reject invalid inputs:
 % duplicate delays, negative power, mismatched lengths.
@@ -468,6 +529,12 @@ verifyError(testCase, ...
 verifyError(testCase, ...
     @() scfde.equalizers.ch5_long_uwa_channel([0, 1, 2], [1, 1], [0, 0]), ...
     "SCFDE:Channel", "length mismatch must be rejected");
+verifyError(testCase, ...
+    @() scfde.equalizers.ch5_long_uwa_channel([0, 1], [0, 0], [0, 0]), ...
+    "SCFDE:Channel", "all-zero power must be rejected (NaN guard)");
+verifyError(testCase, ...
+    @() scfde.equalizers.ch5_long_uwa_channel([3, 0], [1, 1], [0, 0]), ...
+    "SCFDE:Channel", "unsorted delays must be rejected");
 end
 
 function testFblmsProductionEntryReproducible(testCase)

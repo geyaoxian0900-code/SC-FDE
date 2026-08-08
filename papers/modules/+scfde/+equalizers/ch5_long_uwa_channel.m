@@ -26,13 +26,17 @@ if nargin < 3 || isempty(phase)
         phase = [phase, zeros(1, numel(delays) - numel(phase))];
     end
 end
-% Input validation: integer, non-negative, unique delays; non-negative
-% power with the same length as delays; phase with the same length.
+% Input validation: integer, non-negative, STRICTLY INCREASING delays;
+% non-negative power with the same length as delays and at least one
+% active tap (otherwise the unit-energy normalization produces NaN);
+% phase with the same length as delays.
 assert(isvector(delays) && all(delays == round(delays)) && ...
     all(delays >= 0) && numel(unique(delays)) == numel(delays), ...
     "SCFDE:Channel", "delays must be unique non-negative integers");
-assert(numel(power) == numel(delays) && all(power >= 0), ...
-    "SCFDE:Channel", "power must be non-negative with one value per delay");
+assert(all(diff(delays) > 0), ...
+    "SCFDE:Channel", "delays must be strictly increasing");
+assert(numel(power) == numel(delays) && all(power >= 0) && any(power > 0), ...
+    "SCFDE:Channel", "power must be non-negative with one value per delay and at least one active tap");
 assert(numel(phase) == numel(delays), ...
     "SCFDE:Channel", "phase must have one value per delay");
 channel = zeros(1, delays(end) + 1);

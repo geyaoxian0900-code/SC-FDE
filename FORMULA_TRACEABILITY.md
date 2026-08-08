@@ -80,7 +80,12 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
-注：dda-teq 已改为原文图4-25 真自适应实现（dda_teq_true.m）：前馈 W/反馈 B 频域自适应更新（mu_f=0.2/mu_b=0.01、子块 Nc=32/Nf=32/Nb=10、G 时域约束、标量分母、e=d-xhat 训练段、判决引导段），W 从单位冲击起、B=0（不依赖真信道），训练段用 source.training；帧为 [256 独立训练; 1024 数据]（1280 符号帧），交织器由场景 randperm 生成并传入 cfg.permutation，模块不重置全局 RNG（原每帧 rng(2024) 已删除，录码基准无重复）；图4-31 基准（curve_reference/ch4_fig431_fdda_teq_benchmark_run.m可重现，40 帧/SNR = 20480 bit）：趋势高度一致（0dB 0.027 vs 0.03、1dB 0.012 vs 0.01、2dB 0.0058 vs 0.004），logRmse=4.45，maxSnrDev=4.53dB，高 SNR 零误码平台（BPSK 编码增益，8dB+ 为 0），等级 C（趋势与排序一致，调制 BPSK vs QPSK 替代记录）；数据在 curve_reference/ch4_fig431_fdda_teq_true_benchmark.mat，确认无对应强直接核验，故保持 C 而非 B。
+注：dda-teq为原文图4-25 真自适应 Turbo 均衡器（dda_teq_true.m）：
+前馈 W/反馈 B 频域自适应更新（mu_f=2.0/mu_b=0.05、Nc=32/Nf=32/Nb=10、G 时域约束、标量分母），W 从单位冲击起、B=0，训练段用 source.training；
+反馈参考真实有效：训练块用已知训练符号 FFT（B 的梯度非零，训练后 norm(B)>0），数据块第一外迭代用块间判决，后续外迭代用 BCJR 软符号反馈；
+真 I_outer 外循环：训练 80 epochs 收敛到 MMSE 残差→ 数据段固定 W/B 软反馈输出（避免低 SNR 判决污染），外迭代间 BCJR 软符号反馈；cfg.iterations 与 cfg.fddaIterations 均读取，生产配置 I_outer=3 真正生效（轨迹 1.46→0.72→0.71 单调改善）；
+帧为 [256 独立训练; 1024 数据]，交织器由场景生成传入，模块不重置 RNG；
+图4-31 基准与原文同条件（ch4_fdda_teq_uncoded_qpsk.m + ch4_fig431_fdda_teq_benchmark_run.m：uncoded QPSK、I_outer=3、256 训练+1024 数据、Eb/N0 轴），100 帧/SNR=204800 bit，零误码用 Clopper-Pearson 95% 上界审删；结果：16 点全单调、零误码 0 个、logRmse=1.67、maxSnrDev=6.09dB、等级 C；绝对偏移归因于项目合成 3 仲信道（原文 3km 信道参数未披露，0dB 0.127 vs 0.03、10dB 6.1e-4 vs 1.5e-6），趋势/排序与参考一致。
 
 ## 已知缺口（对应 README 审计说明）
 
