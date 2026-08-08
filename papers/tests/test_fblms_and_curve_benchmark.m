@@ -318,6 +318,34 @@ verifyEqual(testCase, benchmark.grade, "C", ...
     "overall grade must reflect the worst method, not the pooled RMSE");
 end
 
+function testCurveBenchmarkAllNanMethodDowngrades(testCase)
+% A method with NO reference points at all (all-NaN reference row) must
+% bring the overall grade down to D even when another method is exact:
+% coverage=[1,0], perGrade=[A,D] must give overall grade D.
+snrSim = 0:2:10;
+reference.snrDb = 0:2:10;
+reference.ber = [
+    1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3   % A: complete reference
+    NaN, NaN, NaN, NaN, NaN, NaN          % B: no reference points
+];
+berSim = [
+    1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3   % A exact
+    zeros(1, 6) + eps                      % B simulated, no reference
+];
+benchmark = scfde.equalizers.curve_benchmark(berSim, snrSim, ...
+    reference, ["A", "B"]);
+verifyEqual(testCase, benchmark.coverageFraction(1), 1, ...
+    "AbsTol", 1e-10, "method A covers all its points");
+verifyEqual(testCase, benchmark.coverageFraction(2), 0, ...
+    "AbsTol", 1e-10, "method B has zero coverage (no reference)");
+verifyEqual(testCase, benchmark.perMethod.grade(1), "A", ...
+    "method A is exact and must be grade A");
+verifyEqual(testCase, benchmark.perMethod.grade(2), "D", ...
+    "method B has no reference and must be grade D");
+verifyEqual(testCase, benchmark.grade, "D", ...
+    "overall grade must be downgraded to D by the no-reference method");
+end
+
 function testCurveBenchmarkCoverageExclusion(testCase)
 % Reference points outside the simulation SNR range must be excluded
 % from the horizontal SNR deviation (and flagged in coverage), not
