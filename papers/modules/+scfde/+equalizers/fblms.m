@@ -14,12 +14,16 @@ function receiver = fblms(channel, source, cfg)
 received = channel.received(:).';
 reference = source.tx(:).';
 cfg = scfde.equalizers.ch4_setup(cfg, numel(received));
-blockLength = field_default(cfg, "fblmsBlockLength", 64);
-filterLength = field_default(cfg, "fblmsFilterLength", 16);
-step = field_default(cfg, "fblmsStep", 0.3);
-epsilon = field_default(cfg, "fblmsEpsilon", 1e-6);
 trainLength = field_default(cfg, "trainingSymbols", ...
     min(round(numel(reference) / 2), numel(reference)));
+% Default block size gives at least two training blocks so the
+% scalar-denominator NLMS can converge inside the training segment.
+blockLength = field_default(cfg, "fblmsBlockLength", ...
+    min(64, max(8, floor(trainLength / 2))));
+filterLength = field_default(cfg, "fblmsFilterLength", ...
+    min(16, max(4, floor(blockLength / 4))));
+step = field_default(cfg, "fblmsStep", 0.5);
+epsilon = field_default(cfg, "fblmsEpsilon", 1e-6);
 useDecisionFeedback = field_default(cfg, "fblmsDecisionDirected", true);
 if isfield(cfg, "fblmsDecisionFcn")
     decisionFcn = cfg.fblmsDecisionFcn;

@@ -43,7 +43,7 @@
 | 4-10..4-18 | MMSE-FD-DFE：`F_k = 1+Σf_m e^{-j2πkm/N}`、`(V-I)f=-v`、`W_k = F_k·H*/(\|H\|²+σ²)`、时域判决反馈 | `fd_dfe_design.m`（包）、`fdfe_symbols.m` | 循环 Toeplitz V、q=ifft(γ) | testFdDfeFeedforwardDependsOnFeedbackLength（独立显式参考 1e-10、g=f 自洽 1e-17） | fig4_2/4_5 | A | 硬判决误差传播（genie 反馈单调改善） | 第3-5轮 |
 | 4-56..4-58 | FDE-FDFE 迭代系数（ρ、λ） | `simulate_coded_equalizers` 内 IBDFE 循环 | ρ∈[0.45,0.97] | 无独立测试 | fig4_7/4_8 | B | 迭代改善不稳定 | 待复核 |
 | BCJR MAP/Log-MAP | 前向后向算法 | `ch4_bcjr_log_domain.m`、`ch4_bcjr_probability.m` | — | 已验证两者数值差 6.66e-16 | fig4_x | A | 无 | 第1轮 |
-| 图4-24/4-25 | 频域块自适应均衡（严格 overlap-save）：重叠缓存、G 时域约束、前 Nf 污染丢弃、频域 NLMS | `fblms_equalizer.m` + 模块 `fblms.m`（注册表 `fblms` ID） | N/Nf/μ/ε 参数化（cfg.fblms*） | test_fblms_and_curve_benchmark（无噪声收敛、边界无污染、旧循环块必败、块数修正、逐样本训练、QPSK 判决） | 统一入口 qpsk 场景（fblms ID） | A（公式） | 原文第4章无 BLMS 独立 BER 曲线（图4-24/4-25 为结构/公式，图4-31 为 FDDA-TEQ 频域自适应家族参考，已数字化到 curve_reference/ch4_fig431_fdda_teq.mat）；曲线对比待 fdda_teq 与统一入口集成后计算 | 本轮 |
+| 图4-24/4-25 | 频域块自适应均衡（严格 overlap-save）：重叠缓存、G 时域约束、前 Nf 污染丢弃、频域 NLMS | `fblms_equalizer.m` + 模块 `fblms.m`（注册表 `fblms` ID） | N/Nf/μ/ε 参数化（cfg.fblms*） | test_fblms_and_curve_benchmark（无噪声收敛、边界无污染、旧循环块必败、块数修正、逐样本训练、QPSK 判决） | 统一入口 qpsk 场景（fblms ID） | B（结构一致，步长量级未定） | 已按图4-24 前/中/后 N+2Nf 结构 + 整块能量标量分母重写；无噪声充足训练下收敛（mse→0）；但统一入口 QPSK 场景短训练段（64 符号）下标量分母收敛不足（原文 L_train 需较长）；图4-31 FDDA-TEQ 家族参考已数字化，曲线对比待 fdda_teq 集成 | 本轮 |
 | IBDFE 权重 | `B_k = (λ(σ²+\|H\|²)-σ²)/(σ²+\|H\|²-ρ\|H\|²)` | `simulate_coded_equalizers` | mean(B)≈0 | 已验证 | fig4_7 | A | 无 | 第1轮 |
 
 ## 第 5 章（互补码键控扩频）
@@ -79,6 +79,7 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
+注：dda_teq 为第4章专用模块（卷积码 (7,5) 码率 1/2 + 交织 + BCJR），与统一入口 QPSK 场景的未编码帧结构不兼容（info 长度不匹配）；图4-31 曲线对比待专用编码帧集成后计算。
 
 ## 已知缺口（对应 README 审计说明）
 
