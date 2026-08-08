@@ -485,10 +485,13 @@ r1 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 1));
 verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm(:)), 0, ...
     "feedback filter B must be non-zero after training");
 rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 1));
-rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.05, 1));
+rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(100, 1));
 verifyGreaterThan(testCase, ...
     norm(rMu0.outputs{1} - rMuBig.outputs{1}), 1e-6, ...
     "changing mu_b must change the output");
+verifyGreaterThan(testCase, ...
+    norm(rMuBig.traces{1}.finalB - rMu0.traces{1}.finalB), 1e-12, ...
+    "changing mu_b must change the feedback filter B");
 rOuter3 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0.01, 3));
 verifyGreaterThan(testCase, ...
     norm(rOuter3.traces{1}.iterationError - r1.traces{1}.iterationError(1)), ...
@@ -574,6 +577,51 @@ verifyEqual(testCase, Bk, Bm, "AbsTol", 1e-12, ...
     "kernel B must equal the manual Eq. (4-82) update");
 verifyEqual(testCase, trace.stepScale(1, 1), 1, ...
     "first block step scale must be gamma^0 = 1");
+end
+
+function testFddaWrapperDefaultDenominatorIsEquation(testCase)
+% The production wrapper fdda_teq_true must default to the book
+% Eq. (4-82) scalar denominator even when cfg.fddaDenomMode is absent
+% (regression: the wrapper used to force "bin", overriding the shared
+% kernel default).  The wrapper result must equal an explicit
+% equation run of the shared kernel and differ from an explicit bin run.
+infoBits = 512;
+trainingSymbols = 256;
+imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+nv = 10^(2/10);
+rng(11, "twister");
+permutation = randperm(2 * infoBits);
+info = randi([0 1], 1, infoBits);
+coded = scfde.equalizers.ch4_convolutional_encode(info);
+dataSymbols = 1 - 2 * coded(permutation);
+training = 1 - 2 * randi([0 1], 1, trainingSymbols);
+tx = [training, dataSymbols];
+N = numel(tx);
+H = fft([imp, zeros(1, N - numel(imp))]);
+received = ifft(H .* fft(tx));
+received = received + sqrt(nv/2) * (randn(size(received)) + 1j * randn(size(received)));
+ch = struct("received", received, "impulse", imp, ...
+    "branches", [received; received]);
+src = struct("data", 1 - 2 * info, "tx", tx, "training", training);
+baseCfg = struct("noiseVariance", nv, "trainingSymbols", trainingSymbols, ...
+    "fddaBlockLength", 32, "fddaFfLength", 32, "fddaFbLength", 10, ...
+    "fddaStepFf", 0.2, "fddaStepFb", 0.01, "iterations", 1, ...
+    "fddaForgetting", 0.97, "permutation", permutation, ...
+    "turboDecoderMode", "Log-MAP");
+rDefault = scfde.equalizers.fdda_teq_true(ch, src, baseCfg);
+cfgEq = baseCfg; cfgEq.fddaDenomMode = "equation";
+rEquation = scfde.equalizers.fdda_teq_true(ch, src, cfgEq);
+cfgBin = baseCfg; cfgBin.fddaDenomMode = "bin";
+rBin = scfde.equalizers.fdda_teq_true(ch, src, cfgBin);
+verifyEqual(testCase, rDefault.traces{1}.finalW, ...
+    rEquation.traces{1}.finalW, "AbsTol", 1e-12, ...
+    "production default must run the equation denominator");
+verifyEqual(testCase, rDefault.traces{1}.finalB, ...
+    rEquation.traces{1}.finalB, "AbsTol", 1e-12, ...
+    "production default must run the equation denominator (B)");
+verifyGreaterThan(testCase, ...
+    norm(rDefault.traces{1}.finalW - rBin.traces{1}.finalW), 1e-6, ...
+    "production default must differ from the bin engineering mode");
 end
 
 function testCh5ChannelInputValidation(testCase)

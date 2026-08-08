@@ -7,11 +7,12 @@ function receiver = fdda_teq_true(channel, source, cfg)
 % The book simulation parameters are mu_f=0.2, mu_b=0.01, N_c=32,
 % N_f=32, N_b=10, I_inner=1, I_outer=3.  The kernel updates W and B on
 % EVERY block (training mode and decision-directed mode, Eq. 4-82)
-% with the exponential forgetting factor gamma^block, and inherits the
-% filters across outer iterations (Eq. 4-81).  The data segment of the
-% first outer iteration uses hard-decision errors; later outer
-% iterations use the BCJR soft symbols (coded frame) as the error and
-% feedback references.
+% with the exponential forgetting factor gamma^m (m = global block
+% counter), and inherits the filters across outer iterations
+% (Eq. 4-81).  The feedback/error reference of the data segment is the
+% decision (default, the book's decision-directed mode) or the
+% previous outer iteration's soft symbols (cfg.fddaSoftFeedback);
+% the BCJR soft decoding is applied to the FINAL output only.
 %
 % The frame must be [training; data] (see run_turbo_scenario).  The
 % interleaver is supplied by the scenario (cfg.permutation); the module
@@ -25,7 +26,12 @@ function receiver = fdda_teq_true(channel, source, cfg)
 % cfg.fddaForgetting - gamma, the exponential forgetting factor
 %                      (default 0.97; engineering parameter, the book
 %                      gives gamma < 1 without a value)
-% cfg.fddaDenomMode - "bin" (per-bin, default) or "block" denominator
+% cfg.fddaDenomMode - "equation" (default, the book Eq. 4-82 scalar
+%                      delta + R^H R), "block" or "bin" engineering
+%                      variants
+% cfg.fddaSoftFeedback - "decision" (default, book decision-directed
+%                      mode), "equalized" or "bcjr" engineering
+%                      extensions
 % cfg.trainingSymbols - training length
 % cfg.permutation / cfg.noiseVariance / cfg.turboDecoderMode - BCJR
 
@@ -48,7 +54,7 @@ params = struct("blockLength", field_default(cfg, "fddaBlockLength", 32), ...
     "stepFb", field_default(cfg, "fddaStepFb", 0.01), ...
     "outerIterations", outerIterations, ...
     "forgetting", field_default(cfg, "fddaForgetting", 0.97), ...
-    "denomMode", field_default(cfg, "fddaDenomMode", "bin"), ...
+    "denomMode", field_default(cfg, "fddaDenomMode", "equation"), ...
     "trainLength", trainLength);
 nData = numel(received) - trainLength;
 if nData > 0
