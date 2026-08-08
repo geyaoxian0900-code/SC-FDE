@@ -80,16 +80,16 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
-注： dda-teq 为原文图4-25 真自适应 Turbo 均衡器（ dda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
-- 式(4-82) 完整执行：外迭代内 **每个数据块都更新 W 和 B**（训练模式用已知训练符号、决策引导模式用判决/软符号误差），带指数遗忘因子 gamma^m（m=跨外迭代全局块索引，步长不重置）；式(4-81) 外迭代继承 W/B；
+注： fdda-teq 为原文图4-25 真自适应 Turbo 均衡器（ fdda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
+- 式(4-82) 完整执行：外迭代内 **每个数据块都更新 W 和 B**（训练模式用已知训练符号、决策引导模式用判决/软符号误差），带指数遗忘因子 gamma_f^i/gamma_b^i（i=外迭代编号，同一外迭代内所有块缩放相同；默认 gamma_f=gamma_b=0.97，为参数假设已记录）；式(4-81) 外迭代继承 W/B；
 - 参数与原文一致：mu_f=0.2、mu_b=0.01、Nc=32、Nf=32、Nb=10、I_inner=1、I_outer=3（无 80-epochs 训练放大）；
 - 分母默认为原文式(4-82) 标量 delta+R^H R（denomMode='equation'，生产包装器与核心默认一致，包装器级回归测试确认）；'block'/'bin'为工程变体；单块数值等价测试证实 W/B 与手动式(4-82) 完全一致；
-- 反馈/误差参考默认为原文决策引导模式（ ddaSoftFeedback='decision'），软符号同时进反馈谱 Xtilde 与误差 E(k)；bcjr/equalized 为工程扩展分别记录；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
+- 反馈/误差参考默认为原文决策引导模式（ ffddaSoftFeedback='decision'），软符号同时进反馈谱 Xtilde 与误差 E(k)；bcjr/equalized 为工程扩展分别记录；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
 - 诊断轨迹对同一真值：iterationMse/决策 BER 均以发送数据符号为参考，外迭代不发散；轨迹为 outerIterations x numBlocks 矩阵（stepScale/W/B 逐块记录）；
 - 遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1）；
 - 图4-31 工程趋势基准（ch4_fdda_teq_uncoded_qpsk.m 调用与生产共享的核心，同样 equation 分母）：uncoded QPSK、I_outer=3、256+1024、Eb/N0，100 帧/SNR=204800 bit，零误码 0 个，Clopper-Pearson 95% 上界审删；logRmse=2.30、maxSnrDev=4.74dB、等级 C；绝对偏移与高 SNR 平台为原文标量分母下小步长的数学后果加合成 3 仲信道（原文 3km 参数未披露），趋势/排序一致。
 
-## 已知缺口（对应 README）（对应 README 审计说明）
+## 已知缺口（对应 README）
 
 1. **HTFDE 可靠度缩放**（第3章）：工程设置，未按原文逐式（待办 P1）
 2. **BLMS overlap-save**（第4章）：已新增严格 overlap-save 的 `fblms_equalizer`（图4-25 语义，含重叠缓存/G 约束/污染丢弃/负向回归），现有 Turbo 融合版保留；原文步长量级与图 4-25 曲线数字化待办

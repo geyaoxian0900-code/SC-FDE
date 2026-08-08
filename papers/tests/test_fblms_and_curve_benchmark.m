@@ -624,6 +624,43 @@ verifyGreaterThan(testCase, ...
     "production default must differ from the bin engineering mode");
 end
 
+function testFddaForgettingIndexedByOuterIteration(testCase)
+% Eq. (4-82) uses gamma_f^i / gamma_b^i with i the OUTER ITERATION
+% index: ALL blocks inside the same outer iteration share the same
+% scale, and the next outer iteration scales by gamma.  A per-block
+% (global block counter) implementation must fail this test.
+Nc = 32; Nf = 32; Nb = 10;
+fftLength = Nc + 2 * max(Nf, Nb);
+rng(3, "twister");
+% Frame of 2 blocks: 1 training block + 1 data block.
+training = (1 - 2 * randi([0 1], 1, Nc));
+dataBlock = (1 - 2 * randi([0 1], 1, Nc));
+tx = [training, dataBlock];
+imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+received = (ifft(fft([imp, zeros(1, numel(tx) - numel(imp))]) .* ...
+    fft(tx)) + 0.05 * (randn(1, numel(tx)) + 1j * randn(1, numel(tx))));
+gamma = 0.9;
+params = struct("blockLength", Nc, "ffLength", Nf, "fbLength", Nb, ...
+    "stepFf", 0.2, "stepFb", 0.01, "outerIterations", 2, ...
+    "forgettingF", gamma, "denomMode", "equation", ...
+    "trainLength", Nc, "referenceData", dataBlock);
+params.decisionFn = @(x) sign(real(x));
+[~, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
+    received, training, params, @(o, d) d);
+ss = trace.stepScale;   % outerIterations x numBlocks
+verifyEqual(testCase, ss(1, 1), 1, "AbsTol", 1e-12, ...
+    "first outer iteration scale must be gamma^0 = 1");
+verifyEqual(testCase, ss(1, 2), ss(1, 1), "AbsTol", 1e-12, ...
+    "all blocks of outer 1 must share the same scale");
+verifyEqual(testCase, ss(2, 1), gamma, "AbsTol", 1e-12, ...
+    "outer 2 scale must be gamma^1");
+verifyEqual(testCase, ss(2, 2), ss(2, 1), "AbsTol", 1e-12, ...
+    "all blocks of outer 2 must share the same scale");
+verifyEqual(testCase, trace.stepScaleF, trace.stepScaleB, ...
+    "AbsTol", 1e-12, ...
+    "default gamma_f = gamma_b assumption must hold");
+end
+
 function testCh5ChannelInputValidation(testCase)
 % The parameterized chapter-5 channel must reject invalid inputs:
 % duplicate delays, negative power, mismatched lengths.

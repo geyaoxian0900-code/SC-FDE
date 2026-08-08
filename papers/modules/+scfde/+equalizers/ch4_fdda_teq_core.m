@@ -9,16 +9,18 @@ function [dataOut, trace] = ch4_fdda_teq_core(received, training, params, softFn
 %               inherited from the end of iteration i-1:
 %                   W^(i)(k) = W^-(K),  B^(i)(k) = B^-(K)
 %   Eq. (4-82)  every block k (training mode AND decision-directed mode)
-%               updates the filters with an exponential forgetting
-%               factor gamma^m (gamma < 1) shrinking the step:
-%                   W^(i)(k+1) = W^(i)(k) + gamma^m * mu_f * F G F^H
+%               updates the filters with the exponential forgetting
+%               factors gamma_f^i and gamma_b^i (gamma < 1), where i is
+%               the OUTER ITERATION index, so all blocks k inside the
+%               same outer iteration use the SAME scale:
+%                   W^(i)(k+1) = W^(i)(k) + gamma_f^i * mu_f * F G F^H
 %                                   (R^(i)(k) .* E(k)) / (eps + R^H R)
-%                   B^(i)(k+1) = B^(i)(k) + gamma^m * mu_b * F G F^H
+%                   B^(i)(k+1) = B^(i)(k) + gamma_b^i * mu_b * F G F^H
 %                                   (Xtilde^(i)(k) .* E(k)) / (eps + Xtilde^H Xtilde)
 %   where R = input spectrum, Xtilde = feedback spectrum,
 %   E(k) = FFT(e(k)), e = d - xhat on training blocks, decision or
 %   soft-symbol error on data blocks, G the time-domain constraint
-%   (first Nf / Nb taps), gamma the forgetting factor.
+%   (first Nf / Nb taps).
 %   The last inner iteration's output is the filter output fed to the
 %   demodulator.
 %
@@ -29,9 +31,11 @@ function [dataOut, trace] = ch4_fdda_teq_core(received, training, params, softFn
 %   stepFf        mu_f (default 0.2)
 %   stepFb        mu_b (default 0.01)
 %   outerIterations I_outer (default 1)
-%   forgetting    gamma (default 0.995); step = gamma^blockIndex
-%   denomMode     'bin' (per-frequency-bin |R_k|^2 + eps, default) or
-%                 'block' (scalar block energy / fftLength)
+%   forgettingF   gamma_f (default 0.97); step scale gamma_f^(i-1)
+%   forgettingB   gamma_b (default = gamma_f); the book uses separate
+%                 factors; taking them equal is a parameter assumption
+%   denomMode     'equation' (default, the book Eq. 4-82 scalar
+%                 delta + R^H R), 'block' or 'bin' engineering variants
 %   trainLength   length of the training segment (default numel(training))
 %   decisionFn    decision function on the data segment for the first
 %                 outer iteration (default sign(real(.)) for BPSK)
@@ -57,7 +61,13 @@ Nb = field_default(params, "fbLength", 10);
 muF = field_default(params, "stepFf", 0.2);
 muB = field_default(params, "stepFb", 0.01);
 outerIterations = field_default(params, "outerIterations", 1);
-gamma = field_default(params, "forgetting", 0.995);
+% Book Eq. (4-82) uses separate forgetting factors for the feedforward
+% and feedback updates:  gamma_f^i  and  gamma_b^i, where i is the
+% OUTER ITERATION index (same scale for all blocks k inside an outer
+% iteration).  The defaults take gamma_f = gamma_b (a parameter
+% assumption, recorded in the traceability matrix).
+gammaF = field_default(params, "forgettingF", 0.97);
+gammaB = field_default(params, "forgettingB", gammaF);
 denomMode = field_default(params, "denomMode", "equation");
 % 'equation' (default) - the book Eq. (4-82) scalar denominator
 %                       delta + R^H R (full spectral block energy, no
@@ -92,11 +102,12 @@ trace.weightNorm = zeros(outerIterations, numBlocks);
 trace.feedbackNorm = zeros(outerIterations, numBlocks);
 trace.errorPower = zeros(outerIterations, numBlocks);
 trace.stepScale = zeros(outerIterations, numBlocks);
+trace.stepScaleF = zeros(outerIterations, numBlocks);
+trace.stepScaleB = zeros(outerIterations, numBlocks);
 trace.iterationMse = zeros(1, outerIterations);
 trace.decisionBer = zeros(1, outerIterations);
 softData = zeros(1, nData);
 lastDataBlockOut = zeros(1, Nc);
-globalBlock = 0;
 
 for outer = 1:outerIterations
     % Eq. (4-81): the filters are inherited from the previous outer
@@ -179,37 +190,38 @@ for outer = 1:outerIterations
         errorSpectrum = fft(errorBlock, fftLength);
 
         % -- Eq. (4-82): W and B updates on EVERY block ----------------
-        % The forgetting factor gamma^m accumulates across the outer
-        % iterations (m = global block counter), so the step keeps
-        % shrinking instead of resetting at each outer iteration.
-        stepScale = gamma^(globalBlock);
+        % The forgetting factors are gamma_f^i and gamma_b^i with i the
+        % OUTER ITERATION index (zero-based): ALL blocks k inside the
+        % same outer iteration use the SAME scale.
+        stepScaleF = gammaF^(outer - 1);
+        stepScaleB = gammaB^(outer - 1);
         gradF = conj(inputSpectrum.') .* errorSpectrum.';
         if strcmpi(denomMode, "bin")
             binF = abs(inputSpectrum.').^2;
             denomF = binF + 0.05 * mean(binF) + 1e-6;
-            W = W + stepScale * muF * gradF ./ denomF;
+            W = W + stepScaleF * muF * gradF ./ denomF;
         elseif strcmpi(denomMode, "block")
             denomF = 1e-6 + epsilon_norm(inputSpectrum) / fftLength;
-            W = W + stepScale * muF * gradF / denomF;
+            W = W + stepScaleF * muF * gradF / denomF;
         else
             % 'equation' (default): the book Eq. (4-82) scalar
             % denominator  delta + R^H R  with the FULL spectral block
             % energy (no fftLength division, no empirical term).
             denomF = 1e-6 + epsilon_norm(inputSpectrum);
-            W = W + stepScale * muF * gradF / denomF;
+            W = W + stepScaleF * muF * gradF / denomF;
         end
         W = time_constrain(W, fftLength, Nf);
         gradB = conj(feedbackSpectrum.') .* errorSpectrum.';
         if strcmpi(denomMode, "bin")
             binB = abs(feedbackSpectrum.').^2;
             denomB = binB + 0.05 * mean(binB) + 1e-6;
-            B = B + stepScale * muB * gradB ./ denomB;
+            B = B + stepScaleB * muB * gradB ./ denomB;
         elseif strcmpi(denomMode, "block")
             denomB = 1e-6 + epsilon_norm(feedbackSpectrum) / fftLength;
-            B = B + stepScale * muB * gradB / denomB;
+            B = B + stepScaleB * muB * gradB / denomB;
         else
             denomB = 1e-6 + epsilon_norm(feedbackSpectrum);
-            B = B + stepScale * muB * gradB / denomB;
+            B = B + stepScaleB * muB * gradB / denomB;
         end
         B = time_constrain(B, fftLength, Nb);
 
@@ -218,8 +230,9 @@ for outer = 1:outerIterations
         trace.feedbackNorm(outer, block + 1) = norm(B);
         trace.errorPower(outer, block + 1) = ...
             mean(abs(errorSegment(inFrame)).^2);
-        trace.stepScale(outer, block + 1) = stepScale;
-        globalBlock = globalBlock + 1;
+        trace.stepScale(outer, block + 1) = stepScaleF;
+        trace.stepScaleF(outer, block + 1) = stepScaleF;
+        trace.stepScaleB(outer, block + 1) = stepScaleB;
     end
     dataOut = output(trainLength + 1:min(trainLength + nData, numel(output)));
     dataOut = dataOut(1:nData);
