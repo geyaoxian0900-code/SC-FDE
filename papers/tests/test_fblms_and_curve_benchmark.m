@@ -390,6 +390,30 @@ verifyEqual(testCase, benchmark.perMethod.grade(1), "D", ...
     "per-method grade must be downgraded to D");
 end
 
+function testCh5ChannelParameterizedAndSensitive(testCase)
+% The chapter-5 11-tap channel must be parameterized (delays/power/
+% phase) for sensitivity analysis, and the default synthetic model must
+% match its documented tap list.
+ch = scfde.equalizers.ch5_long_uwa_channel();
+delays = [0, 1, 2, 3, 4, 5, 7, 9, 11, 13, 15];
+verifyEqual(testCase, numel(ch), delays(end) + 1, ...
+    "default channel length must match the 11-tap model");
+verifyEqual(testCase, norm(ch), 1, "AbsTol", 1e-12, ...
+    "channel must be unit-energy");
+active = find(abs(ch) > 1e-12);
+verifyEqual(testCase, active, delays + 1, ...
+    "default channel must place taps at the documented delays");
+% Sensitivity: perturbing the tap phases must change the channel
+% (the unit-energy normalization cancels a global gain perturbation).
+phaseBase = [0, .5, -1.0, .8, -2.1, .25, -1.5, 1.4, -.8, .9, -2.6];
+chPerturbed = scfde.equalizers.ch5_long_uwa_channel( ...
+    delays, [], phaseBase + 0.3);
+verifyEqual(testCase, numel(chPerturbed), numel(ch), ...
+    "perturbed channel must keep the same length");
+verifyGreaterThan(testCase, norm(ch - chPerturbed), 1e-3, ...
+    "tap-phase perturbation must change the channel");
+end
+
 function testFblmsProductionEntryReproducible(testCase)
 % The unified production entry with the QPSK scenario must be
 % DETERMINISTIC for a fixed configuration: the same seed must reproduce

@@ -51,7 +51,8 @@
 | 公式编号 | 原文定义 | 代码函数 | 参数映射 | 测试 | 仿真图 | 等级 | 已知偏差 | 审计状态 |
 |---|---|---|---|---|---|---|---|---|
 | CCK 码本 | 8/16/32 码片 256 唯一字 | `ch5_cck_codebook.m` | 单位能量误差 ≤1.11e-16 | test_audit_round3_fixes（码字恢复/bit 表） | fig5_x | A | 无 | 第1-3轮 |
-| CCK Turbo 外码 | 完整卷积/LDPC 外码 + 交织 + SISO 译码 | `ch5_turbo_cck_frame.m` | 目前用重复码替代 | 无 | fig5_x | C | 外码被重复码替代，非原文完整 Turbo | 待办 P1 |
+| 5-60~5-69 | MAP-CCK-TE LLR：后验 = 外信息 + 先验，log-sum-exp 计算 | `ch5_soft_book_detect_with_prior.m`（后验 LLR）+ `ch5_fde_cck_turbo_detect.m`（外信息交换） | 先验 LLR、噪声方差 | 无独立测试 | fig5_x | B | 后验 LLR 结构与原文一致 | 本轮 |
+| CCK Turbo 外码 | 原文明确为 Turbo 码（未给生成多项式/校验矩阵/码率/交织器） | `ch5_turbo_cck_frame.m` | 目前重复码率 1/2 + 交织 | 无 | fig5_x | C | 原文未公开外码参数；保留重复码不猜测（按审计规则） | 本轮 |
 | 5.5 节信道 | 11 径信道 | `ch5_long_uwa_channel.m` | 合成信道 | 无 | fig5_xx | C | 非原文精确信道，未保存逐径参数 | 待办 P1 |
 
 ## 第 6 章（循环移位扩频）
@@ -59,7 +60,7 @@
 | 公式编号 | 原文定义 | 代码函数 | 参数映射 | 测试 | 仿真图 | 等级 | 已知偏差 | 审计状态 |
 |---|---|---|---|---|---|---|---|---|
 | CSK 码本 | M 元循环移位 + bit table | `ch6_csk_codebook.m`、`ch6_bit_table.m` | M=4 | test_audit_round3_fixes（bit 级 BER） | fig6_x | A | 无 | 第3轮 |
-| PIC/SIC/ESE | 软干扰消除迭代 | `csk_ese.m`、`csk_soft_sic.m`、`ch6_ese_residual.m` | 阻尼系数为工程设置 | 无 | fig6_x | C | 阻尼系数非原文规定 | 待办 P1 |
+| PIC/SIC/ESE | 软干扰消除迭代 | `ch6_csk_idma_detect.m`（L38 后验相信阻尼融合）、`csk_ese.m`、`csk_soft_sic.m` | 阻尼可配置（eseDamping，默认 0.58） | 敏感性已完成：0→发散，0.3→0.014，0.58→0.009-0.014，0.8-1.0→0.0078（最优） | fig6_x | C | 原文未规定阻尼；已参数化+敏感性分析，标为工程参数 | 本轮 |
 | CSK-IDMA | 多用户迭代检测 | `ch6_csk_idma_detect.m` | — | 无 | fig6_x | B | 待复核 | — |
 
 ## 统一入口与指标
@@ -79,7 +80,7 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
-注：dda_teq 为第4章专用模块（卷积码 (7,5) 码率 1/2 + 交织 + BCJR），与统一入口 QPSK 场景的未编码帧结构不兼容（info 长度不匹配）；图4-31 曲线对比待专用编码帧集成后计算。
+注：dda_teq 已接入 turbo 场景（BPSK 编码帧：(7,5) 码率 1/2、256 训练 + 1024 信息符号、I_outer=3、mu_f=0.2）；图4-31 基准已计算：趋势一致（-5dB 0.27 vs 0.8、0dB 0.002 vs 0.03），但 BPSK vs QPSK 调制替代使绝对偏移 ~5dB，等级 C（趋势与排序一致）；数据保存在 curve_reference/ch4_fig431_fdda_teq_benchmark.mat。
 
 ## 已知缺口（对应 README 审计说明）
 

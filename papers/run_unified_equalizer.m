@@ -366,14 +366,23 @@ end
 
 %% Chapter 4 turbo link (convolutional-coded BPSK frame)
 function results = run_turbo_scenario(cfg)
-infoBits = 120;
+% Chapter-4 coded frame matching the book FDDA-TEQ simulation
+% parameters (Fig. 4-29..4-32): convolutional code (7,5) octal, rate
+% 1/2, blocks of 256 training + 1024 info symbols, I_inner=2,
+% I_outer=3, mu_f=0.2, mu_b=0.01.  The book uses QPSK; this scenario
+% transmits BPSK (the implemented turbo equalizers are BPSK LLR
+% chains), which is recorded as a modulation deviation in the
+% benchmark.
+infoBits = 512;                 % 1024 coded bits = 512 info (rate 1/2)
+trainingSymbols = 256;
 imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
 nv = 10^(-cfg.snrDb / 10);
-link = struct("noiseVariance", nv, "iterations", 4, ...
+link = struct("noiseVariance", nv, "iterations", 3, ...
     "infoBits", infoBits, "turboDecoderMode", "Log-MAP", ...
     "baselineDecoder", "Log-MAP", "tdAdaptiveTaps", 16, ...
-    "tdNlmsStep", 0.35, "blmsStep", 0.06, "blmsLeakage", 1e-3, ...
+    "tdNlmsStep", 0.35, "blmsStep", 0.2, "blmsLeakage", 1e-3, ...
     "blmsRegularization", 1e-3, "turboDamping", 0.75, ...
+    "fddaStepFf", 0.2, "fddaStepFb", 0.01, ...
     "snrDb", cfg.snrDb);
 totalErrors = [];
 totalBits = 0;
@@ -391,7 +400,7 @@ for frame = 1:cfg.frameCount
     ch = struct("received", received, "impulse", imp, ...
         "branches", [received; received]);
     src = struct("data", 1 - 2 * info, "tx", tx, ...
-        "training", tx(1:64));
+        "training", tx(1:trainingSymbols));
     link.equalizers = cfg.equalizers;
     recv = scfde.receiver_bank_pluggable(ch, src, link);
     if isempty(totalErrors)
