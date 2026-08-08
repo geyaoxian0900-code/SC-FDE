@@ -80,7 +80,12 @@
 
 分级标准：A：log-BER RMSE ≤ 0.15；B：≤ 0.30；C：仅趋势与排序一致；D：未实现。
 已建参考数据：curve_reference/ch4_fig431_fdda_teq.mat（图4-31 FDDA-TEQ 未编码 BER，16 点，SNR -5~10 dB）。
-注：dda-teq为原文图4-25 真自适应 Turbo 均衡器（dda_teq_true.m）：
+注：dda-teq为原文图4-25 真自适应 Turbo 均衡器（dda_teq_true.m + 共享核心 ch4_fdda_teq_core.m）：
+式(4-82) 完整执行：外迭代内 **每个数据块都更新 W 和 B**（训练模式用已知训练符号、决策引导模式用判决/软符号误差），带指数遗忘因子 gamma^m（m=跨外迭代全局块索引，步长不重置）；式(4-81) 外迭代继承 W/B；
+参数与原文一致：mu_f=0.2、mu_b=0.01、Nc=32、Nf=32、Nb=10、I_inner=1、I_outer=3（无 80-epochs 训练放大）；遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1），已记录；
+反馈参考默认为均衡输出（软，cfg.fddaSoftFeedback 可选 decision/bcjr）；BCJR 软译码用于最终输出（原文“最后内迭代输出送调解调器软译码”）；
+诊断轨迹对同一真值：iterationMse/决策 BER 均以发送数据符号为参考，外迭代不发散；
+图4-31 工程趋势基准（ch4_fdda_teq_uncoded_qpsk.m 调用与生产共享的核心）：uncoded QPSK、I_outer=3、256+1024、Eb/N0，100 帧/SNR=204800 bit，零误码 0 个，Clopper-Pearson 95% 上界审删；logRmse=1.67、maxSnrDev=6.03dB、等级 C；绝对偏移归因合成 3 仲信道（原文 3km 参数未披露），趋势/排序一致。
 前馈 W/反馈 B 频域自适应更新（mu_f=2.0/mu_b=0.05、Nc=32/Nf=32/Nb=10、G 时域约束、标量分母），W 从单位冲击起、B=0，训练段用 source.training；
 反馈参考真实有效：训练块用已知训练符号 FFT（B 的梯度非零，训练后 norm(B)>0），数据块第一外迭代用块间判决，后续外迭代用 BCJR 软符号反馈；
 真 I_outer 外循环：训练 80 epochs 收敛到 MMSE 残差→ 数据段固定 W/B 软反馈输出（避免低 SNR 判决污染），外迭代间 BCJR 软符号反馈；cfg.iterations 与 cfg.fddaIterations 均读取，生产配置 I_outer=3 真正生效（轨迹 1.46→0.72→0.71 单调改善）；
