@@ -51,3 +51,28 @@ verifyError(testCase, ...
     @() scfde.equalizers.ch4_turbo_frame_contract(channel, source, cfg), ...
     "SCFDE:TurboPermutation");
 end
+
+function testDecoderFeedbackExcludesTrainingFromBcjr(testCase)
+rng(7, "twister");
+training = 1 - 2 * randi([0 1], 1, 256);
+information = randi([0 1], 1, 512);
+coded = scfde.equalizers.ch4_convolutional_encode(information);
+permutation = randperm(1024);
+tx = [training, 1 - 2 * coded(permutation)];
+frame = scfde.equalizers.ch4_turbo_frame_contract( ...
+    struct("received", tx), ...
+    struct("training", training, "data", 1 - 2 * information, "tx", tx), ...
+    struct("trainingSymbols", 256, "infoBits", 512, ...
+        "permutation", permutation));
+llr = 50 * tx;
+previous = [training, zeros(1, 1024)];
+[bits, decoderFrame, softFrame] = ...
+    scfde.equalizers.ch4_decoder_feedback_frame( ...
+        llr, frame, previous, 1, "Log-MAP");
+verifyEqual(testCase, numel(bits), 512);
+verifyEqual(testCase, bits, logical(information));
+verifyEqual(testCase, softFrame(frame.trainingIndices), training);
+verifyEqual(testCase, decoderFrame(frame.trainingIndices), zeros(1, 256));
+verifySize(testCase, decoderFrame, [1, 1280]);
+verifySize(testCase, softFrame, [1, 1280]);
+end
