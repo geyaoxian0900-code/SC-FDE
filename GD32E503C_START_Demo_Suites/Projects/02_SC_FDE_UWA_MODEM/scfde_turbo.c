@@ -23,9 +23,13 @@ void scfde_turbo_conv_encode(const uint8_t *info_bits, uint8_t *coded_bits)
     }
 }
 
-/* Trellis: nextState[state][input], outputBits[state][input][2] */
+/* Trellis for (7,5)_8, state number = s1*2+s2 with s1 = most recent input:
+ *   state 0 (00): next = {0,2}, out = {(0,0),(1,1)}
+ *   state 1 (01): next = {0,2}, out = {(1,1),(0,0)}
+ *   state 2 (10): next = {1,3}, out = {(1,0),(0,1)}
+ *   state 3 (11): next = {1,3}, out = {(0,1),(1,0)} */
 static const uint8_t turbo_next[SCFDE_TURBO_STATES][2] = {
-    {0u, 2u}, {1u, 3u}, {0u, 2u}, {1u, 3u}
+    {0u, 2u}, {0u, 2u}, {1u, 3u}, {1u, 3u}
 };
 static const uint8_t turbo_out[SCFDE_TURBO_STATES][2][2] = {
     {{0u, 0u}, {1u, 1u}},
@@ -78,8 +82,15 @@ static void turbo_build_perm(void)
 
 void scfde_turbo_interleave(const uint8_t *in, uint8_t *out)
 {
+    static uint8_t temp[SCFDE_TURBO_CODE_BITS];
     uint16_t i;
     if (!turbo_perm_ready) { turbo_build_perm(); }
+    /* support in-place operation */
+    if (in == out)
+    {
+        memcpy(temp, in, sizeof(temp));
+        in = temp;
+    }
     for (i = 0u; i < SCFDE_TURBO_CODE_BITS; i++)
     {
         out[i] = in[turbo_perm[i]];
@@ -88,8 +99,14 @@ void scfde_turbo_interleave(const uint8_t *in, uint8_t *out)
 
 void scfde_turbo_deinterleave(const float *in, float *out)
 {
+    static float temp[SCFDE_TURBO_CODE_BITS];
     uint16_t i;
     if (!turbo_perm_ready) { turbo_build_perm(); }
+    if (in == out)
+    {
+        memcpy(temp, in, sizeof(temp));
+        in = temp;
+    }
     for (i = 0u; i < SCFDE_TURBO_CODE_BITS; i++)
     {
         out[turbo_perm[i]] = in[i];
@@ -108,7 +125,7 @@ static float turbo_log_combine(float left, float right, uint8_t max_log)
         return left > right ? left : right;
     }
     maximum = left > right ? left : right;
-    if (isinf(maximum))
+    if (maximum <= -1.0e29f)
     {
         return maximum;
     }
@@ -123,7 +140,7 @@ static void turbo_normalize(float *row, uint8_t count)
     {
         if (row[i] > maximum) { maximum = row[i]; }
     }
-    if (isfinite(maximum))
+    if (maximum > -1.0e29f)
     {
         for (i = 0u; i < count; i++)
         {
@@ -161,13 +178,13 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
     /* forward recursion */
     for (s = 0u; s < SCFDE_TURBO_STATES; s++)
     {
-        alpha[0][s] = (s == 0u) ? 0.0f : -INFINITY;
+        alpha[0][s] = (s == 0u) ? 0.0f : -1.0e30f;
     }
     for (t = 0u; t < SCFDE_TURBO_TIME; t++)
     {
         for (s = 0u; s < SCFDE_TURBO_STATES; s++)
         {
-            alpha[t + 1u][s] = -INFINITY;
+            alpha[t + 1u][s] = -1.0e30f;
         }
         for (s = 0u; s < SCFDE_TURBO_STATES; s++)
         {
@@ -191,7 +208,7 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
         uint16_t tprev = t - 1u;
         for (s = 0u; s < SCFDE_TURBO_STATES; s++)
         {
-            beta[tprev][s] = -INFINITY;
+            beta[tprev][s] = -1.0e30f;
         }
         for (s = 0u; s < SCFDE_TURBO_STATES; s++)
         {
@@ -208,7 +225,7 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
     /* soft output */
     for (t = 0u; t < SCFDE_TURBO_TIME; t++)
     {
-        float input_value[2] = {-INFINITY, -INFINITY};
+        float input_value[2] = {-1.0e30f, -1.0e30f};
         for (s = 0u; s < SCFDE_TURBO_STATES; s++)
         {
             for (u = 0u; u < 2u; u++)
@@ -223,5 +240,135 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
     for (t = 0u; t < SCFDE_TURBO_TIME; t++)
     {
         info_bits[t] = (info_llr[t] >= 0.0f) ? 1u : 0u;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Extended BCJR: also output the coded-bit posterior LLRs             */
+/* ------------------------------------------------------------------ */
+
+void scfde_turbo_bcjr_ext(const float *coded_llr, float *info_llr,
+                          float *coded_out, uint8_t *info_bits,
+                          uint8_t max_log)
+{
+    static float alpha[SCFDE_TURBO_TIME + 1u][SCFDE_TURBO_STATES];
+    static float beta[SCFDE_TURBO_TIME + 1u][SCFDE_TURBO_STATES];
+    static float gamma_metric[SCFDE_TURBO_TIME][SCFDE_TURBO_STATES][2];
+    uint16_t t;
+    uint8_t s, u, c;
+
+    for (t = 0u; t < SCFDE_TURBO_TIME; t++)
+    {
+        float l0 = coded_llr[2u * t];
+        float l1 = coded_llr[2u * t + 1u];
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            for (u = 0u; u < 2u; u++)
+            {
+                gamma_metric[t][s][u] = 0.5f * ((float)turbo_out[s][u][0] * l0 +
+                                                (float)turbo_out[s][u][1] * l1);
+            }
+        }
+    }
+    for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+    {
+        alpha[0][s] = (s == 0u) ? 0.0f : -1.0e30f;
+    }
+    for (t = 0u; t < SCFDE_TURBO_TIME; t++)
+    {
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            alpha[t + 1u][s] = -1.0e30f;
+        }
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            for (u = 0u; u < 2u; u++)
+            {
+                uint8_t ns = turbo_next[s][u];
+                float value = alpha[t][s] + gamma_metric[t][s][u];
+                alpha[t + 1u][ns] = turbo_log_combine(alpha[t + 1u][ns], value, max_log);
+            }
+        }
+        turbo_normalize(alpha[t + 1u], SCFDE_TURBO_STATES);
+    }
+    for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+    {
+        beta[SCFDE_TURBO_TIME][s] = 0.0f;
+    }
+    for (t = SCFDE_TURBO_TIME; t > 0u; t--)
+    {
+        uint16_t tprev = t - 1u;
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            beta[tprev][s] = -1.0e30f;
+        }
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            for (u = 0u; u < 2u; u++)
+            {
+                uint8_t ns = turbo_next[s][u];
+                float value = gamma_metric[tprev][s][u] + beta[t][ns];
+                beta[tprev][s] = turbo_log_combine(beta[tprev][s], value, max_log);
+            }
+        }
+        turbo_normalize(beta[tprev], SCFDE_TURBO_STATES);
+    }
+    for (t = 0u; t < SCFDE_TURBO_TIME; t++)
+    {
+        float input_value[2] = {-1.0e30f, -1.0e30f};
+        float code_value[2][2] = {{-1.0e30f, -1.0e30f},
+                                  {-1.0e30f, -1.0e30f}};
+        for (s = 0u; s < SCFDE_TURBO_STATES; s++)
+        {
+            for (u = 0u; u < 2u; u++)
+            {
+                uint8_t ns = turbo_next[s][u];
+                float path = alpha[t][s] + gamma_metric[t][s][u] + beta[t + 1u][ns];
+                input_value[u] = turbo_log_combine(input_value[u], path, max_log);
+                for (c = 0u; c < 2u; c++)
+                {
+                    code_value[turbo_out[s][u][c]][c] =
+                        turbo_log_combine(code_value[turbo_out[s][u][c]][c], path, max_log);
+                }
+            }
+        }
+        info_llr[t] = input_value[1] - input_value[0];
+        coded_out[2u * t] = code_value[1][0] - code_value[0][0];
+        coded_out[2u * t + 1u] = code_value[1][1] - code_value[0][1];
+    }
+    for (t = 0u; t < SCFDE_TURBO_TIME; t++)
+    {
+        info_bits[t] = (info_llr[t] >= 0.0f) ? 1u : 0u;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* QPSK soft symbols from coded LLRs: E[s] = (tanh(l0/2)+j*tanh(l1/2))/sqrt(2) */
+/* ------------------------------------------------------------------ */
+
+void scfde_turbo_soft_symbols(const float *coded_llr, scfde_complex_t *symbols)
+{
+    uint16_t i;
+    for (i = 0u; i < SCFDE_TURBO_TIME; i++)
+    {
+        symbols[i].re = tanhf(coded_llr[2u * i] * 0.5f) * 0.7071067811865476f;
+        symbols[i].im = tanhf(coded_llr[2u * i + 1u] * 0.5f) * 0.7071067811865476f;
+    }
+}
+
+/* float in-place interleaver for coded LLR feedback */
+void scfde_turbo_interleave_f(const float *in, float *out)
+{
+    static float temp[SCFDE_TURBO_CODE_BITS];
+    uint16_t i;
+    if (!turbo_perm_ready) { turbo_build_perm(); }
+    if (in == out)
+    {
+        memcpy(temp, in, sizeof(temp));
+        in = temp;
+    }
+    for (i = 0u; i < SCFDE_TURBO_CODE_BITS; i++)
+    {
+        out[i] = in[turbo_perm[i]];
     }
 }

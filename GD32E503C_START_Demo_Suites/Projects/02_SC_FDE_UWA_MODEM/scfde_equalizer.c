@@ -207,7 +207,9 @@ const char *scfde_equalizer_name(scfde_equalizer_mode_t mode)
     static const char *const names[SCFDE_EQUALIZER_COUNT] = {
         "AUTO", "MMSE-FDE", "ZF-FDE", "MF-FDE", "IB-DFE", "NLMS-TDE",
         "HTFDE", "SD-IBDFE", "HD-IBDFE", "ICE-SD-IBDFE", "ICE-HD-IBDFE",
-        "DFE", "LMS-DFE", "NLMS-DFE", "RLS-DFE", "DPLL-DFE", "FBLMS"
+        "DFE", "LMS-DFE", "NLMS-DFE", "RLS-DFE", "DPLL-DFE", "FBLMS",
+        "FD-TURBO", "FD-DFE", "TF-TURBO", "BITF-TURBO", "BLMS-TF-TURBO",
+        "TD-TURBO", "FDDA-TEQ", "TDDA-TEQ", "FDDA-DFE-TEQ"
     };
     if ((uint8_t)mode >= (uint8_t)SCFDE_EQUALIZER_COUNT)
     {
@@ -580,7 +582,7 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
     static scfde_complex_t input_block[SCFDE_FBLMS_FFT];
     static scfde_complex_t filtered[SCFDE_FBLMS_FFT];
     static scfde_complex_t error_spectrum[SCFDE_FBLMS_FFT];
-    static float front_tail[SCFDE_FBLMS_FILTER];
+    static scfde_complex_t front_tail[SCFDE_FBLMS_FILTER];
     uint16_t block_index, n;
     uint16_t symbol_cursor = 0u;
 
@@ -594,8 +596,7 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
             uint16_t i;
             for (i = 0; i < n_f; i++)
             {
-                input_block[i].re = front_tail[i];
-                input_block[i].im = 0.0f;
+                input_block[i] = front_tail[i];
             }
             for (i = 0; i < n_block; i++)
             {
@@ -618,7 +619,7 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
             }
             for (i = 0; i < n_f; i++)
             {
-                front_tail[i] = input_block[n_block - n_f + i].re;
+                front_tail[i] = input_block[n_block - n_f + i];
             }
             scfde_fft(input_block, fft_len, 0u);
             for (i = 0; i < fft_len; i++)
@@ -664,7 +665,7 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
                             error_spectrum[i].im * input_block[i].im;
                 update.im = error_spectrum[i].im * input_block[i].re -
                             error_spectrum[i].re * input_block[i].im;
-                float den = SCFDE_FBLMS_EPSILON + scalar_energy;
+                float den = scalar_energy + 0.1f;
                 weights[i].re += SCFDE_FBLMS_STEP * update.re / den;
                 weights[i].im += SCFDE_FBLMS_STEP * update.im / den;
             }
@@ -1065,6 +1066,11 @@ static void dfe_adaptive(scfde_equalizer_mode_t mode,
     }
 }
 
+static void fdda_equalize(scfde_equalizer_mode_t mode,
+                          const scfde_complex_t *frame, uint16_t frame_symbols,
+                          const scfde_complex_t *training, uint16_t training_length,
+                          uint16_t data_symbols, scfde_complex_t *output);
+
 void scfde_equalizer_dfe(scfde_equalizer_mode_t mode,
                          const scfde_complex_t *frame,
                          uint16_t frame_symbols,
@@ -1094,6 +1100,12 @@ void scfde_equalizer_dfe(scfde_equalizer_mode_t mode,
         break;
     case SCFDE_EQUALIZER_FBLMS:
         fblms_equalize(frame, frame_symbols, training, 64u, data_symbols, output);
+        break;
+    case SCFDE_EQUALIZER_FDDA_TEQ:
+    case SCFDE_EQUALIZER_TDDA_TEQ:
+    case SCFDE_EQUALIZER_FDDA_DFE_TEQ:
+        fdda_equalize(mode, frame, frame_symbols, training, 64u,
+                      data_symbols, output);
         break;
     default:
         break;
@@ -1165,5 +1177,181 @@ void scfde_equalizer_apply_a(scfde_equalizer_mode_t mode,
         /* write back the refined channel so the modem can report it */
         memcpy((scfde_complex_t *)channel_response, channel_copy,
                fft_size * sizeof(scfde_complex_t));
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* FDDA family: decision-directed frequency-domain adaptive equalizers */
+/* (book Fig. 4-31/4-32, ch4_fdda_teq_core). Shared kernel with the     */
+/* FBLMS overlap-save structure plus decision feedback.                */
+/* ------------------------------------------------------------------ */
+
+#define SCFDE_FDDA_BLOCK   32u
+#define SCFDE_FDDA_FFT     64u
+#define SCFDE_FDDA_FILTER  16u
+#define SCFDE_FDDA_FB_TAPS 6u
+#define SCFDE_FDDA_STEP_F  0.2f
+#define SCFDE_FDDA_STEP_B  0.01f
+#define SCFDE_FDDA_FORGET  0.97f
+
+static void fdda_equalize(scfde_equalizer_mode_t mode,
+                          const scfde_complex_t *frame, uint16_t frame_symbols,
+                          const scfde_complex_t *training, uint16_t training_length,
+                          uint16_t data_symbols, scfde_complex_t *output)
+{
+    const uint16_t n_block = SCFDE_FDDA_BLOCK;
+    const uint16_t n_f = SCFDE_FDDA_FILTER;
+    const uint16_t fft_len = SCFDE_FDDA_FFT;
+    static scfde_complex_t weights[SCFDE_FDDA_FFT];
+    static scfde_complex_t fb_weights[SCFDE_FDDA_FB_TAPS];
+    static scfde_complex_t input_block[SCFDE_FDDA_FFT];
+    static scfde_complex_t filtered[SCFDE_FDDA_FFT];
+    static scfde_complex_t error_spectrum[SCFDE_FDDA_FFT];
+    static scfde_complex_t front_tail[SCFDE_FDDA_FILTER];
+    static scfde_complex_t decision_ring[SCFDE_FDDA_FB_TAPS];
+    uint16_t block_index, n;
+    uint16_t symbol_cursor = 0u;
+    uint8_t use_fb = (mode == SCFDE_EQUALIZER_FDDA_DFE_TEQ);
+
+    static float fdda_scale;   /* set at the top of fdda_equalize */    memset(weights, 0, sizeof(weights));
+    memset(fb_weights, 0, sizeof(fb_weights));
+    memset(front_tail, 0, sizeof(front_tail));
+    memset(decision_ring, 0, sizeof(decision_ring));
+    {
+        uint16_t total_blocks;
+        float scale = 0.0f;
+        for (n = 0; n < training_length && n < frame_symbols; n++)
+        {
+            scale += sqrtf(complex_power(frame[n]));
+        }
+        scale /= (float)training_length;
+        fdda_scale = (scale < 1.0e-6f) ? 1.0f : scale;
+        total_blocks = (uint16_t)((frame_symbols + n_block - 1u) / n_block);
+        for (block_index = 0; block_index < total_blocks; block_index++)
+        {
+            uint32_t block_start = (uint32_t)block_index * n_block;
+            uint16_t i;
+            for (i = 0; i < n_f; i++)
+            {
+                input_block[i] = front_tail[i];
+            }
+            for (i = 0; i < n_block; i++)
+            {
+                uint32_t idx = block_start + i;
+                if (idx < frame_symbols)
+                {
+                    input_block[n_f + i].re = frame[idx].re / fdda_scale;
+                    input_block[n_f + i].im = frame[idx].im / fdda_scale;
+                }
+                else
+                {
+                    input_block[n_f + i].re = 0.0f;
+                    input_block[n_f + i].im = 0.0f;
+                }
+            }
+            for (i = 0; i < n_f; i++)
+            {
+                uint32_t idx = block_start + n_block + i;
+                input_block[n_f + n_block + i].re = (idx < frame_symbols) ? frame[idx].re : 0.0f;
+                input_block[n_f + n_block + i].im = (idx < frame_symbols) ? frame[idx].im : 0.0f;
+            }
+            for (i = 0; i < n_f; i++)
+            {
+                front_tail[i] = input_block[n_block - n_f + i];
+            }
+            scfde_fft(input_block, fft_len, 0u);
+            for (i = 0; i < fft_len; i++)
+            {
+                filtered[i] = complex_multiply(weights[i], input_block[i]);
+            }
+            scfde_fft(filtered, fft_len, 1u);
+            {
+                float scalar_energy = 0.0f;
+                for (i = 0; i < n_block; i++)
+                {
+                    scfde_complex_t xhat = filtered[n_f + i];
+                    scfde_complex_t ref = {0.0f, 0.0f};
+                    uint32_t idx = block_start + i;
+                    /* decision feedback term (DFE variant) */
+                    if (use_fb && idx > 0u)
+                    {
+                        uint16_t k;
+                        for (k = 0u; k < SCFDE_FDDA_FB_TAPS && (idx - 1u - k) < frame_symbols; k++)
+                        {
+                            uint32_t d_idx = idx - 1u - k;
+                            scfde_complex_t d = (d_idx < training_length) ?
+                                training[d_idx % (training_length / 2u)] : decision_ring[k];
+                            xhat.re -= fb_weights[k].re * d.re - fb_weights[k].im * d.im;
+                            xhat.im -= fb_weights[k].re * d.im + fb_weights[k].im * d.re;
+                        }
+                    }
+                    if (idx < training_length)
+                    {
+                        ref = training[idx % (training_length / 2u)];
+                    }
+                    else if (idx < frame_symbols)
+                    {
+                        ref = qpsk_hard_decision(xhat);
+                    }
+                    error_spectrum[n_f + i].re = ref.re - xhat.re;
+                    error_spectrum[n_f + i].im = ref.im - xhat.im;
+                    scalar_energy += xhat.re * xhat.re + xhat.im * xhat.im;
+                    if ((idx < frame_symbols) && (idx >= training_length) &&
+                        (symbol_cursor < data_symbols))
+                    {
+                        output[symbol_cursor++] = xhat;
+                    }
+                    /* decision ring update */
+                    {
+                        uint16_t k2;
+                        for (k2 = SCFDE_FDDA_FB_TAPS - 1u; k2 > 0u; k2--)
+                        {
+                            decision_ring[k2] = decision_ring[k2 - 1u];
+                        }
+                    }
+                    decision_ring[0] = ref;
+                }
+                for (i = 0; i < n_f; i++)
+                {
+                    error_spectrum[i].re = 0.0f;
+                    error_spectrum[i].im = 0.0f;
+                    error_spectrum[n_f + n_block + i].re = 0.0f;
+                    error_spectrum[n_f + n_block + i].im = 0.0f;
+                }
+                scfde_fft(error_spectrum, fft_len, 0u);
+                for (i = 0; i < fft_len; i++)
+                {
+                    scfde_complex_t update;
+                    update.re = error_spectrum[i].re * input_block[i].re +
+                                error_spectrum[i].im * input_block[i].im;
+                    update.im = error_spectrum[i].im * input_block[i].re -
+                                error_spectrum[i].re * input_block[i].im;
+                    float den = scalar_energy + 0.1f;
+                    weights[i].re += SCFDE_FDDA_STEP_F * update.re / den;
+                    weights[i].im += SCFDE_FDDA_STEP_F * update.im / den;
+                }
+                /* time constraint: first n_f taps only */
+                memcpy(filtered, weights, fft_len * sizeof(scfde_complex_t));
+                scfde_fft(filtered, fft_len, 1u);
+                memset(weights, 0, fft_len * sizeof(scfde_complex_t));
+                for (i = 0; i < n_f; i++)
+                {
+                    weights[i] = filtered[i];
+                }
+                scfde_fft(weights, fft_len, 0u);
+                /* feedback tap update (DFE variant) */
+                if (use_fb)
+                {
+                    uint16_t k;
+                    for (k = 0u; k < SCFDE_FDDA_FB_TAPS; k++)
+                    {
+                        fb_weights[k].re += SCFDE_FDDA_STEP_B * decision_ring[k].re *
+                                            error_spectrum[n_f].re;
+                        fb_weights[k].im += SCFDE_FDDA_STEP_B * decision_ring[k].im *
+                                            error_spectrum[n_f].im;
+                    }
+                }
+            }
+        }
     }
 }

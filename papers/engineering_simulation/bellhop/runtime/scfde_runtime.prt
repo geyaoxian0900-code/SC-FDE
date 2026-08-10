@@ -15,7 +15,7 @@
    z (m)     alphaR (m/s)   betaR  rho (g/cm^3)  alphaI     betaI
 
       0.00      1500.00      0.00     1.00       0.0000    0.0000
-    100.00      1490.00      0.00     1.00       0.0000    0.0000
+    100.00      1500.00      0.00     1.00       0.0000    0.0000
 
                                  ( RMS roughness =   0.00     )
      ACOUSTO-ELASTIC half-space
@@ -72,8 +72,8 @@
 Tracing beam       1    -80.00
 
  Geometric hat beams                     
- halfwidth  =    14.215064434042976     
- epsilonOpt =  (  0.0000000000000000     ,  7617786.2756290575     )
+ halfwidth  =    14.234043158253982     
+ epsilonOpt =  (  0.0000000000000000     ,  7638141.0729060117     )
  EpsMult    =    1.0000000000000000     
 
 Tracing beam      21    -76.80
@@ -126,4 +126,4 @@ Tracing beam     941     70.55
 Tracing beam     961     73.75
 Tracing beam     981     76.96
 
- CPU Time =       0.312E-01s
+ CPU Time =       0.156E-01s

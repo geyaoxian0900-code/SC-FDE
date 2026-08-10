@@ -115,4 +115,13 @@ uint8_t scfde_modem_prepare_tx_turbo(const uint8_t *payload, uint8_t length,
 scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
                                            uint32_t sample_count);
 
+/**
+ * Turbo-family receive with a selectable variant.
+ * @param mode One of FD_TURBO/FD_DFE/TF_TURBO/BITF_TURBO/
+ *             BLMS_TF_TURBO/TD_TURBO (conv-coded frame required).
+ */
+scfde_rx_result_t scfde_modem_decode_turbo_mode(scfde_equalizer_mode_t mode,
+                                                const uint16_t *samples,
+                                                uint32_t sample_count);
+
 #endif

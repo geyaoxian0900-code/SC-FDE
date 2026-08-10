@@ -45,6 +45,11 @@ int main(void)
     for (mode = SCFDE_EQUALIZER_AUTO; mode < SCFDE_EQUALIZER_COUNT;
          mode = (scfde_equalizer_mode_t)((uint8_t)mode + 1u))
     {
+        /* turbo-family modes use the conv-coded frame (see test_turbo) */
+        if (mode >= SCFDE_EQUALIZER_FD_TURBO && mode <= SCFDE_EQUALIZER_TD_TURBO)
+        {
+            continue;
+        }
         scfde_rx_result_t result;
         prepare_loopback(payload10, (uint8_t)sizeof(payload10), 0x77u);
         scfde_modem_set_equalizer(mode);

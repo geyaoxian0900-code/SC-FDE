@@ -1,4 +1,4 @@
-﻿#include "scfde_app.h"
+#include "scfde_app.h"
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
@@ -136,9 +136,15 @@ static void app_prepare_loopback(const uint8_t *payload,uint8_t length,uint8_t s
 static void app_transmit(void)
 {
     uint8_t payload[SCFDE_MAX_PAYLOAD]; uint8_t length;
-    printf("Text (max %u bytes): ",SCFDE_MAX_PAYLOAD);
-    length=app_read_line(payload,SCFDE_MAX_PAYLOAD);
-    if(scfde_modem_prepare_tx(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
+    uint8_t turbo=app_is_turbo_mode();
+    uint8_t max_len=turbo?SCFDE_TURBO_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD;
+    printf("Text (max %u bytes): ",max_len);
+    length=app_read_line(payload,max_len);
+    if(turbo)
+    {
+        if(scfde_modem_prepare_tx_turbo(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
+    }
+    else if(scfde_modem_prepare_tx(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
     printf("TX start: seq=%u len=%u, PA4 DAC active for 48 ms...\r\n",g_sequence,length);
     half_duplex_enter_tx();
     passband_tx_send_blocking(0,scfde_modem_get_tx_sample_length());
@@ -159,7 +165,15 @@ static void app_receive(void)
     passband_rx_start_dma_append(preroll,remaining); passband_rx_wait_complete();
     half_duplex_enter_idle();
     printf("RX captured: %lu samples, decoding...\r\n",(unsigned long)passband_rx_get_captured_length());
-    result=scfde_modem_decode(passband_rx_get_buffer(),passband_rx_get_captured_length());
+    if(app_is_turbo_mode())
+    {
+        result=scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),
+            passband_rx_get_buffer(),passband_rx_get_captured_length());
+    }
+    else
+    {
+        result=scfde_modem_decode(passband_rx_get_buffer(),passband_rx_get_captured_length());
+    }
     app_print_result(&result);
 }
 
@@ -167,8 +181,18 @@ static void app_digital_loopback(void)
 {
     static const uint8_t payload[]={'S','C','-','F','D','E'}; scfde_rx_result_t result;
     printf("Digital loopback with %s...\r\n",scfde_equalizer_name(scfde_modem_get_equalizer()));
-    app_prepare_loopback(payload,(uint8_t)sizeof(payload),0x55u);
-    result=scfde_modem_decode(g_loopback_samples,SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);
+    if(app_is_turbo_mode())
+    {
+        static const uint8_t tp[]={'S','C','-','F','D','E'};
+        app_prepare_loopback_turbo(tp,(uint8_t)sizeof(tp),0x55u);
+        result=scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),
+            g_loopback_samples,SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);
+    }
+    else
+    {
+        app_prepare_loopback(payload,(uint8_t)sizeof(payload),0x55u);
+        result=scfde_modem_decode(g_loopback_samples,SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);
+    }
     app_print_result(&result);
 }
 

@@ -27,6 +27,17 @@ typedef enum
     SCFDE_EQUALIZER_RLS_DFE,  /**< RLS adaptive DFE. */
     SCFDE_EQUALIZER_DPLL_DFE, /**< NLMS DFE with DPLL carrier-phase tracking. */
     SCFDE_EQUALIZER_FBLMS,    /**< Frequency-domain block LMS (overlap-save). */
+    /* Chapter-4 turbo family (conv-coded frame, BCJR soft feedback). */
+    SCFDE_EQUALIZER_FD_TURBO,      /**< FD-IBDFE + BCJR iterations. */
+    SCFDE_EQUALIZER_FD_DFE,        /**< Frequency DFE + single BCJR. */
+    SCFDE_EQUALIZER_TF_TURBO,      /**< Time+frequency averaged turbo. */
+    SCFDE_EQUALIZER_BITF_TURBO,    /**< Bidirectional time-frequency turbo. */
+    SCFDE_EQUALIZER_BLMS_TF_TURBO, /**< Leaky FD-BLMS adaptive turbo. */
+    SCFDE_EQUALIZER_TD_TURBO,      /**< Time-domain LMMSE turbo (MMSE eq.). */
+    /* Chapter-4 FDDA family (uncoded frame, decision-directed adapt). */
+    SCFDE_EQUALIZER_FDDA_TEQ,     /**< FDDA time-domain/decision adaptive. */
+    SCFDE_EQUALIZER_TDDA_TEQ,     /**< TDDA variant. */
+    SCFDE_EQUALIZER_FDDA_DFE_TEQ, /**< FDDA with decision feedback. */
     SCFDE_EQUALIZER_COUNT     /**< Sentinel used for validation and menu iteration. */
 } scfde_equalizer_mode_t;
 

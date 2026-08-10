@@ -68,21 +68,30 @@ int main(void)
           "Max-Log-MAP clean decode must recover the info bits");
     printf("Max-Log-MAP clean round trip: PASS\n");
 
-    /* 4) Full turbo-mode digital loopback. */
+    /* 4) Full turbo-mode digital loopback for all six variants. */
     {
         const uint8_t payload[] = {'T', 'U', 'R', 'B', 'O', '1'};
-        scfde_rx_result_t result;
-        prepare_loopback(payload, (uint8_t)sizeof(payload), 0x42u);
-        result = scfde_modem_decode_turbo(g_loopback, LOOPBACK_LEN);
-        printf("turbo loopback: valid=%u sync=%.3f len=%u seq=%u\n",
-               result.valid, result.sync_metric, result.payload_length,
-               result.sequence);
-        CHECK(result.valid == 1u, "turbo loopback must decode");
-        CHECK(result.payload_length == (uint8_t)sizeof(payload),
-              "turbo payload length mismatch");
-        CHECK(result.sequence == 0x42u, "turbo sequence mismatch");
-        CHECK(memcmp(result.payload, payload, sizeof(payload)) == 0,
-              "turbo payload bytes mismatch");
+        scfde_equalizer_mode_t modes[] = {
+            SCFDE_EQUALIZER_FD_TURBO, SCFDE_EQUALIZER_FD_DFE,
+            SCFDE_EQUALIZER_TF_TURBO, SCFDE_EQUALIZER_BITF_TURBO,
+            SCFDE_EQUALIZER_BLMS_TF_TURBO, SCFDE_EQUALIZER_TD_TURBO
+        };
+        uint8_t m;
+        for (m = 0; m < 6u; m++)
+        {
+            scfde_rx_result_t result;
+            prepare_loopback(payload, (uint8_t)sizeof(payload), 0x42u);
+            result = scfde_modem_decode_turbo_mode(modes[m], g_loopback, LOOPBACK_LEN);
+            printf("turbo loopback [%s]: valid=%u sync=%.3f len=%u\n",
+                   scfde_equalizer_name(modes[m]), result.valid,
+                   result.sync_metric, result.payload_length);
+            CHECK(result.valid == 1u, "turbo loopback must decode");
+            CHECK(result.payload_length == (uint8_t)sizeof(payload),
+                  "turbo payload length mismatch");
+            CHECK(result.sequence == 0x42u, "turbo sequence mismatch");
+            CHECK(memcmp(result.payload, payload, sizeof(payload)) == 0,
+                  "turbo payload bytes mismatch");
+        }
     }
 
     printf("PASS\n");

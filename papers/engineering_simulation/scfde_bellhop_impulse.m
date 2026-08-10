@@ -16,7 +16,8 @@ function impulse = scfde_bellhop_impulse(bellhopOptions, symbolRateHz, maxTaps)
 
 defaults = struct("bellhopWaterDepth", 100, "bellhopSourceDepth", 20, ...
     "bellhopReceiverDepth", 30, "bellhopRangeKm", 1.0, ...
-    "carrierHz", 12000, "txSampleRate", 96000);
+    "carrierHz", 12000, "txSampleRate", 96000, ...
+    "bellhopSediment", "custom", "bellhopSsp", "linear");
 if nargin < 1 || isempty(bellhopOptions)
     bellhopOptions = struct();
 end
@@ -28,10 +29,12 @@ for k = 1:numel(names)
 end
 cacheFile = fullfile(fileparts(fileparts(mfilename("fullpath"))), ...
     "results", "bellhop_impulse_cache.mat");
-cacheKey = sprintf("%.1f_%.1f_%.1f_%.2f_%d", ...
+sediment = field_default(bellhopOptions, "bellhopSediment", "custom");
+ssp = field_default(bellhopOptions, "bellhopSsp", "linear");
+cacheKey = sprintf("%.1f_%.1f_%.1f_%.2f_%d_%s_%s", ...
     bellhopOptions.bellhopWaterDepth, bellhopOptions.bellhopSourceDepth, ...
     bellhopOptions.bellhopReceiverDepth, bellhopOptions.bellhopRangeKm, ...
-    bellhopOptions.carrierHz);
+    bellhopOptions.carrierHz, sediment, ssp);
 if isfile(cacheFile)
     cache = load(cacheFile);
     if isfield(cache, "cacheKey") && strcmp(cache.cacheKey, cacheKey)
@@ -57,4 +60,12 @@ if ~exist(fileparts(cacheFile), "dir")
     mkdir(fileparts(cacheFile));
 end
 save(cacheFile, "cache");
+end
+
+function value = field_default(options, name, defaultValue)
+if isfield(options, name) && ~isempty(options.(name))
+    value = options.(name);
+else
+    value = defaultValue;
+end
 end

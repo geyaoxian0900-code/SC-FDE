@@ -2,6 +2,7 @@
 #define SCFDE_TURBO_H
 
 #include <stdint.h>
+#include "scfde_fft.h"
 
 /* Chapter-4 turbo components for the embedded modem.
  *
@@ -32,11 +33,24 @@ void scfde_turbo_deinterleave(const float *in, float *out);
  * Log-MAP BCJR SISO decoder.
  * @param coded_llr 192 coded-bit LLRs (positive favors bit 1).
  * @param info_llr  96 information-bit LLRs out.
- * @param info_bits 96 hard decisions out (1 if LLR < 0 semantics? see
- *        implementation: bit 1 when llr >= 0).
+ * @param info_bits 96 hard decisions out.
  * @param max_log   nonzero to use Max-Log-MAP approximation.
  */
 void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
                       uint8_t *info_bits, uint8_t max_log);
+
+/**
+ * Extended BCJR: also returns the coded-bit posterior LLRs (used to
+ * rebuild the soft-symbol feedback frame in turbo iterations).
+ */
+void scfde_turbo_bcjr_ext(const float *coded_llr, float *info_llr,
+                          float *coded_out, uint8_t *info_bits,
+                          uint8_t max_log);
+
+/** Float-domain interleaver (coded LLR feedback). */
+void scfde_turbo_interleave_f(const float *in, float *out);
+
+/** QPSK soft symbols from coded LLRs: tanh(l/2)/sqrt(2) per axis. */
+void scfde_turbo_soft_symbols(const float *coded_llr, scfde_complex_t *symbols);
 
 #endif

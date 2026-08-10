@@ -99,6 +99,7 @@ un_all_equalizers.m 独立运行 37 个 ID，37/37 PASS（单次运行，1 帧/I
 - 计量精确化：errorBits/	otalBits 为逐方法整数向量，er = errorBits ./ totalBits，Clopper-Pearson 95% 区间逐方法报告；不用 round(ber .* totalBits) 重建。
 - CCK 边界：symbols < 4 触发 SCFDE:FrameTooShort（非索引异常）。
 - 可复现性：同 seed 精确复现 errorBits/totalBits/BER；异 seed 至少一个误码数变化；结果元数据记录源代码 gitCommit。
+- Bellhop 环境参数化：ellhopSediment（silt/mud/clay/fine-sand/coarse-sand/rock/custom 预设，Jensen 表）、ellhopSsp（linear/cvw/file）+自定义 SSP 文件、ellhopSurfaceSpeed/BottomSpeed；海面平坦为默认（该 Bellhop 构建不支持 surface 选项行，'G' 已明确拒绝并提示用表面混合层 SSP 近似海况）。
 - Bellhop 信道接入：
 un_unified_equalizer 支持 channelMode="bellhop"（qpsk/turbo 场景），通过 scfde_bellhop_impulse 将 Bellhop 浅海到达时延/增益采样为符号率冲击响应（缓存于 results/bellhop_impulse_cache.mat）；默认仍为合成信道（可复现无外部依赖）。
 - 跨场景契约：scenario=auto 查询注册表，多场景组合触发 SCFDE:MixedScenarios（不再按优先级猜测）；显式指定场景时验证所有内置 ID 属于该场景；"all" 按当前场景解析为 17/10/7/3 全部方法。

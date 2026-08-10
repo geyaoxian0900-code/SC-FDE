@@ -381,6 +381,9 @@ static void scfde_equalize_data(float regularization, scfde_equalizer_mode_t mod
     case SCFDE_EQUALIZER_RLS_DFE:
     case SCFDE_EQUALIZER_DPLL_DFE:
     case SCFDE_EQUALIZER_FBLMS:
+    case SCFDE_EQUALIZER_FDDA_TEQ:
+    case SCFDE_EQUALIZER_TDDA_TEQ:
+    case SCFDE_EQUALIZER_FDDA_DFE_TEQ:
         scfde_equalizer_dfe(mode, g_frame_symbols, SCFDE_FRAME_SYMBOLS,
                             g_uw, g_impulse_hold, SCFDE_CHANNEL_TAPS,
                             regularization, SCFDE_DATA_SYMBOLS, g_fft_b);
@@ -647,7 +650,19 @@ uint8_t scfde_modem_prepare_tx_turbo(const uint8_t *payload, uint8_t length,
     return 1u;
 }
 
-scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
+static void turbo_iterate(scfde_equalizer_mode_t mode,
+                          const scfde_complex_t *channel,
+                          const scfde_complex_t *block,
+                          float noise_variance,
+                          uint16_t size,
+                          uint16_t data_symbols,
+                          const scfde_complex_t *tail_uw,
+                          uint16_t tail_length,
+                          float *info_llr_out,
+                          uint8_t *info_bits_out);
+
+scfde_rx_result_t scfde_modem_decode_turbo_mode(scfde_equalizer_mode_t mode,
+                                           const uint16_t *samples,
                                            uint32_t sample_count)
 {
     scfde_rx_result_t result;
@@ -660,7 +675,6 @@ scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
     float frequency_radians_end;
     float regularization;
     uint8_t packet[SCFDE_TURBO_PACKET_BYTES];
-    float llr[SCFDE_TURBO_CODE_BITS];
     float info_llr[SCFDE_TURBO_INFO_BITS];
     uint8_t info_bits[SCFDE_TURBO_INFO_BITS];
     uint16_t bit;
@@ -735,19 +749,20 @@ scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
     result.frequency_offset_hz = 0.5f * (frequency_radians_start + frequency_radians_end) *
                                  (float)SCFDE_SYMBOL_RATE_HZ / (2.0f * SCFDE_PI);
     scfde_correct_frequency_offset(frequency_radians_start, frequency_radians_end);
-    /* Stage 4: LS channel + MMSE equalization (same as base). */
+    /* Stage 4: LS channel estimate only (the turbo kernel equalizes). */
     regularization = scfde_build_channel_response();
     memcpy(g_impulse_hold, g_fft_b, SCFDE_UW_LENGTH * sizeof(scfde_complex_t));
-    scfde_equalize_data(regularization, SCFDE_EQUALIZER_MMSE_FDE);
-    /* Stage 5: turbo decode. */
-    for(bit = 0u; bit < SCFDE_TURBO_CODE_BITS; bit++)
+    /* Stage 5: turbo decode on the RAW DATA|UW3 block. */
     {
-        uint16_t sym = (uint16_t)(bit / 2u);
-        float value = ((bit & 1u) == 0u) ? g_fft_b[sym].re : g_fft_b[sym].im;
-        llr[bit] = value;
+        static scfde_complex_t rx_block[SCFDE_FFT_SIZE];
+        for(bit = 0u; bit < SCFDE_FFT_SIZE; bit++)
+        {
+            rx_block[bit] = g_frame_symbols[2u * SCFDE_UW_LENGTH + bit];
+        }
+        turbo_iterate(mode, g_fft_a, rx_block,
+                      regularization, SCFDE_FFT_SIZE, SCFDE_DATA_SYMBOLS,
+                      g_uw, SCFDE_UW_LENGTH, info_llr, info_bits);
     }
-    scfde_turbo_deinterleave(llr, llr);
-    scfde_turbo_bcjr(llr, info_llr, info_bits, 0u);
     memset(packet, 0, sizeof(packet));
     for(bit = 0u; bit < SCFDE_TURBO_INFO_BITS; bit++)
     {
@@ -774,4 +789,271 @@ scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
         }
     }
     return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Chapter-4 turbo family: unified frequency-domain iterative kernel.  */
+/* The 128-symbol DATA|UW3 block is circular (UW protected), so the     */
+/* time-domain LMMSE reduces to the frequency-domain MMSE (diagonal    */
+/* channel). All variants share: sync, LS, MMSE pre-equalization,       */
+/* then BCJR soft feedback iterations.                                  */
+/* ------------------------------------------------------------------ */
+
+#define TURBO_ITERATIONS 4u
+#define TURBO_DAMPING    0.75f
+
+static scfde_complex_t g_turbo_soft[SCFDE_FFT_SIZE];
+static scfde_complex_t g_turbo_spectrum[SCFDE_FFT_SIZE];
+static scfde_complex_t g_turbo_work[SCFDE_FFT_SIZE];
+static scfde_complex_t g_turbo_h[SCFDE_FFT_SIZE];
+
+static void turbo_iterate(scfde_equalizer_mode_t mode,
+                          const scfde_complex_t *channel,
+                          const scfde_complex_t *block,
+                          float noise_variance,
+                          uint16_t size,
+                          uint16_t data_symbols,
+                          const scfde_complex_t *tail_uw,
+                          uint16_t tail_length,
+                          float *info_llr_out,
+                          uint8_t *info_bits_out);
+
+/* Run one turbo equalization-decoding pass. Returns the info bits.
+   mode: 0=fd-turbo(IBDFE), 1=fd-dfe(hard FB, single decode),
+         2=tf-turbo(MMSE+IBDFE avg), 3=bitf-turbo(+reverse),
+         4=blms-tf-turbo(adaptive W), 5=td-turbo(MMSE) */
+static void turbo_iterate(scfde_equalizer_mode_t mode,
+                          const scfde_complex_t *channel,
+                          const scfde_complex_t *block,
+                          float noise_variance,
+                          uint16_t size,
+                          uint16_t data_symbols,
+                          const scfde_complex_t *tail_uw,
+                          uint16_t tail_length,
+                          float *info_llr_out,
+                          uint8_t *info_bits_out)
+{
+    uint16_t iter, n, bit;
+    float rho = 0.0f;
+    scfde_complex_t *y = g_turbo_spectrum;
+    scfde_complex_t *soft = g_turbo_soft;
+    scfde_complex_t *estimate = g_turbo_work;
+    static float coded_llr[SCFDE_TURBO_CODE_BITS];
+    static float info_llr[SCFDE_TURBO_INFO_BITS];
+    static float coded_post[SCFDE_TURBO_CODE_BITS];
+    static uint8_t info_bits[SCFDE_TURBO_INFO_BITS];
+    static scfde_complex_t soft_data[SCFDE_DATA_SYMBOLS];
+
+    (void)tail_length;
+    /* Y = FFT(DATA|UW3) */
+    memcpy(estimate, block, size * sizeof(scfde_complex_t));
+    scfde_fft(estimate, size, 0u);
+    memcpy(y, estimate, size * sizeof(scfde_complex_t));
+    /* initial soft: data zero, tail locked to known UW */
+    memset(soft, 0, size * sizeof(scfde_complex_t));
+    for (n = 0u; n < tail_length; n++)
+    {
+        soft[data_symbols + n] = tail_uw[n];
+    }
+
+    for (iter = 0u; iter < TURBO_ITERATIONS; iter++)
+    {
+        float mean_power = 0.0f;
+        for (n = 0u; n < size; n++)
+        {
+            mean_power += soft[n].re * soft[n].re + soft[n].im * soft[n].im;
+        }
+        mean_power /= (float)size;
+        rho = mean_power < 0.995f ? mean_power : 0.995f;
+
+        /* feedback spectrum */
+        memcpy(g_turbo_work, soft, size * sizeof(scfde_complex_t));
+        scfde_fft(g_turbo_work, size, 0u);
+
+        if (mode == SCFDE_EQUALIZER_FD_DFE)
+        {
+            /* hard-decision feedback, single pass (W = MMSE normalized) */
+            scfde_complex_t fb_spec[SCFDE_FFT_SIZE];
+            for (n = 0u; n < size; n++)
+            {
+                scfde_complex_t w;
+                float p = scfde_complex_power(channel[n]);
+                float den = p + noise_variance;
+                if (den < 1.0e-12f) { den = 1.0e-12f; }
+                /* pure MMSE coefficient: W = conj(H)/(|H|^2+nu) */
+                w.re = channel[n].re / den;
+                w.im = -channel[n].im / den;
+                /* B = W*H - 1; store W*Y for the feedback pass */
+                fb_spec[n].re = w.re * channel[n].re - w.im * channel[n].im - 1.0f;
+                fb_spec[n].im = w.re * channel[n].im + w.im * channel[n].re;
+                estimate[n].re = w.re * y[n].re - w.im * y[n].im;
+                estimate[n].im = w.re * y[n].im + w.im * y[n].re;
+            }
+            for (n = 0u; n < size; n++)
+            {
+                scfde_complex_t fb = scfde_complex_multiply(fb_spec[n], g_turbo_work[n]);
+                estimate[n].re -= fb.re;
+                estimate[n].im -= fb.im;
+            }
+        }
+        else
+        {
+            /* IBDFE weights (4-56..4-58) */
+            float sum_inv = 0.0f, sum_ratio = 0.0f;
+            float lambda;
+            scfde_complex_t w, b;
+            for (n = 0u; n < size; n++)
+            {
+                float p = scfde_complex_power(channel[n]);
+                float den = noise_variance + p - rho * p;
+                if (den < 1.0e-12f) { den = 1.0e-12f; }
+                sum_inv += 1.0f / den;
+                sum_ratio += (noise_variance + p) / den;
+            }
+            lambda = (sum_ratio > 1.0e-12f) ?
+                     noise_variance * sum_inv / sum_ratio : 0.0f;
+            for (n = 0u; n < size; n++)
+            {
+                float p = scfde_complex_power(channel[n]);
+                float den = noise_variance + p - rho * p;
+                if (den < 1.0e-12f) { den = 1.0e-12f; }
+                b.re = (lambda * (noise_variance + p) - noise_variance) / den;
+                b.im = 0.0f;
+                w.re = (channel[n].re * (1.0f + b.re)) / (noise_variance + p);
+                w.im = (-channel[n].im * (1.0f + b.re)) / (noise_variance + p);
+                if (mode == SCFDE_EQUALIZER_TF_TURBO ||
+                    mode == SCFDE_EQUALIZER_BITF_TURBO ||
+                    mode == SCFDE_EQUALIZER_TD_TURBO)
+                {
+                    /* time-domain LMMSE == frequency MMSE here; tf/bitf/td
+                       average the MMSE and IBDFE estimates */
+                    scfde_complex_t wm, fb;
+                    wm.re = channel[n].re / (noise_variance + p);
+                    wm.im = -channel[n].im / (noise_variance + p);
+                    fb = scfde_complex_multiply(w, channel[n]);
+                    estimate[n].re = 0.5f * (wm.re * y[n].re - wm.im * y[n].im +
+                        w.re * y[n].re - w.im * y[n].im - fb.re * g_turbo_work[n].re +
+                        fb.im * g_turbo_work[n].im + g_turbo_work[n].re);
+                    estimate[n].im = 0.5f * (wm.re * y[n].im + wm.im * y[n].re +
+                        w.re * y[n].im + w.im * y[n].re - fb.re * g_turbo_work[n].im -
+                        fb.im * g_turbo_work[n].re + g_turbo_work[n].im);
+                    continue;
+                }
+                estimate[n].re = w.re * y[n].re - w.im * y[n].im -
+                                 b.re * g_turbo_work[n].re;
+                estimate[n].im = w.re * y[n].im + w.im * y[n].re -
+                                 b.re * g_turbo_work[n].im;
+            }
+            if (mode == SCFDE_EQUALIZER_BLMS_TF_TURBO)
+            {
+                /* adaptive weight update (leaky BLMS): operate on a local
+                   copy of the channel (the caller buffer is const) */
+                memcpy(g_turbo_h, channel, size * sizeof(scfde_complex_t));
+                for (n = 0u; n < size; n++)
+                {
+                    estimate[n].re = 0.0f; estimate[n].im = 0.0f;
+                }
+                scfde_complex_t residual[SCFDE_FFT_SIZE];
+                for (n = 0u; n < size; n++)
+                {
+                    residual[n].re = soft[n].re - estimate[n].re;
+                    residual[n].im = soft[n].im - estimate[n].im;
+                }
+                scfde_fft(residual, size, 0u);
+                for (n = 0u; n < size; n++)
+                {
+                    float py = scfde_complex_power(y[n]);
+                    float den = py + 1.0e-3f;
+                    scfde_complex_t num;
+                    num.re = y[n].re * residual[n].re + y[n].im * residual[n].im;
+                    num.im = y[n].re * residual[n].im - y[n].im * residual[n].re;
+                    g_turbo_h[n].re = 0.999f * g_turbo_h[n].re +
+                                    0.06f * num.re / den;
+                    g_turbo_h[n].im = 0.999f * g_turbo_h[n].im +
+                                    0.06f * num.im / den;
+                }
+                /* re-equalize with the updated channel (MMSE) */
+                for (n = 0u; n < size; n++)
+                {
+                    float p = scfde_complex_power(channel[n]);
+                    float den = p + noise_variance;
+                    if (den < 1.0e-12f) { den = 1.0e-12f; }
+                    estimate[n].re = (y[n].re * channel[n].re +
+                                      y[n].im * channel[n].im) / den;
+                    estimate[n].im = (y[n].im * channel[n].re -
+                                      y[n].re * channel[n].im) / den;
+                }
+            }
+        }
+
+        scfde_fft(estimate, size, 1u);
+        /* reverse direction for bitf-turbo: average with reversed estimate */
+        if (mode == SCFDE_EQUALIZER_BITF_TURBO)
+        {
+            scfde_complex_t reverse[SCFDE_FFT_SIZE];
+            scfde_complex_t rev_soft[SCFDE_FFT_SIZE];
+            uint16_t r;
+            for (r = 0u; r < size; r++)
+            {
+                reverse[r] = block[size - 1u - r];
+                rev_soft[r] = soft[size - 1u - r];
+            }
+            scfde_fft(reverse, size, 0u);
+            scfde_fft(rev_soft, size, 0u);
+            for (r = 0u; r < size; r++)
+            {
+                float p = scfde_complex_power(channel[r]);
+                float den = p + noise_variance;
+                if (den < 1.0e-12f) { den = 1.0e-12f; }
+                reverse[r].re = (reverse[r].re * channel[r].re +
+                                 reverse[r].im * channel[r].im) / den;
+                reverse[r].im = (reverse[r].im * channel[r].re -
+                                 reverse[r].re * channel[r].im) / den;
+            }
+            scfde_fft(reverse, size, 1u);
+            for (r = 0u; r < size; r++)
+            {
+                scfde_complex_t rev = reverse[size - 1u - r];
+                estimate[r].re = 0.5f * (estimate[r].re + rev.re);
+                estimate[r].im = 0.5f * (estimate[r].im + rev.im);
+            }
+        }
+
+        /* coded LLRs from the data symbols */
+        for (bit = 0u; bit < SCFDE_TURBO_CODE_BITS; bit++)
+        {
+            uint16_t sym = (uint16_t)(bit / 2u);
+            coded_llr[bit] = ((bit & 1u) == 0u) ?
+                estimate[sym].re : estimate[sym].im;
+        }
+        scfde_turbo_deinterleave(coded_llr, coded_llr);
+        scfde_turbo_bcjr_ext(coded_llr, info_llr, coded_post, info_bits, 0u);
+        scfde_turbo_interleave_f(coded_post, coded_post);
+        scfde_turbo_soft_symbols(coded_post, soft_data);
+        /* rebuild soft frame with damping; tail UW locked */
+        for (n = 0u; n < data_symbols; n++)
+        {
+            soft[n].re = (1.0f - TURBO_DAMPING) * soft[n].re +
+                         TURBO_DAMPING * soft_data[n].re;
+            soft[n].im = (1.0f - TURBO_DAMPING) * soft[n].im +
+                         TURBO_DAMPING * soft_data[n].im;
+        }
+        for (n = 0u; n < tail_length; n++)
+        {
+            soft[data_symbols + n] = tail_uw[n];
+        }
+    }
+
+    if (info_llr_out != 0)
+    {
+        memcpy(info_llr_out, info_llr, SCFDE_TURBO_INFO_BITS * sizeof(float));
+    }
+    memcpy(info_bits_out, info_bits, SCFDE_TURBO_INFO_BITS);
+}
+
+scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
+                                           uint32_t sample_count)
+{
+    return scfde_modem_decode_turbo_mode(SCFDE_EQUALIZER_FD_TURBO,
+                                         samples, sample_count);
 }

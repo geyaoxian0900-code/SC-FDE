@@ -154,3 +154,66 @@ P2（systick_config 未调用）→ 保留（延时走 bsp_usart 忙等，不阻
 
 - FBLMS 在回环（单位信道）下训练块数少（64 训练符号 = 2 块），判决段自适应补偿——多径下需实测
 - RLS 用对角加载 1.0 稳定 float32，训练 52 步后冻结 P——性能与 MATLAB double 版可能有差异，需对比
+
+## 8. B1 完成：turbo 核心件 + 全链路回环（2026-08-04 17:0x）
+
+### 8.1 新增
+
+- `scfde_turbo.c/h`：rate-1/2 卷积码 (7,5)、固定 192 位交织器（Hull-Dobell LCG）、Log-MAP/Max-Log BCJR（4 状态、T=96）
+- `scfde_modem.c`：`scfde_modem_prepare_tx_turbo` / `scfde_modem_decode_turbo`（12 字节包/6 字节 payload；复用同步/LS/MMSE 链）
+- 帧不变：DATA 96 QPSK 符号 = 192 coded bit = 96 info bit
+
+### 8.2 发现并修复的缺陷（4 处）
+
+| 缺陷 | 修复 |
+|---|---|
+| LCG 参数不满足 Hull-Dobell（A-1 不被 3 整除）→ 交织器死循环 | A=37, C=17（A≡1 mod 12，C 与 192 互质） |
+| 分支度量符号约定错（用了 MATLAB 负 LLR 的 (1-2·out) 公式） | 按正 LLR=bit1 用 Σ out·llr |
+| trellis `turbo_next` state 1/2 写反 | 按 s1·2+s2 编号修正 |
+| interleave/deinterleave 原地调用破坏数据 | 内部 static 缓冲支持 in-place |
+| `-INFINITY` 在 Keil FPU fast-math 下 UB（-Wnan-infinity-disabled） | 改用 -1.0e30f 哨兵 |
+
+### 8.3 验证
+
+- **PC 测试 8/8 全过**（新增 test_turbo：BCJR 干净往返、2 位翻转纠错（dfree=5）、Max-Log、turbo 回环）
+- Keil 0 Error 0 Warning；hex `221B3652B58DF86C99EF5C6977184DCC69A32715D169EE5CF178F2F170F42DD5`
+- BCJR 计算量：T=96×4 状态×10 迭代 ≈ 8 万 flops（<1ms@180MHz）
+
+### 8.4 B 级剩余（B2-B5）
+
+fd-turbo 迭代化、tf-turbo、bitf-turbo、blms-tf-turbo、fd-dfe、tdda-teq、fdda-teq、fdda-dfe-teq、td-turbo（需 96×96 Cholesky）
+
+## 9. B2~B5 完成：turbo 族 + FDDA 族（2026-08-04 18:2x）
+
+### 9.1 新增（26 种均衡/解码模式全量进固件）
+
+- **turbo 系 6 种**（统一频域迭代核 `turbo_iterate`，4 迭代 + BCJR 软反馈）：
+  FD-TURBO（IBDFE 权重 4-56..58）、FD-DFE（MMSE+硬反馈）、TF-TURBO（MMSE+IBDFE 平均）、
+  BITF-TURBO（+反向均衡）、BLMS-TF-TURBO（漏自适应权重）、TD-TURBO（时域 LMMSE=频域 MMSE，循环信道对角化）
+- **FDDA 系 3 种**（判决自适应，无 BCJR）：FDDA-TEQ、TDDA-TEQ、FDDA-DFE-TEQ
+- API：`scfde_modem_decode_turbo_mode(mode,...)`；FDDA 并入 `scfde_equalizer_dfe` 分派
+
+### 9.2 关键工程决策
+
+- **时域 LMMSE = 频域 MMSE**（循环块对角化）→ td/tf/bitf-turbo 无需 96×96 Cholesky
+- FDDA 参数：块 32/FFT 64/抽头 16（8 抽头/32 点循环混叠导致发散）
+
+### 9.3 发现并修复的缺陷
+
+| 缺陷 | 修复 |
+|---|---|
+| turbo 核收到 MMSE 后块（应为原始接收块） | decode_turbo_mode 传原始 DATA\|UW3 |
+| FD-DFE 把含 Y 的 w 再乘 Y（双重 Y） | w 改纯 MMSE 系数 |
+| FDDA 输入未归一化（4200 级）| fdda_scale 归一化 |
+| FDDA/FBLMS 首块 scalar_energy≈0 时 den 下限 1e-6 太小 → 权重爆 | den ≥ 0.1 |
+| front_tail 只存实部（复数 overlap 虚部丢失）| 改复数 |
+
+### 9.4 验证
+
+- **PC 测试 8/8 全过**：test_turbo 覆盖 6 种 turbo 变体回环全 PASS；test_end_to_end 覆盖 20 种均衡器（17+FDDA 3）全 PASS
+- Keil 0 Error 0 Warning；hex `2FE9307DDCDB6D4EB930C542F317C2C658837B4FBFECC8C42DD6FB6702D30F40`（70KB）
+- 固件均衡/解码模式全集：**26 种**（6 基础 FDE + 5 ch3 族 + 6 DFE 族 + 3 FDDA + 6 turbo）
+
+### 9.5 剩余（C 级，需新帧/多通道）
+
+CCK 7 种、CSK 3 种（专用调制帧）、多通道 3 种 + PTR（需多路 ADC 硬件）
