@@ -90,6 +90,17 @@
 - 遗忘因子 gamma=0.97 为工程参数（原文仅给 gamma<1）；
 - 图4-31 工程趋势基准（ch4_fdda_teq_uncoded_qpsk.m 调用与生产共享的核心，同样 equation 分母）：uncoded QPSK、I_outer=3、256+1024、Eb/N0，100 帧/SNR=204800 bit，零误码 0 个，Clopper-Pearson 95% 上界审删；logRmse=2.30、maxSnrDev=4.74dB、等级 C；绝对偏移与高 SNR 平台为原文标量分母下小步长的数学后果加合成 3 仲信道（原文 3km 参数未披露），趋势/排序一致。
 
+## 37 均衡器运行契约审计（2026-08-10）
+
+- 37/37 注册衡器 ID → 模块映射；模块组：QPSK 17、Turbo 10、CCK 7、CSK 3；
+un_all_equalizers.m 独立运行 37 个 ID，37/37 PASS（单次运行，1 帧/ID）。
+- 第 4 章帧契约：[256 已知训练; 1024 交织编码数据]（ch4_turbo_frame_contract）；BCJR 仅处理 1024 编码数据，返回恰 512 信息位（ch4_decoder_feedback_frame）；训练符号不进 BCJR。
+- 交织器由场景统一生成（cfg.permutation）；所有第 4 章包装器不调用 rng/randperm，10/10 直接调用 RNG 状态保持测试通过。
+- 计量精确化：errorBits/	otalBits 为逐方法整数向量，er = errorBits ./ totalBits，Clopper-Pearson 95% 区间逐方法报告；不用 round(ber .* totalBits) 重建。
+- CCK 边界：symbols < 4 触发 SCFDE:FrameTooShort（非索引异常）。
+- 可复现性：同 seed 精确复现 errorBits/totalBits/BER；异 seed 至少一个误码数变化；结果元数据记录源代码 gitCommit。
+- 算法等级 A/B/C 不因运行时修复而改变；运行完成不等于公式实现等级。
+
 ## 已知缺口（对应 README）
 
 1. **HTFDE 可靠度缩放**（第3章）：工程设置，未按原文逐式（待办 P1）

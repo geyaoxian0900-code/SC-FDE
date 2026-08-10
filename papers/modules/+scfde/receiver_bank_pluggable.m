@@ -12,6 +12,16 @@ function receiver = receiver_bank_pluggable(channel, source, cfg)
 % and must return receiver.outputs{1} (symbol estimates), receiver.ids,
 % receiver.names and optionally receiver.traces/receiver.learningMse.
 % Custom modules can therefore be plugged in without touching built-ins.
+%
+% OUTPUT-DOMAIN CONTRACT (the metric domain of receiver.outputs{1}
+% depends on the scenario that drives the module):
+%   qpsk    data-symbol estimates; full-frame TDE outputs are sliced by
+%           the metric adapter in run_unified_equalizer
+%   turbo   512 information-symbol decisions after the (7,5) BCJR
+%           (training symbols never enter the decoder)
+%   cck     chip estimates plus detected codeword indices in trace
+%   csk     spreading-sequence estimates plus detected cyclic-shift
+%           indices in trace
 
 if isfield(cfg, "equalizers")
     requested = cfg.equalizers;

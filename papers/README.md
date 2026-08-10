@@ -80,6 +80,14 @@ receiver = equalizer(channel, source, cfg)
 `names`；`traces`/`learningMse`/`estimates` 可选。内置 37 个均衡器注册在
 `modules/+scfde/equalizer_registry.m`，实现位于 `+scfde/+equalizers/`。
 
+运行契约（`FORMULA_TRACEABILITY.md`「37 均衡器运行契约审计」）：
+
+- 每个 ID 由其声明场景驱动：QPSK 17 / Turbo 10 / CCK 7 / CSK 3。
+- Turbo 场景输出为 512 信息位判决（BCJR 仅处理 1024 编码数据，训练符号不进译码器；帧契约 `ch4_turbo_frame_contract`）。
+- `outputs{1}` 的度量域随场景而定（qpsk 符号估计 / turbo 信息判决 / cck-csk 码片估计 + trace 索引），并非普遍与 `source.tx` 对齐。
+- `errorBits`/`totalBits`/Clopper-Pearson 95% 区间为逐方法精确向量（`ber = errorBits ./ totalBits`，不用 `round` 重建）。
+- `run_all_equalizers` 独立运行全部 37 个 ID 并返回 37 行审计表（含 gitCommit 元数据）。
+
 通过 `cfg.equalizers` 选择要运行的均衡器：
 
 ```matlab
