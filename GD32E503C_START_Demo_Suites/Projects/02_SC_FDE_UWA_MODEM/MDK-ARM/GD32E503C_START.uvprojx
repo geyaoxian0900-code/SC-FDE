@@ -445,6 +445,11 @@
               <FilePath>..\scfde_cck.c</FilePath>
             </File>
             <File>
+              <FileName>scfde_csk.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\scfde_csk.c</FilePath>
+            </File>
+            <File>
               <FileName>gd32e50x_it.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\gd32e50x_it.c</FilePath>

@@ -38,7 +38,7 @@
 #define SCFDE_UW_LENGTH               32u
 #define SCFDE_DATA_SYMBOLS            96u
 #define SCFDE_FRAME_SYMBOLS           192u
-#define SCFDE_RX_CAPTURE_LENGTH       4096u
+#define SCFDE_RX_CAPTURE_LENGTH       8192u
 
 #define SCFDE_LDPC_ENABLED            0u
 #if SCFDE_LDPC_ENABLED

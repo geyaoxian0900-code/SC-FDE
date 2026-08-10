@@ -295,29 +295,37 @@ static void cck_nearest_book(const scfde_complex_t *observations,
     }
 }
 
+/* time-reversed conjugate matched filter: out[n] = sum_k conj(ch[L-1-k])*in[n-k]. */
+static void cck_tr_filter(const scfde_complex_t *in, uint16_t in_len,
+                          const scfde_complex_t *channel, scfde_complex_t *out)
+{
+    uint16_t n, m;
+    for (n = 0u; n < in_len + SCFDE_CCK_TAPS - 1u; n++)
+    {
+        out[n].re = 0.0f;
+        out[n].im = 0.0f;
+        for (m = 0u; m < SCFDE_CCK_TAPS; m++)
+        {
+            if ((m <= n) && ((n - m) < in_len))
+            {
+                scfde_complex_t tr;
+                scfde_complex_t v;
+                tr.re = channel[SCFDE_CCK_TAPS - 1u - m].re;
+                tr.im = -channel[SCFDE_CCK_TAPS - 1u - m].im;
+                v = cck_mul(tr, in[n - m]);
+                out[n].re += v.re;
+                out[n].im += v.im;
+            }
+        }
+    }
+}
+
 /* MFB: TR matched filter, aligned to the data block, then nearest book. */
 static void cck_receive_mfb(uint16_t *detected)
 {
     scfde_complex_t focused[SCFDE_CCK_CHIPS + SCFDE_CCK_TAPS];
-    uint16_t n, m;
 
-    memset(focused, 0, sizeof(focused));
-    for (n = 0u; n < SCFDE_CCK_CHIPS + SCFDE_CCK_TAPS - 1u; n++)
-    {
-        for (m = 0u; m < SCFDE_CCK_TAPS; m++)
-        {
-            if ((m <= n) && ((n - m) < SCFDE_CCK_CHIPS))
-            {
-                scfde_complex_t tr;
-                scfde_complex_t v;
-                tr.re = g_impulse[SCFDE_CCK_TAPS - 1u - m].re;
-                tr.im = -g_impulse[SCFDE_CCK_TAPS - 1u - m].im;
-                v = cck_mul(tr, g_data[n - m]);
-                focused[n].re += v.re;
-                focused[n].im += v.im;
-            }
-        }
-    }
+    cck_tr_filter(g_data, SCFDE_CCK_CHIPS, g_impulse, focused);
     cck_nearest_book(&focused[SCFDE_CCK_TAPS - 1u], SCFDE_CCK_WORDS, detected);
 }
 
@@ -463,7 +471,8 @@ static void cck_append_state(scfde_complex_t *state, const scfde_complex_t *word
 static void cck_dfe_core(const scfde_complex_t *received, uint16_t block_count,
                          uint8_t reverse, float noise_variance,
                          uint16_t *detected,
-                         float *scores /* block_count x 256, -1e30 elsewhere */)
+                         float *scores /* block_count x 256, -1e30 elsewhere */,
+                         const uint16_t *fixed_decisions)
 {
     scfde_complex_t state[SCFDE_CCK_TAPS - 1u];
     scfde_complex_t channel[SCFDE_CCK_TAPS];
@@ -517,10 +526,12 @@ static void cck_dfe_core(const scfde_complex_t *received, uint16_t block_count,
         detected[block] = best_index;
         {
             scfde_complex_t word[8u];
+            uint16_t state_index = fixed_decisions ? fixed_decisions[block]
+                                                   : best_index;
             for (c = 0u; c < 8u; c++)
             {
-                word[c] = reverse ? cck_conj(g_book[best_index][7u - c])
-                                  : g_book[best_index][c];
+                word[c] = reverse ? cck_conj(g_book[state_index][7u - c])
+                                  : g_book[state_index][c];
             }
             cck_append_state(state, word);
         }
@@ -529,7 +540,7 @@ static void cck_dfe_core(const scfde_complex_t *received, uint16_t block_count,
 
 static void cck_receive_dfe(uint16_t *detected)
 {
-    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 0u, 0.001f, detected, 0);
+    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 0u, 0.001f, detected, 0, 0);
 }
 
 /* fuse: forward + backward normalized scores, argmax. Rows where the
@@ -586,8 +597,8 @@ static void cck_receive_bidfe(uint16_t *detected)
         f_scores[i] = -1.0e30f;
         b_scores[i] = -1.0e30f;
     }
-    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 0u, 0.001f, fwd, f_scores);
-    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 1u, 0.001f, bwd, b_scores);
+    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 0u, 0.001f, fwd, f_scores, 0);
+    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 1u, 0.001f, bwd, b_scores, 0);
 #ifdef SCFDE_CCK_DEBUG
     {
         uint16_t dbg;
@@ -614,90 +625,22 @@ static void cck_receive_bidfe2(uint16_t *detected)
     static float b_scores[SCFDE_CCK_WORDS * SCFDE_CCK_BOOK_SIZE];
     static float flipped[SCFDE_CCK_WORDS * SCFDE_CCK_BOOK_SIZE];
     uint16_t bi1[SCFDE_CCK_WORDS];
-    uint16_t block, c, k, i;
+    uint16_t rev_bi1[SCFDE_CCK_WORDS];
+    uint16_t scratch[SCFDE_CCK_WORDS];
+    uint16_t block, k, i;
 
     cck_receive_bidfe(bi1);
+    for (block = 0u; block < SCFDE_CCK_WORDS; block++)
+    {
+        rev_bi1[block] = bi1[SCFDE_CCK_WORDS - 1u - block];
+    }
     for (i = 0u; i < SCFDE_CCK_WORDS * SCFDE_CCK_BOOK_SIZE; i++)
     {
         f_scores[i] = -1.0e30f;
         b_scores[i] = -1.0e30f;
     }
-    /* forward refinement: scores with bi1 decisions as state. */
-    {
-        scfde_complex_t state[SCFDE_CCK_TAPS - 1u];
-        uint16_t active[128u];
-        memset(state, 0, sizeof(state));
-        for (block = 0u; block < SCFDE_CCK_WORDS; block++)
-        {
-            const scfde_complex_t *obs = &g_data[block * 8u];
-            cck_candidate_list(obs, active);
-            for (c = 0u; c < 128u; c++)
-            {
-                scfde_complex_t predicted[8u];
-                float score = 0.0f;
-                uint16_t chip;
-                cck_expected_block(state, &g_book[active[c]][0], g_impulse, predicted);
-                for (chip = 0u; chip < 8u; chip++)
-                {
-                    float dr = obs[chip].re - predicted[chip].re;
-                    float di = obs[chip].im - predicted[chip].im;
-                    score -= (dr * dr + di * di);
-                }
-                score /= 0.001f;
-                f_scores[block * SCFDE_CCK_BOOK_SIZE + active[c]] = score;
-            }
-            cck_append_state(state, &g_book[bi1[block]][0]);
-        }
-    }
-    /* backward refinement: reversed view with reversed bi1 decisions. */
-    {
-        scfde_complex_t state[SCFDE_CCK_TAPS - 1u];
-        scfde_complex_t channel[SCFDE_CCK_TAPS];
-        uint16_t active[128u];
-        for (k = 0u; k < SCFDE_CCK_TAPS; k++)
-        {
-            channel[k] = cck_conj(g_impulse[SCFDE_CCK_TAPS - 1u - k]);
-        }
-        memset(state, 0, sizeof(state));
-        for (block = 0u; block < SCFDE_CCK_WORDS; block++)
-        {
-            scfde_complex_t obs[8u];
-            for (c = 0u; c < 8u; c++)
-            {
-                uint16_t src = (uint16_t)(SCFDE_CCK_CHIPS - 1u - (block * 8u + c));
-                obs[c] = cck_conj(g_data[src]);
-            }
-            cck_candidate_list(obs, active);
-            for (c = 0u; c < 128u; c++)
-            {
-                scfde_complex_t predicted[8u];
-                scfde_complex_t word[8u];
-                float score = 0.0f;
-                uint16_t chip;
-                for (chip = 0u; chip < 8u; chip++)
-                {
-                    word[chip] = cck_conj(g_book[active[c]][7u - chip]);
-                }
-                cck_expected_block(state, word, channel, predicted);
-                for (chip = 0u; chip < 8u; chip++)
-                {
-                    float dr = obs[chip].re - predicted[chip].re;
-                    float di = obs[chip].im - predicted[chip].im;
-                    score -= (dr * dr + di * di);
-                }
-                score /= 0.001f;
-                b_scores[block * SCFDE_CCK_BOOK_SIZE + active[c]] = score;
-            }
-            {
-                scfde_complex_t word[8u];
-                for (c = 0u; c < 8u; c++)
-                {
-                    word[c] = cck_conj(g_book[bi1[SCFDE_CCK_WORDS - 1u - block]][7u - c]);
-                }
-                cck_append_state(state, word);
-            }
-        }
-    }
+    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 0u, 0.001f, scratch, f_scores, bi1);
+    cck_dfe_core(g_data, SCFDE_CCK_WORDS, 1u, 0.001f, scratch, b_scores, rev_bi1);
     for (block = 0u; block < SCFDE_CCK_WORDS; block++)
     {
         for (k = 0u; k < SCFDE_CCK_BOOK_SIZE; k++)
@@ -741,22 +684,7 @@ static void cck_receive_tr_diversity(uint16_t *detected)
         }
         if (branch_energy[branch] < 1.0e-8f) { branch_energy[branch] = 1.0e-8f; }
         memset(focused, 0, (frame_chips + SCFDE_CCK_TAPS) * sizeof(scfde_complex_t));
-        for (n = 0u; n < frame_chips + SCFDE_CCK_TAPS - 1u; n++)
-        {
-            for (m = 0u; m < SCFDE_CCK_TAPS; m++)
-            {
-                if ((m <= n) && ((n - m) < frame_chips))
-                {
-                    scfde_complex_t tr;
-                    scfde_complex_t v;
-                    tr.re = channel[SCFDE_CCK_TAPS - 1u - m].re;
-                    tr.im = -channel[SCFDE_CCK_TAPS - 1u - m].im;
-                    v = cck_mul(tr, g_frame[n - m]);
-                    focused[n].re += v.re;
-                    focused[n].im += v.im;
-                }
-            }
-        }
+        cck_tr_filter(g_frame, frame_chips, channel, focused);
         /* Align each branch to the channel main tap: the TR matched
            filter of h focuses at delay 27-channel_peak, the TR of the
            time-reversed channel focuses at delay channel_peak. */
@@ -873,7 +801,10 @@ static void cck_receive_fde(uint16_t *detected, float noise_variance)
                 idx[block] = best_index;
                 for (k = 0u; k < SCFDE_CCK_BOOK_SIZE; k++)
                 {
-                    distances[k] = expf(-(distances[k] - best_dist) / noise_variance);
+                    /* soft weights approximate exp(-(d-dmin)/sigma) with a
+                       rational decay to avoid the expf library cost. */
+                    distances[k] = 1.0f /
+                        (1.0f + (distances[k] - best_dist) / noise_variance);
                     weight_sum += distances[k];
                 }
                 for (chip = 0u; chip < 8u; chip++)

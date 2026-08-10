@@ -7,15 +7,28 @@
 | 项 | 值 |
 |---|---|
 | 目标芯片 | **GD32E508VET6**（Cortex-M33 @200MHz 器件，工作于 180MHz；烧录工具实测识别） |
-| 固件文件 | `Projects\02_SC_FDE_UWA_MODEM\MDK-ARM\output\Project.hex` |
-| **Project.hex SHA-256** | `D3E447401FAD420097B6C00EC7D46F5D9348D58CA4CCA8C3ECF7BA6F87B0DEBB`（26 模式版：20 均衡器 + 6 turbo，2026-08-04） |
-| 编译日期 | 2026-08-04 17:04:37（本地） |
-| Keil 构建结果 | MDK 5.42 / ARMCLANG 6：**0 Error, 0 Warning**（Rebuild All） |
-| Flash / RAM | Code 14012 + RO 1340 ≈ **16.7 KB** / ZI 35528 + RW 20 + 栈 4KB ≈ **38.7 KB**（E508VET6：512KB Flash / 128KB SRAM） |
+| 固件文件 | `Projects\02_SC_FDE_UWA_MODEM\MDK-ARM\output\Project.hex`（**41 模式版**，待 Keil 激活后生成） |
+| 模式覆盖 | **41 种**：AUTO + 31 种均衡器（ch2/ch3/ch4 + PTR/MC）+ CCK 7 接收机 + CSK 3 接收机（见 §1.1） |
+| Keil 构建结果 | MDK 5.42 / ARMCLANG 6：编译 0 Error 0 Warning；**链接受评估版 32KB 限制**（当前镜像 ≈ 37KB，见 §6） |
 | 工程配置 | **Cortex-M33、FPU3(SFPU)、`GD32E508` 宏、core_cm33.h、25MHz HXTAL → 180MHz PLL**（与板载 25MHz 晶振匹配；原工程配置，勿改回 HD/8MHz） |
 | 基线 | QPSK 4 ksym/s / 12 kHz 载波 / 96k 发射 / 48k 接收 / UW(32)×3 / 28 抽头 LS / MMSE-FDE / CRC-16 / 24 字节包（payload ≤ 18） |
 | **LDPC** | **OFF**（`SCFDE_LDPC_ENABLED=0`；不要重新启用——码结构 d_min=2 缺陷，见 AUDIT_REPORT P14） |
-| 源码版本 | 本机工作副本（对应 `scfde_porting_review.zip` 2026-08-04 版） |
+| RX 捕获 | **8192 采样**（`SCFDE_RX_CAPTURE_LENGTH`，BSP DMA 缓冲 8192）——容纳 CCK 224 符号 / CSK 512 符号帧 |
+| 源码版本 | 本机工作副本（对应 `scfde_porting_review.zip` 2026-08-04 版 + C 级 15 种移植） |
+
+### 1.1 模式清单（菜单 4 循环 / 菜单 3 回环）
+
+| 族 | 模式 | 帧 | 说明 |
+|---|---|---|---|
+| 基线 | AUTO | 标准 UW 帧 | 固定模式尝试直到 CRC 通过 |
+| ch2 DFE 族 | DFE / LMS-DFE / NLMS-DFE / RLS-DFE / DPLL-DFE | 标准帧 | 时域判决反馈族 |
+| ch3 FDE 族 | MMSE-FDE / ZF-FDE / MF-FDE / IB-DFE / NLMS-TDE | 标准帧 | 频域均衡 |
+| ch3 A 级 | HTFDE / SD-IBDFE / HD-IBDFE / ICE-SD-IBDFE / ICE-HD-IBDFE | 标准帧 | 混合时频/迭代块 DFE |
+| ch4 turbo | FD-TURBO / FD-DFE / TF-TURBO / BITF-TURBO / BLMS-TF-TURBO / TD-TURBO | 卷积编码帧 | BCJR 软反馈（payload ≤ 6B） |
+| ch4 FDDA | FDDA-TEQ / TDDA-TEQ / FDDA-DFE-TEQ | 标准帧 | 判决导向自适应 |
+| ch2 C 级 | FBLMS / PTR-DFE / SUBBAND-PTR-DFE / MC-LMS-DFE / MC-NLMS-DFE / MC-RLS-DFE | 标准帧 | 频域块 LMS / 被动时反 / 多通道（2 伪分支） |
+| ch5 CCK | CCK-MFB / CCK-RAKE / CCK-DFE / CCK-BIDFE / CCK-BIDFE2 / CCK-TR-DIV / CCK-FDE | **CCK 帧**（224 符号，8-bit 码字 ×16，payload ≤ 10B） | 802.11b 互补码键控，独立调制解调器 |
+| ch6 CSK | CSK-MF / CSK-SOFT-SIC / CSK-ESE | **CSK 帧**（512 符号，8-chip 循环移位 ×48，payload ≤ 6B） | 扩频循环移位键控，独立调制解调器 |
 
 ## 2. 烧录准备
 
@@ -106,3 +119,18 @@ role>
 1. **单板纯数字回环**：菜单 `3`（digital loopback），或运行 `hardware/single_board_loopback.py` 自动跑 300 帧
 2. **单板 DAC–ADC 有线回环**：见 `hardware/WIRE_LOOPBACK_GUIDE.md`
 3. **两板自动对测**：`twoboard/twoboard_test.py`（见 `twoboard/README.md`）
+4. **26+ 模式全量回环扫**：`hardware/mode_sweep_loopback.py --menu 3|5`（自动遍历 41 种模式，输出 CSV/日志）
+
+## 6. Keil 评估版 32KB 限制（重要）
+
+当前镜像约 **37.2KB** 代码（37172 B，编译 0 Error 0 Warning），超过 MDK 未激活
+（评估版）的 32KB 链接限制（`L6050U: code size exceeds the maximum allowed`）。
+**需要激活 Keil MDK**（Project → License Management 填入有效序列号，或联网激活
+MDK-Professional）后才能完成链接并生成 `Project.hex`。激活后重新构建：
+
+```
+UV4 -b MDK-ARM\GD32E503C_START.uvprojx -j0 -o build_log.txt
+```
+
+全部算法代码已通过 PC 单元测试（`porting_stm32/pc_tests`，GCC 编译，
+**7 项测试全 PASS**：fft/ldpc/equalizer/end_to_end(41 模式)/turbo/cck/csk）。

@@ -6,7 +6,7 @@ if nargin < 1
 end
 cfg.source = string(get_option(options, "source", "paper-figure"));
 cfg.bellhopRoot = get_option(options, "bellhopRoot", ...
-    "D:\MATLAB\atWin10_2020_11_4\atWin10_2020_11_4");
+    "D:\MATLAB\bellhop_modern");
 cfg.waterDepth = get_option(options, "waterDepth", 100);
 cfg.sourceDepth = get_option(options, "sourceDepth", 50);
 cfg.receiverDepths = get_option(options, "receiverDepths", 40:1.5:50.5);
@@ -31,7 +31,15 @@ end
 assert(strcmpi(cfg.source, "bellhop"), ...
     "Unknown Chapter 2 channel source: %s", cfg.source);
 
-executable = fullfile(cfg.bellhopRoot, "windows-bin-20201102", "bellhop.exe");
+executable = "";
+for candidate = [fullfile(cfg.bellhopRoot, "windows-bin-20201102", "bellhop.exe"), ...
+        fullfile(cfg.bellhopRoot, "Bellhop", "bellhop.exe"), ...
+        fullfile(cfg.bellhopRoot, "bellhop.exe")]
+    if isfile(candidate)
+        executable = candidate;
+        break;
+    end
+end
 readerDirectory = fullfile(cfg.bellhopRoot, "Matlab", "ReadWrite");
 assert(isfile(executable), "Bellhop executable was not found: %s", executable);
 assert(isfile(fullfile(readerDirectory, "read_arrivals_asc.m")), ...

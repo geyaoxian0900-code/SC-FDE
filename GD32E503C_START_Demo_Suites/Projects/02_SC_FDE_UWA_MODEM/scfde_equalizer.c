@@ -71,6 +71,89 @@ static scfde_complex_t complex_multiply(scfde_complex_t a, scfde_complex_t b)
     return value;
 }
 
+/* Shared RLS update: gain vector, weight step, and the P update with
+   hermitianization and diagonal loading (float32 stability). Used by both
+   the single-channel and multichannel DFE families. */
+static void rls_step(scfde_complex_t *weights, scfde_complex_t *rls,
+                     uint16_t w, const scfde_complex_t *input,
+                     const scfde_complex_t *error, uint8_t training)
+{
+    static scfde_complex_t pv[SCFDE_MC_WEIGHTS];
+    static scfde_complex_t gain[SCFDE_MC_WEIGHTS];
+    uint16_t i, k;
+    for (i = 0; i < w; i++)
+    {
+        pv[i].re = 0.0f;
+        pv[i].im = 0.0f;
+        for (k = 0; k < w; k++)
+        {
+            pv[i].re += rls[i * w + k].re * input[k].re -
+                        rls[i * w + k].im * input[k].im;
+            pv[i].im += rls[i * w + k].re * input[k].im +
+                        rls[i * w + k].im * input[k].re;
+        }
+    }
+    {
+        float denom = SCFDE_RLS_FORGETTING;
+        for (k = 0; k < w; k++)
+        {
+            denom += input[k].re * pv[k].re + input[k].im * pv[k].im;
+        }
+        if (denom < 1.0e-3f) { denom = 1.0e-3f; }
+        for (i = 0; i < w; i++)
+        {
+            gain[i].re = pv[i].re / denom;
+            gain[i].im = pv[i].im / denom;
+            weights[i].re += gain[i].re * error->re + gain[i].im * error->im;
+            weights[i].im += gain[i].re * error->im - gain[i].im * error->re;
+        }
+    }
+    if (training)
+    {
+        /* P = (P - gain * (input' * P)) / lambda; (input'*P)[k] =
+           sum_j conj(input[j]) * P[j][k]. */
+        for (i = 0; i < w; i++)
+        {
+            for (k = 0; k < w; k++)
+            {
+                float q_re = 0.0f, q_im = 0.0f;
+                uint16_t j;
+                for (j = 0; j < w; j++)
+                {
+                    q_re += input[j].re * rls[j * w + k].re +
+                            input[j].im * rls[j * w + k].im;
+                    q_im += input[j].re * rls[j * w + k].im -
+                            input[j].im * rls[j * w + k].re;
+                }
+                {
+                    float gv_re = gain[i].re * q_re - gain[i].im * q_im;
+                    float gv_im = gain[i].re * q_im + gain[i].im * q_re;
+                    rls[i * w + k].re =
+                        (rls[i * w + k].re - gv_re) / SCFDE_RLS_FORGETTING;
+                    rls[i * w + k].im =
+                        (rls[i * w + k].im - gv_im) / SCFDE_RLS_FORGETTING;
+                }
+            }
+        }
+        for (i = 0; i < w; i++)
+        {
+            for (k = i + 1u; k < w; k++)
+            {
+                float re = (rls[i * w + k].re + rls[k * w + i].re) * 0.5f;
+                float im = (rls[i * w + k].im - rls[k * w + i].im) * 0.5f;
+                rls[i * w + k].re = re;
+                rls[i * w + k].im = im;
+                rls[k * w + i].re = re;
+                rls[k * w + i].im = -im;
+            }
+        }
+        for (i = 0; i < w; i++)
+        {
+            rls[i * w + i].re += 1.0f;
+        }
+    }
+}
+
 static scfde_complex_t complex_conjugate(scfde_complex_t value)
 {
     value.im = -value.im;
@@ -223,7 +306,8 @@ const char *scfde_equalizer_name(scfde_equalizer_mode_t mode)
         "TD-TURBO", "FDDA-TEQ", "TDDA-TEQ", "FDDA-DFE-TEQ",
         "PTR-DFE", "SUBBAND-PTR-DFE", "MC-LMS-DFE", "MC-NLMS-DFE", "MC-RLS-DFE",
         "CCK-MFB", "CCK-RAKE", "CCK-DFE", "CCK-BIDFE",
-        "CCK-BIDFE2", "CCK-TR-DIV", "CCK-FDE"
+        "CCK-BIDFE2", "CCK-TR-DIV", "CCK-FDE",
+        "CSK-MF", "CSK-SOFT-SIC", "CSK-ESE"
     };
     if ((uint8_t)mode >= (uint8_t)SCFDE_EQUALIZER_COUNT)
     {
@@ -959,84 +1043,8 @@ static void dfe_adaptive(scfde_equalizer_mode_t mode,
         error.im = decision.im - estimate.im;
         if (is_rls)
         {
-            scfde_complex_t pv[SCFDE_DFE_WEIGHTS];
-            scfde_complex_t gain[SCFDE_DFE_WEIGHTS];
-            for (i = 0; i < SCFDE_DFE_WEIGHTS; i++)
-            {
-                pv[i].re = 0.0f; pv[i].im = 0.0f;
-                for (k = 0; k < SCFDE_DFE_WEIGHTS; k++)
-                {
-                    pv[i].re += g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re * input[k].re -
-                                g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im * input[k].im;
-                    pv[i].im += g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re * input[k].im +
-                                g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im * input[k].re;
-                }
-            }
-            {
-                float denom = SCFDE_RLS_FORGETTING;
-                for (k = 0; k < SCFDE_DFE_WEIGHTS; k++)
-                {
-                    denom += input[k].re * pv[k].re + input[k].im * pv[k].im;
-                }
-                if (denom < 1.0e-3f) { denom = 1.0e-3f; }
-                for (i = 0; i < SCFDE_DFE_WEIGHTS; i++)
-                {
-                    gain[i].re = pv[i].re / denom;
-                    gain[i].im = pv[i].im / denom;
-                    g_dfe_weights[i].re += gain[i].re * error.re + gain[i].im * error.im;
-                    g_dfe_weights[i].im += gain[i].re * error.im - gain[i].im * error.re;
-                }
-            }
-            /* P = (P - gain * (input' * P)) / lambda, updated only during
-               the training segment; the payload segment freezes P and
-               uses the converged inverse correlation for w updates.
-               (input'*P)[k] = sum_j conj(input[j]) * P[j][k] */
-            if (n < training_length)
-            {
-            for (i = 0; i < SCFDE_DFE_WEIGHTS; i++)
-            {
-                for (k = 0; k < SCFDE_DFE_WEIGHTS; k++)
-                {
-                    float q_re = 0.0f, q_im = 0.0f;
-                    uint16_t j;
-                    for (j = 0; j < SCFDE_DFE_WEIGHTS; j++)
-                    {
-                        q_re += input[j].re * g_dfe_rls[j * SCFDE_DFE_WEIGHTS + k].re +
-                                input[j].im * g_dfe_rls[j * SCFDE_DFE_WEIGHTS + k].im;
-                        q_im += input[j].re * g_dfe_rls[j * SCFDE_DFE_WEIGHTS + k].im -
-                                input[j].im * g_dfe_rls[j * SCFDE_DFE_WEIGHTS + k].re;
-                    }
-                    {
-                        float gv_re = gain[i].re * q_re - gain[i].im * q_im;
-                        float gv_im = gain[i].re * q_im + gain[i].im * q_re;
-                        g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re =
-                            (g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re - gv_re) / SCFDE_RLS_FORGETTING;
-                        g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im =
-                            (g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im - gv_im) / SCFDE_RLS_FORGETTING;
-                    }
-                }
-            }
-            /* hermitianize P = (P + P')/2 to keep float32 RLS stable */
-            for (i = 0; i < SCFDE_DFE_WEIGHTS; i++)
-            {
-                for (k = i + 1u; k < SCFDE_DFE_WEIGHTS; k++)
-                {
-                    float re = (g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re +
-                                g_dfe_rls[k * SCFDE_DFE_WEIGHTS + i].re) * 0.5f;
-                    float im = (g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im -
-                                g_dfe_rls[k * SCFDE_DFE_WEIGHTS + i].im) * 0.5f;
-                    g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].re = re;
-                    g_dfe_rls[i * SCFDE_DFE_WEIGHTS + k].im = im;
-                    g_dfe_rls[k * SCFDE_DFE_WEIGHTS + i].re = re;
-                    g_dfe_rls[k * SCFDE_DFE_WEIGHTS + i].im = -im;
-                }
-            }
-            /* diagonal loading keeps float32 P positive definite */
-            for (i = 0; i < SCFDE_DFE_WEIGHTS; i++)
-            {
-                g_dfe_rls[i * SCFDE_DFE_WEIGHTS + i].re += 1.0f;
-            }
-            }
+            rls_step(g_dfe_weights, g_dfe_rls, SCFDE_DFE_WEIGHTS, input,
+                     &error, (n < training_length) ? 1u : 0u);
         }
         else
         {
@@ -1276,72 +1284,8 @@ static void multichannel_dfe_equalize(scfde_equalizer_mode_t mode,
         error.im = decision.im - estimate.im;
         if (is_rls)
         {
-            scfde_complex_t pv[SCFDE_MC_WEIGHTS];
-            scfde_complex_t gain[SCFDE_MC_WEIGHTS];
-            for (i = 0; i < W; i++)
-            {
-                pv[i].re = 0.0f; pv[i].im = 0.0f;
-                for (k = 0; k < W; k++)
-                {
-                    pv[i].re += g_mc_rls[i * W + k].re * input[k].re -
-                                g_mc_rls[i * W + k].im * input[k].im;
-                    pv[i].im += g_mc_rls[i * W + k].re * input[k].im +
-                                g_mc_rls[i * W + k].im * input[k].re;
-                }
-            }
-            {
-                float denom = SCFDE_RLS_FORGETTING;
-                for (k = 0; k < W; k++)
-                {
-                    denom += input[k].re * pv[k].re + input[k].im * pv[k].im;
-                }
-                if (denom < 1.0e-3f) { denom = 1.0e-3f; }
-                for (i = 0; i < W; i++)
-                {
-                    gain[i].re = pv[i].re / denom;
-                    gain[i].im = pv[i].im / denom;
-                    g_mc_weights[i].re += gain[i].re * error.re + gain[i].im * error.im;
-                    g_mc_weights[i].im += gain[i].re * error.im - gain[i].im * error.re;
-                }
-            }
-            if (n < training_length)
-            {
-                for (i = 0; i < W; i++)
-                {
-                    for (k = 0; k < W; k++)
-                    {
-                        float q_re = 0.0f, q_im = 0.0f;
-                        uint16_t j;
-                        for (j = 0; j < W; j++)
-                        {
-                            q_re += input[j].re * g_mc_rls[j * W + k].re +
-                                    input[j].im * g_mc_rls[j * W + k].im;
-                            q_im += input[j].re * g_mc_rls[j * W + k].im -
-                                    input[j].im * g_mc_rls[j * W + k].re;
-                        }
-                        {
-                            float gv_re = gain[i].re * q_re - gain[i].im * q_im;
-                            float gv_im = gain[i].re * q_im + gain[i].im * q_re;
-                            g_mc_rls[i * W + k].re =
-                                (g_mc_rls[i * W + k].re - gv_re) / SCFDE_RLS_FORGETTING;
-                            g_mc_rls[i * W + k].im =
-                                (g_mc_rls[i * W + k].im - gv_im) / SCFDE_RLS_FORGETTING;
-                        }
-                    }
-                }
-                for (i = 0; i < W; i++)
-                {
-                    for (k = i + 1u; k < W; k++)
-                    {
-                        float re = (g_mc_rls[i * W + k].re + g_mc_rls[k * W + i].re) * 0.5f;
-                        float im = (g_mc_rls[i * W + k].im - g_mc_rls[k * W + i].im) * 0.5f;
-                        g_mc_rls[i * W + k].re = re;
-                        g_mc_rls[i * W + k].im = im;
-                        g_mc_rls[k * W + i].re = re;
-                        g_mc_rls[k * W + i].im = -im;
-                    }
-                }
-            }
+            rls_step(g_mc_weights, g_mc_rls, W, input, &error,
+                     (n < training_length) ? 1u : 0u);
         }
         else
         {

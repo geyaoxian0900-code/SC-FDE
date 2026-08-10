@@ -46,7 +46,7 @@ readerDirectory = fullfile(toolboxRoot, "Matlab", "ReadWrite");
 if ~isfile(fullfile(readerDirectory, "read_arrivals_asc.m"))
     % Fall back to the legacy toolbox reader when the modern root has
     % no Matlab/ReadWrite directory.
-    readerDirectory = fullfile("D:\MATLAB\atWin10_2020_11_4\atWin10_2020_11_4", ...
+    readerDirectory = fullfile("D:\MATLAB\bellhop_modern", ...
         "Matlab", "ReadWrite");
 end
 assert(isfile(executable), "Bellhop executable was not found: %s", executable);

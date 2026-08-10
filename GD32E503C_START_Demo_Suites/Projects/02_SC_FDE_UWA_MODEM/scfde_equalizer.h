@@ -54,6 +54,10 @@ typedef enum
     SCFDE_EQUALIZER_CCK_BIDFE2,    /**< CCK bidirectional DFE-2 (refinement). */
     SCFDE_EQUALIZER_CCK_TR_DIVERSITY, /**< CCK time-reversal diversity. */
     SCFDE_EQUALIZER_CCK_FDE,       /**< CCK frequency-domain IBDFE. */
+    /* Chapter-6 CSK receivers (spread-spectrum cyclic-shift frame). */
+    SCFDE_EQUALIZER_CSK_MF,        /**< CSK matched-filter dictionary detect. */
+    SCFDE_EQUALIZER_CSK_SOFT_SIC,  /**< CSK soft successive interference cancel. */
+    SCFDE_EQUALIZER_CSK_ESE,       /**< CSK IDMA-ESE (single-user MF fallback). */
     SCFDE_EQUALIZER_COUNT     /**< Sentinel used for validation and menu iteration. */
 } scfde_equalizer_mode_t;
 

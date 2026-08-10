@@ -254,8 +254,9 @@ function testBellhopChannelModeSmoke(testCase)
 % channelMode="bellhop" must run the qpsk and turbo scenarios through
 % the Bellhop shallow-water channel; skipped when the Bellhop toolbox
 % executable is not installed.
-toolboxRoot = "D:\MATLAB\atWin10_2020_11_4\atWin10_2020_11_4";
-if ~isfile(fullfile(toolboxRoot, "windows-bin-20201102", "bellhop.exe"))
+toolboxRoot = "D:\MATLAB\bellhop_modern";
+if ~(isfile(fullfile(toolboxRoot, "Bellhop", "bellhop.exe")) || ...
+        isfile(fullfile(toolboxRoot, "windows-bin-20201102", "bellhop.exe")))
     return;
 end
 r1 = run_unified_equalizer(struct("equalizers", "htfde", ...

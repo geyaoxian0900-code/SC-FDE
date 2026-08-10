@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""mode_sweep_loopback.py - sweep all 26 firmware equalizer modes through
-menu 4 (next equalizer) + menu 3 (digital loopback).
+"""mode_sweep_loopback.py - sweep all 41 firmware modes through
+menu 4 (next equalizer) + menu 3/5 (digital/analog loopback).
 
-Requires the B2-B5 firmware (26 modes: 20 base + 6 turbo). Turbo modes
-automatically use the conv-coded frame inside the digital loopback.
+Requires the C-grade firmware (41 modes: 26 base+turbo+FDDA+PTR/MC,
+7 CCK receivers, 3 CSK receivers). Turbo/CCK/CSK modes automatically use
+their own frame inside the loopback dispatch.
 
 Usage:
-    python mode_sweep_loopback.py --port COM6 [--repeats 1]
+    python mode_sweep_loopback.py --port COM6 [--repeats 1] [--menu 3|5]
 
 Outputs CSV + log; exit 0 = every mode passed every repeat.
 """
@@ -57,6 +58,21 @@ EXPECTED = {
     "FDDA-TEQ": dict(seq=0x55, length=6, text="SC-FDE"),
     "TDDA-TEQ": dict(seq=0x55, length=6, text="SC-FDE"),
     "FDDA-DFE-TEQ": dict(seq=0x55, length=6, text="SC-FDE"),
+    "PTR-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "SUBBAND-PTR-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "MC-LMS-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "MC-NLMS-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "MC-RLS-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-MFB": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-RAKE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-DFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-BIDFE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-BIDFE2": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-TR-DIV": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CCK-FDE": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CSK-MF": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CSK-SOFT-SIC": dict(seq=0x55, length=6, text="SC-FDE"),
+    "CSK-ESE": dict(seq=0x55, length=6, text="SC-FDE"),
 }
 EXPECTED_EQ = "MMSE-FDE"
 

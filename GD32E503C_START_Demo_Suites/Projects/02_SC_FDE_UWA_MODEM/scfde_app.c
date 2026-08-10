@@ -1,5 +1,6 @@
 #include "scfde_app.h"
 #include "scfde_cck.h"
+#include "scfde_csk.h"
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +25,7 @@ typedef enum
 } app_role_t;
 
 static uint8_t g_sequence;
-#define APP_LOOPBACK_LEN (SCFDE_CCK_FRAME_SYMBOLS * SCFDE_RX_SAMPLES_PER_SYMBOL)
+#define APP_LOOPBACK_LEN (SCFDE_CSK_FRAME_SYMBOLS * SCFDE_RX_SAMPLES_PER_SYMBOL)
 static uint16_t g_loopback_samples[APP_LOOPBACK_LEN];
 
 static const char *app_role_name(app_role_t role)
@@ -147,16 +148,29 @@ static uint8_t app_is_cck_mode(void)
     return (m>=SCFDE_EQUALIZER_CCK_MFB)&&(m<=SCFDE_EQUALIZER_CCK_FDE)?1u:0u;
 }
 
+static uint8_t app_is_csk_mode(void)
+{
+    scfde_equalizer_mode_t m=scfde_modem_get_equalizer();
+    return (m>=SCFDE_EQUALIZER_CSK_MF)&&(m<=SCFDE_EQUALIZER_CSK_ESE)?1u:0u;
+}
+
 static scfde_cck_receiver_t app_cck_receiver(void)
 {
     return (scfde_cck_receiver_t)((uint8_t)scfde_modem_get_equalizer()-
                                   (uint8_t)SCFDE_EQUALIZER_CCK_MFB);
 }
 
-/* Shared transmit-frame dispatch: CCK frame vs baseline/turbo frame. */
+static scfde_csk_receiver_t app_csk_receiver(void)
+{
+    return (scfde_csk_receiver_t)((uint8_t)scfde_modem_get_equalizer()-
+                                  (uint8_t)SCFDE_EQUALIZER_CSK_MF);
+}
+
+/* Shared transmit-frame dispatch: CCK/CSK frame vs baseline/turbo frame. */
 static uint8_t app_prepare_frame(const uint8_t *payload,uint8_t length,uint8_t seq)
 {
     if(app_is_cck_mode()){return scfde_cck_prepare_tx(payload,length,seq);}
+    if(app_is_csk_mode()){return scfde_csk_prepare_tx(payload,length,seq);}
     if(app_is_turbo_mode()){return scfde_modem_prepare_tx_turbo(payload,length,seq);}
     return scfde_modem_prepare_tx(payload,length,seq);
 }
@@ -164,12 +178,14 @@ static uint8_t app_prepare_frame(const uint8_t *payload,uint8_t length,uint8_t s
 static uint32_t app_frame_tx_samples(void)
 {
     if(app_is_cck_mode()){return scfde_cck_get_tx_sample_length();}
+    if(app_is_csk_mode()){return scfde_csk_get_tx_sample_length();}
     return scfde_modem_get_tx_sample_length();
 }
 
 static int16_t app_frame_tx_sample(uint32_t index)
 {
     if(app_is_cck_mode()){return scfde_cck_get_tx_sample(index);}
+    if(app_is_csk_mode()){return scfde_csk_get_tx_sample(index);}
     return scfde_modem_get_tx_sample(index);
 }
 
@@ -179,6 +195,10 @@ static scfde_rx_result_t app_decode_frame(const uint16_t *samples,uint32_t sampl
     {
         return scfde_cck_decode(samples,sample_count,app_cck_receiver());
     }
+    if(app_is_csk_mode())
+    {
+        return scfde_csk_decode(samples,sample_count,app_csk_receiver());
+    }
     if(app_is_turbo_mode())
     {
         return scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),samples,sample_count);
@@ -186,23 +206,14 @@ static scfde_rx_result_t app_decode_frame(const uint16_t *samples,uint32_t sampl
     return scfde_modem_decode(samples,sample_count);
 }
 
-static void app_prepare_loopback_turbo(const uint8_t *payload,uint8_t length,uint8_t seq)
-{
-    uint32_t index;
-    scfde_modem_prepare_tx_turbo(payload,length,seq);
-    for(index=0u;index<(SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);index++)
-    {
-        int32_t adc=2048+(int32_t)scfde_modem_get_tx_sample(index*2u);
-        if(adc<0){adc=0;}else if(adc>4095){adc=4095;}
-        g_loopback_samples[index]=(uint16_t)adc;
-    }
-}
 static void app_transmit(void)
 {
     uint8_t payload[SCFDE_MAX_PAYLOAD]; uint8_t length;
     uint8_t turbo=app_is_turbo_mode();
     uint8_t cck=app_is_cck_mode();
-    uint8_t max_len=turbo?SCFDE_TURBO_MAX_PAYLOAD:(cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
+    uint8_t csk=app_is_csk_mode();
+    uint8_t max_len=turbo?SCFDE_TURBO_MAX_PAYLOAD:
+                 (cck?SCFDE_CCK_MAX_PAYLOAD:(csk?SCFDE_CSK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD));
     printf("Text (max %u bytes): ",max_len);
     length=app_read_line(payload,max_len);
     if(app_prepare_frame(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
@@ -253,6 +264,8 @@ static void app_analog_loopback(void)
     uint8_t payload[SCFDE_MAX_PAYLOAD];
     uint8_t payload_length;
     uint8_t cck=app_is_cck_mode();
+    uint8_t csk=app_is_csk_mode();
+    uint8_t max_len=cck?SCFDE_CCK_MAX_PAYLOAD:(csk?SCFDE_CSK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
     const uint32_t frame_tx_samples=app_frame_tx_samples();
     const uint32_t frame_rx_samples=frame_tx_samples/2u;
     const uint32_t capture_length=
@@ -266,8 +279,8 @@ static void app_analog_loopback(void)
 
     printf("Analog self-loopback with %s...\r\n",
            scfde_equalizer_name(scfde_modem_get_equalizer()));
-    printf("Text (max %u bytes): ",cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
-    payload_length=app_read_line(payload,cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
+    printf("Text (max %u bytes): ",max_len);
+    payload_length=app_read_line(payload,max_len);
     if(payload_length==0u)
     {
         static const uint8_t fallback[]={'S','C','-','F','D','E','1','2','3','4'};
