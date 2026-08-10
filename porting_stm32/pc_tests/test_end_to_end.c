@@ -40,7 +40,8 @@ int main(void)
 
     scfde_modem_init();   /* builds the Chu UW and FFT tables */
 
-    /* 1) Every equalizer-mode setting must decode with the fixed MMSE. */
+    /* 1) Every equalizer mode must decode the digital loopback cleanly
+     * and report itself as the equalizer that ran. */
     for (mode = SCFDE_EQUALIZER_AUTO; mode < SCFDE_EQUALIZER_COUNT;
          mode = (scfde_equalizer_mode_t)((uint8_t)mode + 1u))
     {
@@ -48,13 +49,13 @@ int main(void)
         prepare_loopback(payload10, (uint8_t)sizeof(payload10), 0x77u);
         scfde_modem_set_equalizer(mode);
         result = scfde_modem_decode(g_loopback, LOOPBACK_LEN);
-        printf("mode=%-9s: valid=%u sync=%.3f start=%lu eq=%s len=%u\n",
+        printf("mode=%-12s: valid=%u sync=%.3f start=%lu eq=%s len=%u\n",
                scfde_equalizer_name(mode), result.valid, result.sync_metric,
                (unsigned long)result.frame_start_sample,
                scfde_equalizer_name(result.equalizer_used), result.payload_length);
         CHECK(result.valid == 1u, "loopback decode must pass");
-        CHECK(result.equalizer_used == SCFDE_EQUALIZER_MMSE_FDE,
-              "baseline decoder must always use MMSE-FDE");
+        CHECK(result.equalizer_used == mode,
+              "reported equalizer must match the selected mode");
         CHECK(result.payload_length == (uint8_t)sizeof(payload10),
               "payload length mismatch");
         CHECK(result.sequence == 0x77u, "sequence mismatch");

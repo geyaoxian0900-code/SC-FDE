@@ -236,6 +236,20 @@ verifyError(testCase, ...
     "SCFDE:MixedScenarios");
 end
 
+function testPickEqualizerNonInteractive(testCase)
+% The interactive picker must run registry-number selections in their
+% declared scenario when given options.ids (non-interactive mode).
+result = pick_equalizer(struct("ids", [18, 22], "snrDb", 12, ...
+    "frameCount", 1, "makePlot", false, "randomSeed", 42));
+verifyEqual(testCase, result.ids, ["td-turbo", "bitf-turbo"]);
+verifyEqual(testCase, result.scenario, "turbo");
+verifyEqual(testCase, numel(result.ber), 2);
+resultQpsk = pick_equalizer(struct("ids", [1, 2, 3], "snrDb", 12, ...
+    "frameCount", 1, "makePlot", false, "randomSeed", 42));
+verifyEqual(testCase, resultQpsk.scenario, "qpsk");
+verifyEqual(testCase, numel(resultQpsk.ids), 3);
+end
+
 function testAllResolvesPerScenario(testCase)
 % "all" must resolve to every registered equalizer of the CURRENT
 % scenario: 17 qpsk, 10 turbo, 7 cck, 3 csk.

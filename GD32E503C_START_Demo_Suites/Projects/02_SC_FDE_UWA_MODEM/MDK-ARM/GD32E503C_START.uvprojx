@@ -430,6 +430,10 @@
               <FilePath>..\scfde_modem.c</FilePath>
             </File>
             <File>
+              <FileName>scfde_turbo.c</FileName>
+              <FileType>1</FileType>
+            </File>
+            <File>
               <FileName>scfde_ldpc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\scfde_ldpc.c</FilePath>

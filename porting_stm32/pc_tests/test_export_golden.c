@@ -16,6 +16,7 @@
 #include "scfde_fft.c"
 #include "scfde_ldpc.c"
 #include "scfde_equalizer.c"
+#include "scfde_turbo.c"
 #include "scfde_modem.c"
 #undef static
 

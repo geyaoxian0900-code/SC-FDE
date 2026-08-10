@@ -17,6 +17,7 @@ set(SCFDE_CORE_SOURCES
     ${FIRMWARE_DIR}/scfde_ldpc.c
     ${FIRMWARE_DIR}/scfde_equalizer.c
     ${FIRMWARE_DIR}/scfde_modem.c
+    ${FIRMWARE_DIR}/scfde_turbo.c
 )
 
 # Platform-independent algorithm library (public API tests link against it).
@@ -36,6 +37,7 @@ add_scfde_test(test_fft)          # FFT/IFFT round trip and known transforms
 add_scfde_test(test_ldpc)         # LDPC encode/decode and error correction
 add_scfde_test(test_equalizer)    # MMSE/ZF/MF/IB-DFE/NLMS on synthetic channel
 add_scfde_test(test_end_to_end)   # full digital loopback, all equalizer modes
+add_scfde_test(test_turbo)         # conv code + interleaver + BCJR + turbo loopback
 
 # Static-include tests compile the firmware sources themselves and therefore
 # must not link scfde_core (duplicate symbols).

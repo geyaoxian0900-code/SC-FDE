@@ -117,3 +117,40 @@ P2（systick_config 未调用）→ 保留（延时走 bsp_usart 忙等，不阻
 |---|---|---|---|
 | N1 | **LDPC(192,128) 构造缺陷：d_min=2**。QC 移位只作用于 32 位块内，同一 residue mod 32 的信息位列完全相同（重复列）→ 单比特翻转纠错率仅 33%、双翻转 11%（2000 次随机实测）。且译码器 67% 单错场景返回"syndrome=0 但内容错误"的静默误纠 | `scfde_ldpc.c:19-30`（移位表/索引公式）+ probe 实测 | 基线无影响（LDPC 关闭）；**"后续再加 LDPC"前必须先重新设计码**（如随机构造+环长约束） |
 | N2 | **同步+CFO 估计有效范围约 ±10Hz**（@4ksym/12kHz 载波 ≈ 1.25m/s 径向速度）。20/30Hz 时 MATLAB 与 C 均一致失锁（start=118、CFO 估计减半、valid=0）——C 与 MATLAB 数值完全吻合，属算法固有特性而非移植缺陷 | `test_sync`（10Hz 通过）+ MATLAB 同场景复现（start/CFO 一致） | 静态水声实验（收发静止）无影响；移动平台需扩展多普勒处理 |
+
+## 7. A 级均衡器族移植完成（2026-08-04 16:23）
+
+### 7.1 固件均衡器全集（17 种，菜单 4 循环选择）
+
+原有（3）：MMSE-FDE、ZF-FDE、NLMS-TDE
+新增（14）：MF-FDE 恢复、IB-DFE 恢复、**HTFDE、SD-IBDFE、HD-IBDFE、ICE-SD-IBDFE、ICE-HD-IBDFE（ch3 频域族）+ DFE、LMS-DFE、NLMS-DFE、RLS-DFE、DPLL-DFE、FBLMS（ch2/ch4 时域族）**
+
+- `scfde_equalizer.h`：枚举扩展至 17 种 + `scfde_equalizer_apply_a`（ch3 族）+ `scfde_equalizer_dfe`（时域族）
+- `scfde_equalizer.c`：新增约 800 行实现（htfde/ibdfe-grade-a/fblms/dfe-known/dfe-adaptive）
+- `scfde_modem.c`：decode 按所选模式分派（impulse 副本 g_impulse_hold）
+
+### 7.2 移植中发现并修复的固件缺陷（6 处，均有探针证据）
+
+| 缺陷 | 现象 | 修复 |
+|---|---|---|
+| NLMS-TDE 训练参考尺度失配（g_uw 幅度 1 vs I&D 符号 ~4200） | 输出被缩到 ~1 且符号错 | 参考按接收 UW2 平均幅度缩放（`scfde_modem.c` NLMS 分支） |
+| known-DFE 输出对齐错位（2×delay 符号） | data 段整体错位 → CRC 失败 | 输出只在训练段结束后收集 |
+| known-DFE 回代公式错误 | w≈0 | 回代改为 x=(rhs-Σ)/A |
+| known-DFE rhs 应为 C'e_d（impulse[delay-i]） | w 尺度错 | 修复 rhs 初始化 |
+| **adaptive-DFE 越界读 g_uw[32..63]**（训练 64 符号但 UW 周期 32；-O3 下 UB 发散） | LMS 权重爆到 1e12 | `training[n % (training_length/2)]`（fblms 同步修复） |
+| LMS 步长被除以 1e-5（power 常数误用） | 立即 NaN | LMS 分支直接用步长 |
+| RLS float32 P 矩阵失去正定性（λ=0.985、50 步后 denom 变负） | gain 爆炸 → NaN | denom 下限 1e-3 + 训练段后冻结 P + 对角加载 1.0 |
+| DPLL 相位误差符号反 | 相位跟踪反向 | `imag(ff_est·conj(d))` 修正 |
+
+### 7.3 验证状态
+
+- **PC 测试 7/7 全过**（test_end_to_end 遍历 17 种模式数字回环全 PASS）
+- Keil 构建 0 Error 0 Warning
+- hex SHA-256：`6D45B50FB1020FE77D94591418E37722FE0729854B6912E1A0B4F7BEE36590C2`
+- 新增静态 RAM：RLS 逆相关矩阵 18×18 复 ≈ 2.6KB + 工作区 ≈ 15KB（128KB SRAM 内）
+- **待硬件验证**：多径/噪声场景下各均衡器 BER 对比（两板回环或模拟回环）
+
+### 7.4 已知限制
+
+- FBLMS 在回环（单位信道）下训练块数少（64 训练符号 = 2 块），判决段自适应补偿——多径下需实测
+- RLS 用对角加载 1.0 稳定 float32，训练 52 步后冻结 P——性能与 MATLAB double 版可能有差异，需对比

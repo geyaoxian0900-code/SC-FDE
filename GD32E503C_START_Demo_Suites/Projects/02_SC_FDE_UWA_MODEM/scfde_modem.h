@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 #include "scfde_equalizer.h"
+#include "scfde_turbo.h"
+
+/* Chapter-4 turbo mode (B1 core): DATA carries 96 info bits coded by the
+   rate-1/2 (7,5) convolutional code, interleaved, then QPSK-mapped.
+   Packet: magic(2)+len(1)+seq(1)+payload(<=6)+CRC16(2) = 12 bytes. */
+#define SCFDE_TURBO_PACKET_BYTES   12u
+#define SCFDE_TURBO_MAX_PAYLOAD    6u
+#define SCFDE_TURBO_CRC_INDEX      (SCFDE_TURBO_PACKET_BYTES - 2u)
 
 /* Fixed over-the-air profile compiled into the MCU firmware.
  *
@@ -92,5 +100,19 @@ void scfde_modem_set_equalizer(scfde_equalizer_mode_t mode);
 
 /** Return the currently configured equalizer mode. */
 scfde_equalizer_mode_t scfde_modem_get_equalizer(void);
+
+/**
+ * Chapter-4 turbo mode transmit: prepare a conv-coded, interleaved QPSK
+ * frame from a payload (<= SCFDE_TURBO_MAX_PAYLOAD bytes).
+ */
+uint8_t scfde_modem_prepare_tx_turbo(const uint8_t *payload, uint8_t length,
+                                     uint8_t sequence);
+
+/**
+ * Chapter-4 turbo mode receive: full sync/LS/MMSE chain, then
+ * deinterleave and Log-MAP BCJR decode of the 96 coded information bits.
+ */
+scfde_rx_result_t scfde_modem_decode_turbo(const uint16_t *samples,
+                                           uint32_t sample_count);
 
 #endif
