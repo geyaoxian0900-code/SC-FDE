@@ -1,4 +1,5 @@
 #include "scfde_app.h"
+#include "scfde_cck.h"
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
@@ -23,7 +24,8 @@ typedef enum
 } app_role_t;
 
 static uint8_t g_sequence;
-static uint16_t g_loopback_samples[SCFDE_FRAME_SYMBOLS * SCFDE_RX_SAMPLES_PER_SYMBOL];
+#define APP_LOOPBACK_LEN (SCFDE_CCK_FRAME_SYMBOLS * SCFDE_RX_SAMPLES_PER_SYMBOL)
+static uint16_t g_loopback_samples[APP_LOOPBACK_LEN];
 
 static const char *app_role_name(app_role_t role)
 {
@@ -133,23 +135,83 @@ static void app_prepare_loopback(const uint8_t *payload,uint8_t length,uint8_t s
     }
 }
 
+static uint8_t app_is_turbo_mode(void)
+{
+    scfde_equalizer_mode_t m=scfde_modem_get_equalizer();
+    return (m>=SCFDE_EQUALIZER_FD_TURBO)&&(m<=SCFDE_EQUALIZER_TD_TURBO)?1u:0u;
+}
+
+static uint8_t app_is_cck_mode(void)
+{
+    scfde_equalizer_mode_t m=scfde_modem_get_equalizer();
+    return (m>=SCFDE_EQUALIZER_CCK_MFB)&&(m<=SCFDE_EQUALIZER_CCK_FDE)?1u:0u;
+}
+
+static scfde_cck_receiver_t app_cck_receiver(void)
+{
+    return (scfde_cck_receiver_t)((uint8_t)scfde_modem_get_equalizer()-
+                                  (uint8_t)SCFDE_EQUALIZER_CCK_MFB);
+}
+
+/* Shared transmit-frame dispatch: CCK frame vs baseline/turbo frame. */
+static uint8_t app_prepare_frame(const uint8_t *payload,uint8_t length,uint8_t seq)
+{
+    if(app_is_cck_mode()){return scfde_cck_prepare_tx(payload,length,seq);}
+    if(app_is_turbo_mode()){return scfde_modem_prepare_tx_turbo(payload,length,seq);}
+    return scfde_modem_prepare_tx(payload,length,seq);
+}
+
+static uint32_t app_frame_tx_samples(void)
+{
+    if(app_is_cck_mode()){return scfde_cck_get_tx_sample_length();}
+    return scfde_modem_get_tx_sample_length();
+}
+
+static int16_t app_frame_tx_sample(uint32_t index)
+{
+    if(app_is_cck_mode()){return scfde_cck_get_tx_sample(index);}
+    return scfde_modem_get_tx_sample(index);
+}
+
+static scfde_rx_result_t app_decode_frame(const uint16_t *samples,uint32_t sample_count)
+{
+    if(app_is_cck_mode())
+    {
+        return scfde_cck_decode(samples,sample_count,app_cck_receiver());
+    }
+    if(app_is_turbo_mode())
+    {
+        return scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),samples,sample_count);
+    }
+    return scfde_modem_decode(samples,sample_count);
+}
+
+static void app_prepare_loopback_turbo(const uint8_t *payload,uint8_t length,uint8_t seq)
+{
+    uint32_t index;
+    scfde_modem_prepare_tx_turbo(payload,length,seq);
+    for(index=0u;index<(SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);index++)
+    {
+        int32_t adc=2048+(int32_t)scfde_modem_get_tx_sample(index*2u);
+        if(adc<0){adc=0;}else if(adc>4095){adc=4095;}
+        g_loopback_samples[index]=(uint16_t)adc;
+    }
+}
 static void app_transmit(void)
 {
     uint8_t payload[SCFDE_MAX_PAYLOAD]; uint8_t length;
     uint8_t turbo=app_is_turbo_mode();
-    uint8_t max_len=turbo?SCFDE_TURBO_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD;
+    uint8_t cck=app_is_cck_mode();
+    uint8_t max_len=turbo?SCFDE_TURBO_MAX_PAYLOAD:(cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
     printf("Text (max %u bytes): ",max_len);
     length=app_read_line(payload,max_len);
-    if(turbo)
-    {
-        if(scfde_modem_prepare_tx_turbo(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
-    }
-    else if(scfde_modem_prepare_tx(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
-    printf("TX start: seq=%u len=%u, PA4 DAC active for 48 ms...\r\n",g_sequence,length);
+    if(app_prepare_frame(payload,length,g_sequence)==0u){printf("TX packet rejected.\r\n");return;}
+    printf("TX start: seq=%u len=%u, PA4 DAC active for %lu ms...\r\n",
+           g_sequence,length,(unsigned long)(app_frame_tx_samples()*2u/96000u));
     half_duplex_enter_tx();
-    passband_tx_send_blocking(0,scfde_modem_get_tx_sample_length());
+    passband_tx_send_blocking(0,app_frame_tx_samples());
     half_duplex_enter_idle();
-    printf("TX OK: samples=%lu\r\n",(unsigned long)scfde_modem_get_tx_sample_length());
+    printf("TX OK: samples=%lu\r\n",(unsigned long)app_frame_tx_samples());
     g_sequence++;
 }
 
@@ -165,15 +227,7 @@ static void app_receive(void)
     passband_rx_start_dma_append(preroll,remaining); passband_rx_wait_complete();
     half_duplex_enter_idle();
     printf("RX captured: %lu samples, decoding...\r\n",(unsigned long)passband_rx_get_captured_length());
-    if(app_is_turbo_mode())
-    {
-        result=scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),
-            passband_rx_get_buffer(),passband_rx_get_captured_length());
-    }
-    else
-    {
-        result=scfde_modem_decode(passband_rx_get_buffer(),passband_rx_get_captured_length());
-    }
+    result=app_decode_frame(passband_rx_get_buffer(),passband_rx_get_captured_length());
     app_print_result(&result);
 }
 
@@ -181,18 +235,8 @@ static void app_digital_loopback(void)
 {
     static const uint8_t payload[]={'S','C','-','F','D','E'}; scfde_rx_result_t result;
     printf("Digital loopback with %s...\r\n",scfde_equalizer_name(scfde_modem_get_equalizer()));
-    if(app_is_turbo_mode())
-    {
-        static const uint8_t tp[]={'S','C','-','F','D','E'};
-        app_prepare_loopback_turbo(tp,(uint8_t)sizeof(tp),0x55u);
-        result=scfde_modem_decode_turbo_mode(scfde_modem_get_equalizer(),
-            g_loopback_samples,SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);
-    }
-    else
-    {
-        app_prepare_loopback(payload,(uint8_t)sizeof(payload),0x55u);
-        result=scfde_modem_decode(g_loopback_samples,SCFDE_FRAME_SYMBOLS*SCFDE_RX_SAMPLES_PER_SYMBOL);
-    }
+    app_prepare_loopback(payload,(uint8_t)sizeof(payload),0x55u);
+    result=app_decode_frame(g_loopback_samples,APP_LOOPBACK_LEN);
     app_print_result(&result);
 }
 
@@ -208,7 +252,8 @@ static void app_analog_loopback(void)
        empty line falls back to "SC-FDE1234" for automated testing. */
     uint8_t payload[SCFDE_MAX_PAYLOAD];
     uint8_t payload_length;
-    const uint32_t frame_tx_samples=scfde_modem_get_tx_sample_length();
+    uint8_t cck=app_is_cck_mode();
+    const uint32_t frame_tx_samples=app_frame_tx_samples();
     const uint32_t frame_rx_samples=frame_tx_samples/2u;
     const uint32_t capture_length=
         APP_ANALOG_PREROLL_SAMPLES+frame_rx_samples+APP_ANALOG_TAIL_SAMPLES;
@@ -221,8 +266,8 @@ static void app_analog_loopback(void)
 
     printf("Analog self-loopback with %s...\r\n",
            scfde_equalizer_name(scfde_modem_get_equalizer()));
-    printf("Text (max %u bytes): ",SCFDE_MAX_PAYLOAD);
-    payload_length=app_read_line(payload,SCFDE_MAX_PAYLOAD);
+    printf("Text (max %u bytes): ",cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
+    payload_length=app_read_line(payload,cck?SCFDE_CCK_MAX_PAYLOAD:SCFDE_MAX_PAYLOAD);
     if(payload_length==0u)
     {
         static const uint8_t fallback[]={'S','C','-','F','D','E','1','2','3','4'};
@@ -230,7 +275,7 @@ static void app_analog_loopback(void)
         payload_length=(uint8_t)sizeof(fallback);
         printf("(empty line: using fallback \"SC-FDE1234\")\r\n");
     }
-    if(scfde_modem_prepare_tx(payload,payload_length,0xAAu)==0u)
+    if(app_prepare_frame(payload,payload_length,0xAAu)==0u)
     {
         printf("TX packet rejected.\r\n");
         return;
@@ -262,7 +307,7 @@ static void app_analog_loopback(void)
         }
         printf("ADC min=%u max=%u mean=%lu clipped=%u samples=%lu\r\n",
                adc_min,adc_max,(unsigned long)(sum/n),clipped,(unsigned long)n);
-        result=scfde_modem_decode(buf,n);
+        result=app_decode_frame(buf,n);
     }
     app_print_result(&result);
 }

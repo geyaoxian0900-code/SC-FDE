@@ -99,6 +99,8 @@ un_all_equalizers.m 独立运行 37 个 ID，37/37 PASS（单次运行，1 帧/I
 - 计量精确化：errorBits/	otalBits 为逐方法整数向量，er = errorBits ./ totalBits，Clopper-Pearson 95% 区间逐方法报告；不用 round(ber .* totalBits) 重建。
 - CCK 边界：symbols < 4 触发 SCFDE:FrameTooShort（非索引异常）。
 - 可复现性：同 seed 精确复现 errorBits/totalBits/BER；异 seed 至少一个误码数变化；结果元数据记录源代码 gitCommit。
+- Bellhop 新版：本地 gfortran 16.1 编译 Scripps MPL 新版源码（A-New-BellHope/bellhop, ae1a477 2023-03-30 = 远程最新）→ bellhop.exe/运行时 DLL 在 Bellhop/ 目录（无 PATH 依赖）；ind_bellhop_executable 支持旧版 windows-bin/ 与新版 Bellhop/ 布局。
+- 海面粗糙度：新旧版均通过 **altimetry 文件**（TopOpt 第 5 位 '~' + .ati）实现，非 'G' 行；ellhopSurface='gaussian' 生成 Pierson-Moskowitz 谱海面（RMS 波高/PM 风速），浅源实测粗糙海面改变到达增益分布（flat 2 径 vs rough 3 径）。
 - Bellhop 环境参数化：ellhopSediment（silt/mud/clay/fine-sand/coarse-sand/rock/custom 预设，Jensen 表）、ellhopSsp（linear/cvw/file）+自定义 SSP 文件、ellhopSurfaceSpeed/BottomSpeed；海面平坦为默认（该 Bellhop 构建不支持 surface 选项行，'G' 已明确拒绝并提示用表面混合层 SSP 近似海况）。
 - Bellhop 信道接入：
 un_unified_equalizer 支持 channelMode="bellhop"（qpsk/turbo 场景），通过 scfde_bellhop_impulse 将 Bellhop 浅海到达时延/增益采样为符号率冲击响应（缓存于 results/bellhop_impulse_cache.mat）；默认仍为合成信道（可复现无外部依赖）。

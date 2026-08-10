@@ -384,6 +384,11 @@ static void scfde_equalize_data(float regularization, scfde_equalizer_mode_t mod
     case SCFDE_EQUALIZER_FDDA_TEQ:
     case SCFDE_EQUALIZER_TDDA_TEQ:
     case SCFDE_EQUALIZER_FDDA_DFE_TEQ:
+    case SCFDE_EQUALIZER_PTR_DFE:
+    case SCFDE_EQUALIZER_SUBBAND_PTR_DFE:
+    case SCFDE_EQUALIZER_MC_LMS_DFE:
+    case SCFDE_EQUALIZER_MC_NLMS_DFE:
+    case SCFDE_EQUALIZER_MC_RLS_DFE:
         scfde_equalizer_dfe(mode, g_frame_symbols, SCFDE_FRAME_SYMBOLS,
                             g_uw, g_impulse_hold, SCFDE_CHANNEL_TAPS,
                             regularization, SCFDE_DATA_SYMBOLS, g_fft_b);

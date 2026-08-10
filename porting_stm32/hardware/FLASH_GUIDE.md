@@ -8,7 +8,7 @@
 |---|---|
 | 目标芯片 | **GD32E508VET6**（Cortex-M33 @200MHz 器件，工作于 180MHz；烧录工具实测识别） |
 | 固件文件 | `Projects\02_SC_FDE_UWA_MODEM\MDK-ARM\output\Project.hex` |
-| **Project.hex SHA-256** | `0AA08A0767E58939F8B8B51DC37E27CE66393C2F49B2D89B68FBE7FD6A90294E`（E508 配置 + 横幅修正版，2026-08-04） |
+| **Project.hex SHA-256** | `D3E447401FAD420097B6C00EC7D46F5D9348D58CA4CCA8C3ECF7BA6F87B0DEBB`（26 模式版：20 均衡器 + 6 turbo，2026-08-04） |
 | 编译日期 | 2026-08-04 17:04:37（本地） |
 | Keil 构建结果 | MDK 5.42 / ARMCLANG 6：**0 Error, 0 Warning**（Rebuild All） |
 | Flash / RAM | Code 14012 + RO 1340 ≈ **16.7 KB** / ZI 35528 + RW 20 + 栈 4KB ≈ **38.7 KB**（E508VET6：512KB Flash / 128KB SRAM） |

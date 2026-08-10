@@ -51,6 +51,17 @@ static scfde_complex_t g_impulse[SCFDE_EQUALIZER_MAX_FFT];
 static scfde_complex_t g_dfe_weights[SCFDE_DFE_WEIGHTS];
 static scfde_complex_t g_dfe_rls[SCFDE_DFE_WEIGHTS * SCFDE_DFE_WEIGHTS];
 static float g_dfe_input_power;
+/* C-grade multichannel DFE workspace: B=2 pseudo-branches (the second
+   branch is the received stream delayed by one symbol), weights of
+   B*FF+FB taps and a (B*FF+FB)x(B*FF+FB) RLS inverse correlation. */
+#define SCFDE_MC_BRANCHES 2u
+#define SCFDE_MC_WEIGHTS (SCFDE_MC_BRANCHES * SCFDE_DFE_FF_TAPS + SCFDE_DFE_FB_TAPS)
+#define SCFDE_MC_FF_TOTAL (SCFDE_MC_BRANCHES * SCFDE_DFE_FF_TAPS)
+static scfde_complex_t g_mc_weights[SCFDE_MC_WEIGHTS];
+static scfde_complex_t g_mc_rls[SCFDE_MC_WEIGHTS * SCFDE_MC_WEIGHTS];
+/* PTR front-end workspace bound: the LS impulse is 28 taps, so the
+   equivalent autocorrelation channel is at most 55 taps. */
+#define SCFDE_PTR_MAX_TAPS 28u
 
 static scfde_complex_t complex_multiply(scfde_complex_t a, scfde_complex_t b)
 {
@@ -209,7 +220,10 @@ const char *scfde_equalizer_name(scfde_equalizer_mode_t mode)
         "HTFDE", "SD-IBDFE", "HD-IBDFE", "ICE-SD-IBDFE", "ICE-HD-IBDFE",
         "DFE", "LMS-DFE", "NLMS-DFE", "RLS-DFE", "DPLL-DFE", "FBLMS",
         "FD-TURBO", "FD-DFE", "TF-TURBO", "BITF-TURBO", "BLMS-TF-TURBO",
-        "TD-TURBO", "FDDA-TEQ", "TDDA-TEQ", "FDDA-DFE-TEQ"
+        "TD-TURBO", "FDDA-TEQ", "TDDA-TEQ", "FDDA-DFE-TEQ",
+        "PTR-DFE", "SUBBAND-PTR-DFE", "MC-LMS-DFE", "MC-NLMS-DFE", "MC-RLS-DFE",
+        "CCK-MFB", "CCK-RAKE", "CCK-DFE", "CCK-BIDFE",
+        "CCK-BIDFE2", "CCK-TR-DIV", "CCK-FDE"
     };
     if ((uint8_t)mode >= (uint8_t)SCFDE_EQUALIZER_COUNT)
     {
@@ -696,7 +710,9 @@ static void dfe_known(const scfde_complex_t *frame, uint16_t frame_symbols,
     uint16_t i, j, n;
     static scfde_complex_t gram[SCFDE_DFE_FF_TAPS * SCFDE_DFE_FF_TAPS];
     static scfde_complex_t rhs[SCFDE_DFE_FF_TAPS];
-    static scfde_complex_t eff[SCFDE_DFE_FF_TAPS + 28u];
+    /* The equivalent PTR channel is 2*SCFDE_PTR_MAX_TAPS-1 = 55 taps, so the
+       combined impulse convolution needs 12+55 = 67 entries. */
+    static scfde_complex_t eff[SCFDE_DFE_FF_TAPS + 64u];
     static scfde_complex_t decisions[192];
     uint16_t out_index = 0u;
 
@@ -1071,6 +1087,286 @@ static void fdda_equalize(scfde_equalizer_mode_t mode,
                           const scfde_complex_t *training, uint16_t training_length,
                           uint16_t data_symbols, scfde_complex_t *output);
 
+/* C-grade PTR front end (book 2-47): time-reversed conjugate channel
+   matched filter, then a known-channel MMSE DFE on the equivalent channel
+   g = h*(-n) * h(n).  Subband PTR (2-48) reduces to the same single-branch
+   combination when no branch data is available, so both modes share this
+   core (subband_ptr falls back to a single branch in MATLAB). */
+static void ptr_dfe_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
+                             const scfde_complex_t *impulse, uint16_t impulse_taps,
+                             float noise_variance, uint16_t training_symbols,
+                             uint16_t data_symbols, scfde_complex_t *output)
+{
+    const uint16_t ff = SCFDE_DFE_FF_TAPS;
+    const uint16_t fb = SCFDE_DFE_FB_TAPS;
+    uint16_t delay = impulse_taps / 2u;
+    uint16_t eq_taps;
+    uint16_t n, m;
+    static scfde_complex_t tr[SCFDE_PTR_MAX_TAPS];
+    static scfde_complex_t filtered[192 + SCFDE_PTR_MAX_TAPS];
+    static scfde_complex_t eq[SCFDE_PTR_MAX_TAPS * 2u - 1u];
+    uint16_t out_index = 0u;
+
+    if ((frame == 0) || (output == 0) || (impulse_taps > SCFDE_PTR_MAX_TAPS))
+    {
+        return;
+    }
+    (void)ff;
+    (void)fb;
+    (void)out_index;
+    if (delay > ff - 1u) { delay = ff - 1u; }
+    /* timeReversal = conj(fliplr(impulse)); y = filter(TR, 1, received). */
+    for (n = 0u; n < impulse_taps; n++)
+    {
+        tr[n].re = impulse[impulse_taps - 1u - n].re;
+        tr[n].im = -impulse[impulse_taps - 1u - n].im;
+    }
+    for (n = 0u; n < frame_symbols + impulse_taps - 1u; n++)
+    {
+        filtered[n].re = 0.0f;
+        filtered[n].im = 0.0f;
+        for (m = 0u; m < impulse_taps; m++)
+        {
+            if ((m <= n) && ((n - m) < frame_symbols))
+            {
+                uint32_t idx = n - m;
+                filtered[n].re += tr[m].re * frame[idx].re - tr[m].im * frame[idx].im;
+                filtered[n].im += tr[m].re * frame[idx].im + tr[m].im * frame[idx].re;
+            }
+        }
+    }
+    /* equivalent = conv(TR, impulse), length 2*impulse_taps - 1. */
+    memset(eq, 0, (2u * impulse_taps - 1u) * sizeof(scfde_complex_t));
+    for (n = 0u; n < impulse_taps; n++)
+    {
+        for (m = 0u; m < impulse_taps; m++)
+        {
+            scfde_complex_t p = complex_multiply(tr[n], impulse[m]);
+            eq[n + m].re += p.re;
+            eq[n + m].im += p.im;
+        }
+    }
+    /* Peak alignment: the TR autocorrelation concentrates energy at the
+       center tap (2*impulse_taps-1)/2, which may lie beyond the DFE
+       feedforward aperture. Shift both the filtered stream and the
+       equivalent channel so the peak lands at the feedforward delay. */
+    {
+        float best_power = 0.0f;
+        uint16_t peak = 0u;
+        uint16_t shift;
+        for (n = 0u; n < 2u * impulse_taps - 1u; n++)
+        {
+            float p = complex_power(eq[n]);
+            if (p > best_power) { best_power = p; peak = n; }
+        }
+        shift = (peak > delay) ? (uint16_t)(peak - delay) : 0u;
+        if (shift > 0u)
+        {
+            uint16_t n2;
+            for (n2 = 0u; n2 < frame_symbols; n2++)
+            {
+                filtered[n2] = filtered[n2 + shift];
+            }
+            for (n2 = 0u; n2 + shift < 2u * impulse_taps - 1u; n2++)
+            {
+                eq[n2] = eq[n2 + shift];
+            }
+            eq_taps = (uint16_t)(2u * impulse_taps - 1u - shift);
+        }
+    }
+    /* Known-channel MMSE DFE on the focused stream (shared core). */
+    dfe_known(filtered, frame_symbols, eq, eq_taps, noise_variance,
+              training_symbols, data_symbols, output);
+}
+
+/* C-grade multichannel adaptive DFE (book ch2 multichannel structure):
+   B pseudo-branches share one DFE; the second branch is the received
+   stream delayed by one symbol (a self-diversity view of a single sensor).
+   Training uses the first 64 symbols (UW1|UW2), payload decisions follow. */
+static void multichannel_dfe_equalize(scfde_equalizer_mode_t mode,
+                                      const scfde_complex_t *frame,
+                                      uint16_t frame_symbols,
+                                      const scfde_complex_t *training,
+                                      uint16_t training_length,
+                                      uint16_t data_symbols,
+                                      scfde_complex_t *output)
+{
+    const uint16_t ff = SCFDE_DFE_FF_TAPS;
+    const uint16_t fb = SCFDE_DFE_FB_TAPS;
+    const uint16_t delay = SCFDE_DFE_FF_TAPS / 3u;
+    const uint16_t B = SCFDE_MC_BRANCHES;
+    const uint16_t W = SCFDE_MC_WEIGHTS;
+    uint16_t n, i, k, b;
+    uint8_t is_rls = (mode == SCFDE_EQUALIZER_MC_RLS_DFE);
+    uint8_t is_lms = (mode == SCFDE_EQUALIZER_MC_LMS_DFE);
+    uint16_t first_symbol = (ff > fb + delay) ? ff : (fb + delay + 1u);
+    uint16_t last_symbol = (frame_symbols > delay) ? (uint16_t)(frame_symbols - delay) : 0u;
+    uint16_t out_index = 0u;
+    scfde_complex_t input[SCFDE_MC_WEIGHTS];
+    scfde_complex_t decision_ring[SCFDE_DFE_FB_TAPS];
+    float scale = 0.0f;
+
+    if ((frame == 0) || (training == 0) || (output == 0))
+    {
+        return;
+    }
+    memset(g_mc_weights, 0, sizeof(g_mc_weights));
+    memset(decision_ring, 0, sizeof(decision_ring));
+    for (b = 0u; b < B; b++)
+    {
+        g_mc_weights[b * ff + delay].re = 1.0f / (float)B;
+    }
+    for (n = 0; n < training_length && n < frame_symbols; n++)
+    {
+        scale += sqrtf(complex_power(frame[n]));
+    }
+    scale /= (float)training_length;
+    if (scale < 1.0e-6f) { scale = 1.0f; }
+    g_dfe_input_power = scale;
+    if (is_rls)
+    {
+        memset(g_mc_rls, 0, sizeof(g_mc_rls));
+        for (i = 0; i < W; i++)
+        {
+            g_mc_rls[i * W + i].re = SCFDE_RLS_INIT_INV_CORR;
+        }
+    }
+    for (n = first_symbol; n < last_symbol; n++)
+    {
+        scfde_complex_t estimate = {0.0f, 0.0f};
+        scfde_complex_t decision;
+        scfde_complex_t error;
+        for (b = 0u; b < B; b++)
+        {
+            uint16_t base = b * ff;
+            for (k = 0; k < ff; k++)
+            {
+                uint32_t idx = (uint32_t)n + delay - k - (uint32_t)b;
+                scfde_complex_t v = ((idx < frame_symbols) && (b <= (uint32_t)n + delay - k)) ?
+                                    frame[idx] : (scfde_complex_t){0.0f, 0.0f};
+                input[base + k].re = v.re / scale;
+                input[base + k].im = v.im / scale;
+            }
+        }
+        for (k = 0; k < fb; k++)
+        {
+            input[B * ff + k].re = -decision_ring[k].re;
+            input[B * ff + k].im = -decision_ring[k].im;
+        }
+        for (k = 0; k < W; k++)
+        {
+            estimate.re += g_mc_weights[k].re * input[k].re -
+                           g_mc_weights[k].im * input[k].im;
+            estimate.im += g_mc_weights[k].re * input[k].im +
+                           g_mc_weights[k].im * input[k].re;
+        }
+        if (n < training_length)
+        {
+            decision = training[n % (training_length / 2u)];
+        }
+        else
+        {
+            decision = qpsk_hard_decision(estimate);
+            if (out_index < data_symbols)
+            {
+                output[out_index++] = estimate;
+            }
+        }
+        error.re = decision.re - estimate.re;
+        error.im = decision.im - estimate.im;
+        if (is_rls)
+        {
+            scfde_complex_t pv[SCFDE_MC_WEIGHTS];
+            scfde_complex_t gain[SCFDE_MC_WEIGHTS];
+            for (i = 0; i < W; i++)
+            {
+                pv[i].re = 0.0f; pv[i].im = 0.0f;
+                for (k = 0; k < W; k++)
+                {
+                    pv[i].re += g_mc_rls[i * W + k].re * input[k].re -
+                                g_mc_rls[i * W + k].im * input[k].im;
+                    pv[i].im += g_mc_rls[i * W + k].re * input[k].im +
+                                g_mc_rls[i * W + k].im * input[k].re;
+                }
+            }
+            {
+                float denom = SCFDE_RLS_FORGETTING;
+                for (k = 0; k < W; k++)
+                {
+                    denom += input[k].re * pv[k].re + input[k].im * pv[k].im;
+                }
+                if (denom < 1.0e-3f) { denom = 1.0e-3f; }
+                for (i = 0; i < W; i++)
+                {
+                    gain[i].re = pv[i].re / denom;
+                    gain[i].im = pv[i].im / denom;
+                    g_mc_weights[i].re += gain[i].re * error.re + gain[i].im * error.im;
+                    g_mc_weights[i].im += gain[i].re * error.im - gain[i].im * error.re;
+                }
+            }
+            if (n < training_length)
+            {
+                for (i = 0; i < W; i++)
+                {
+                    for (k = 0; k < W; k++)
+                    {
+                        float q_re = 0.0f, q_im = 0.0f;
+                        uint16_t j;
+                        for (j = 0; j < W; j++)
+                        {
+                            q_re += input[j].re * g_mc_rls[j * W + k].re +
+                                    input[j].im * g_mc_rls[j * W + k].im;
+                            q_im += input[j].re * g_mc_rls[j * W + k].im -
+                                    input[j].im * g_mc_rls[j * W + k].re;
+                        }
+                        {
+                            float gv_re = gain[i].re * q_re - gain[i].im * q_im;
+                            float gv_im = gain[i].re * q_im + gain[i].im * q_re;
+                            g_mc_rls[i * W + k].re =
+                                (g_mc_rls[i * W + k].re - gv_re) / SCFDE_RLS_FORGETTING;
+                            g_mc_rls[i * W + k].im =
+                                (g_mc_rls[i * W + k].im - gv_im) / SCFDE_RLS_FORGETTING;
+                        }
+                    }
+                }
+                for (i = 0; i < W; i++)
+                {
+                    for (k = i + 1u; k < W; k++)
+                    {
+                        float re = (g_mc_rls[i * W + k].re + g_mc_rls[k * W + i].re) * 0.5f;
+                        float im = (g_mc_rls[i * W + k].im - g_mc_rls[k * W + i].im) * 0.5f;
+                        g_mc_rls[i * W + k].re = re;
+                        g_mc_rls[i * W + k].im = im;
+                        g_mc_rls[k * W + i].re = re;
+                        g_mc_rls[k * W + i].im = -im;
+                    }
+                }
+            }
+        }
+        else
+        {
+            float power = SCFDE_FBLMS_EPSILON;
+            float step;
+            for (k = 0; k < W; k++)
+            {
+                power += input[k].re * input[k].re + input[k].im * input[k].im;
+            }
+            step = is_lms ? SCFDE_LMS_STEP : (SCFDE_NLMS_STEP / power);
+            for (k = 0; k < W; k++)
+            {
+                g_mc_weights[k].re += step * (input[k].re * error.re + input[k].im * error.im);
+                g_mc_weights[k].im += step * (input[k].re * error.im - input[k].im * error.re);
+            }
+        }
+        for (i = SCFDE_DFE_FB_TAPS - 1u; i > 0u; i--)
+        {
+            decision_ring[i] = decision_ring[i - 1u];
+        }
+        decision_ring[0] = decision;
+    }
+}
+
+
 void scfde_equalizer_dfe(scfde_equalizer_mode_t mode,
                          const scfde_complex_t *frame,
                          uint16_t frame_symbols,
@@ -1090,6 +1386,17 @@ void scfde_equalizer_dfe(scfde_equalizer_mode_t mode,
     case SCFDE_EQUALIZER_DFE:
         dfe_known(frame, frame_symbols, impulse, impulse_taps, noise_variance,
                   64u, data_symbols, output);
+        break;
+    case SCFDE_EQUALIZER_PTR_DFE:
+    case SCFDE_EQUALIZER_SUBBAND_PTR_DFE:
+        ptr_dfe_equalize(frame, frame_symbols, impulse, impulse_taps,
+                         noise_variance, 64u, data_symbols, output);
+        break;
+    case SCFDE_EQUALIZER_MC_LMS_DFE:
+    case SCFDE_EQUALIZER_MC_NLMS_DFE:
+    case SCFDE_EQUALIZER_MC_RLS_DFE:
+        multichannel_dfe_equalize(mode, frame, frame_symbols, training, 64u,
+                                  data_symbols, output);
         break;
     case SCFDE_EQUALIZER_LMS_DFE:
     case SCFDE_EQUALIZER_NLMS_DFE:

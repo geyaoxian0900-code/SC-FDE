@@ -333,11 +333,11 @@
             <v6LangP>3</v6LangP>
             <vShortEn>1</vShortEn>
             <vShortWch>1</vShortWch>
-            <v6Lto>0</v6Lto>
+            <v6Lto>1</v6Lto>
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>-Oz</MiscControls>
               <Define>GD32E50X,GD32E508,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
               <IncludePath>..\.;..\..\..\..\GD32E50x_Firmware_Library\CMSIS;..\..\..\..\GD32E50x_Firmware_Library\CMSIS\GD\GD32E50x\Include;..\..\..\..\GD32E50x_Firmware_Library\GD32E50x_standard_peripheral\Include;..\..\..\Utilities</IncludePath>
@@ -438,6 +438,11 @@
               <FileName>scfde_ldpc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\scfde_ldpc.c</FilePath>
+            </File>
+            <File>
+              <FileName>scfde_cck.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\scfde_cck.c</FilePath>
             </File>
             <File>
               <FileName>gd32e50x_it.c</FileName>

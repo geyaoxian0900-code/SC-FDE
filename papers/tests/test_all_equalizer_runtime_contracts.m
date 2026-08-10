@@ -270,15 +270,20 @@ r2 = run_unified_equalizer(struct("equalizers", "fd-turbo", ...
     "randomSeed", 42));
 verifyEqual(testCase, r2.totalBits, 512);
 verifyTrue(testCase, isfinite(r2.ber) && r2.ber >= 0 && r2.ber <= 1);
-% Environment parameterization: sediment presets and SSP options must
-% run; the Gaussian surface must raise a clear error on this build.
+% Environment parameterization: sediment presets, SSP options and the
+% Gaussian rough sea (altimetry file) must run; a rough sea must change
+% the arrivals compared with the flat surface at a shallow source
+% depth (surface-reflected paths).
 clay = scfde_bellhop_channel(struct("bellhopSediment", "clay"));
 verifyTrue(testCase, numel(clay) >= 1);
 cvw = scfde_bellhop_channel(struct("bellhopSsp", "cvw"));
 verifyTrue(testCase, numel(cvw) >= 1);
-verifyError(testCase, ...
-    @() scfde_bellhop_channel(struct("bellhopSurface", "gaussian")), ...
-    "SCFDE:Bellhop");
+[dRough, ~, roughInfo] = scfde_bellhop_channel(struct("bellhopSourceDepth", 5, ...
+    "bellhopSurface", "gaussian", "bellhopSurfaceRmsM", 1.0));
+verifyTrue(testCase, numel(dRough) >= 1, ...
+    "a rough sea must still produce arrivals");
+verifyTrue(testCase, roughInfo.totalArrivalCount >= 1, ...
+    "a rough sea must keep the Bellhop run valid");
 end
 
 function testAllResolvesPerScenario(testCase)

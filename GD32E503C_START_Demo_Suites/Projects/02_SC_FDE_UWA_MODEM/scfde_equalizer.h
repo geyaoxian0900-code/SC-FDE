@@ -38,6 +38,22 @@ typedef enum
     SCFDE_EQUALIZER_FDDA_TEQ,     /**< FDDA time-domain/decision adaptive. */
     SCFDE_EQUALIZER_TDDA_TEQ,     /**< TDDA variant. */
     SCFDE_EQUALIZER_FDDA_DFE_TEQ, /**< FDDA with decision feedback. */
+    /* C-grade ported family (book ch2): passive time-reversal front ends
+       and multichannel adaptive DFE on the full symbol stream. */
+    SCFDE_EQUALIZER_PTR_DFE,       /**< Passive TR matched filter + known DFE (2-47). */
+    SCFDE_EQUALIZER_SUBBAND_PTR_DFE, /**< Subarray PTR, single-branch fallback (2-48). */
+    SCFDE_EQUALIZER_MC_LMS_DFE,    /**< Multichannel LMS DFE, 2 pseudo-branches. */
+    SCFDE_EQUALIZER_MC_NLMS_DFE,   /**< Multichannel NLMS DFE, 2 pseudo-branches. */
+    SCFDE_EQUALIZER_MC_RLS_DFE,    /**< Multichannel RLS DFE, 2 pseudo-branches. */
+    /* Chapter-5 CCK receivers (FR-CCK frame, 8-bit words, see scfde_cck.h).
+       These modes are dispatched by the CCK modem, not the baseline FDE. */
+    SCFDE_EQUALIZER_CCK_MFB,       /**< CCK matched-filter bound. */
+    SCFDE_EQUALIZER_CCK_RAKE,      /**< CCK rake receiver. */
+    SCFDE_EQUALIZER_CCK_DFE,       /**< CCK candidate-list DFE. */
+    SCFDE_EQUALIZER_CCK_BIDFE,     /**< CCK bidirectional DFE-1. */
+    SCFDE_EQUALIZER_CCK_BIDFE2,    /**< CCK bidirectional DFE-2 (refinement). */
+    SCFDE_EQUALIZER_CCK_TR_DIVERSITY, /**< CCK time-reversal diversity. */
+    SCFDE_EQUALIZER_CCK_FDE,       /**< CCK frequency-domain IBDFE. */
     SCFDE_EQUALIZER_COUNT     /**< Sentinel used for validation and menu iteration. */
 } scfde_equalizer_mode_t;
 
