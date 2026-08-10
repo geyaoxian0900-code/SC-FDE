@@ -41,18 +41,33 @@ for k = 1:nMethods
     subplot(rows, cols, k);
     % Draw the SOFT equalizer output (estimates) when available - the
     % hard decisions in outputs{1} collapse every method to 4 points.
+    % A zero soft output (e.g. a PTR front end whose DFE does not
+    % converge on this frame) falls back to the hard decisions and is
+    % annotated.
+    hardFallback = false;
     if isfield(result, "estimates") && numel(result.estimates) >= k && ...
             ~isempty(result.estimates{k})
         out = result.estimates{k}(:).';
+        if max(abs(out)) < 1e-9
+            out = result.outputs{k}(:).';
+            hardFallback = true;
+        end
     else
         out = result.outputs{k}(:).';
     end
-    plot(real(out), imag(out), ".", "MarkerSize", 4); hold on;
+    plot(real(out(abs(out) > 1e-6)), imag(out(abs(out) > 1e-6)), ...
+        ".", "MarkerSize", 6); hold on;
     plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
     grid on; axis equal; axis([-2 2 -2 2]);
-    title(sprintf("%s\nBER=%.4g (%d/%d)", result.ids(k), ...
-        result.ber(k), result.errorBits(k), result.totalBits(k)), ...
-        "FontSize", 9);
+    if hardFallback
+        title(sprintf("%s\nBER=%.4g (%d/%d) [soft=0, hard shown]", ...
+            result.ids(k), result.ber(k), result.errorBits(k), ...
+            result.totalBits(k)), "FontSize", 9);
+    else
+        title(sprintf("%s\nBER=%.4g (%d/%d)", result.ids(k), ...
+            result.ber(k), result.errorBits(k), result.totalBits(k)), ...
+            "FontSize", 9);
+    end
 end
 sgtitle(sprintf("Equalized output constellations - one QPSK frame, SNR %g dB, seed %d", ...
     snrDb, randomSeed));
