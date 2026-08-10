@@ -416,8 +416,11 @@ if iscell(requested)
         end
     end
 elseif ischar(requested) || isstring(requested)
-    if requested ~= "all"
-        validate_id(string(requested));
+    requested = string(requested);
+    if ~(isscalar(requested) && requested == "all")
+        for k = 1:numel(requested)
+            validate_id(requested(k));
+        end
     end
 end
 
