@@ -55,8 +55,16 @@ for k = 1:nMethods
     else
         out = result.outputs{k}(:).';
     end
-    plot(real(out(abs(out) > 1e-6)), imag(out(abs(out) > 1e-6)), ...
-        ".", "MarkerSize", 6); hold on;
+    % Normalize every method to its own peak magnitude so the soft
+    % constellations are compared at the same scale (a PTR front end
+    % concentrates its energy on a few correlation peaks while the
+    % equalized methods deliver unit-amplitude symbol estimates).
+    peak = max(abs(out));
+    if peak > 0
+        out = out / peak;
+    end
+    plot(real(out(abs(out) > 1e-3)), imag(out(abs(out) > 1e-3)), ...
+        ".", "MarkerSize", 5); hold on;
     plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
     grid on; axis equal; axis([-2 2 -2 2]);
     if hardFallback

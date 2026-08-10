@@ -1,7 +1,13 @@
 function receiver = ptr_dfe(channel, source, cfg)
 %PTR_DFE Passive time-reversal (PTR) front end + known DFE (book 2-47).
+% The PTR front end is the CIRCULAR matched filter (frequency-domain
+% time reversal): the received block is a circular convolution of the
+% transmit block with the channel, so the linear filter(tr,1,.) would
+% spread the focused energy; the circular front end delivers one
+% correlation peak per symbol.
+N = numel(channel.received);
 timeReversal = conj(fliplr(channel.impulse));
-ptrFrontEnd = filter(timeReversal, 1, channel.received);
+ptrFrontEnd = ifft(conj(fft(channel.impulse, N)) .* fft(channel.received));
 [decisions, mse, ~, trace] = scfde.equalizers.known_dfe_core( ...
     ptrFrontEnd, source.tx, ...
     conv(timeReversal, channel.impulse), cfg);

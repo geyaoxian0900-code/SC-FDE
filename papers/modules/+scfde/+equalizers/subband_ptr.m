@@ -20,8 +20,14 @@ if size(branchImpulses, 1) ~= branchCount
     branchImpulses = repmat(impulse(:).', branchCount, 1);
 end
 output = zeros(1, size(branches, 2));
+blockLength = size(branches, 2);
 for branch = 1:branchCount
-    timeReversed = conj(fliplr(branchImpulses(branch, :)));
-    output = output + filter(timeReversed, 1, branches(branch, :));
+    % Circular (frequency-domain) time reversal: the received block is
+    % a circular convolution, so the linear filter would spread the
+    % focused energy; the circular matched filter yields one
+    % correlation peak per symbol (see ptr_dfe).
+    branchSpectrum = fft(branchImpulses(branch, :), blockLength);
+    output = output + ifft(conj(branchSpectrum) .* ...
+        fft(branches(branch, :)));
 end
 end
