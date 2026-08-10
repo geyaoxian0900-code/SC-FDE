@@ -1,0 +1,448 @@
+# GD32E503C SC-FDE 水声调制解调器 操作手册
+
+适用工程：`Projects/02_SC_FDE_UWA_MODEM`
+固件版本：41 种模式 + MAC 协议层 + 01-DSSS 全部特性移植（2026-08 批）
+配套文档：`hardware/FLASH_GUIDE.md`（烧录）、`hardware/WIRE_LOOPBACK_GUIDE.md`（有线回环）
+
+---
+
+## 目录
+
+1. [系统概述](#1-系统概述)
+2. [硬件准备](#2-硬件准备)
+3. [固件构建与烧录](#3-固件构建与烧录)
+4. [串口终端](#4-串口终端)
+5. [角色与命令总览](#5-角色与命令总览)
+6. [41 种模式详解](#6-41-种模式详解)
+7. [单板验证操作](#7-单板验证操作)
+8. [两板通信操作](#8-两板通信操作)
+9. [MAC 协议层](#9-mac-协议层)
+10. [自动化脚本](#10-自动化脚本)
+11. [验收清单](#11-验收清单)
+12. [故障排查](#12-故障排查)
+13. [附录](#13-附录)
+
+---
+
+## 1. 系统概述
+
+本固件实现一套完整的水声（UWA）SC-FDE 调制解调器：
+
+- **物理层**：QPSK / 4 ksym/s / 12 kHz 载波 / 96 kHz 发射 / 48 kHz 接收；
+  三 UW 帧结构（UW1|UW2|DATA|UW3），UW2 做 LS 信道估计（28 抽头）。
+- **均衡层**：41 种模式（AUTO + 31 种均衡器 + 7 种 CCK 接收机 + 3 种 CSK 接收机），
+  覆盖 MATLAB 论文工程 37 种均衡器的全部算法，外加基线 MF-FDE/IB-DFE/NLMS-TDE。
+- **调制族**：标准 QPSK 帧 / turbo 卷积编码帧 / CCK 帧（802.11b 互补码）/
+  CSK 帧（循环移位扩频）四种发射链，菜单自动按模式切换。
+- **MAC 层**：请求-应答握手、时隙突发 + 3/5 多数表决、idle 保活帧
+  （自 01 DSSS 工程移植）。
+- **测试特性**：200 轮自动压测、可调信道错误注入、no-sync 唤醒音、
+  PB0/PB1 同步线触发、burst TX、TX 预览。
+
+**模式数量**：41 = AUTO + 40 算法模式（37 种 MATLAB 均衡器 + 3 种基线扩展）。
+
+---
+
+## 2. 硬件准备
+
+### 2.1 必备
+
+| 项 | 说明 |
+|---|---|
+| 开发板 | GD32E503C-START（或兼容 GD32E508VET6 板），板上 PA4 DAC / PA0 ADC / USART0 |
+| 下载器 | 板载 GD-Link 或 J-Link（SWD） |
+| USB-TTL | 3.3V 电平，接 PA9(TX)/PA10(RX)，共地 |
+| 换能器/扬声器 | 两板通信时接 PA4 输出、PA0 输入（可选，回环可无） |
+
+### 2.2 引脚
+
+| 功能 | 引脚 |
+|---|---|
+| 发射 DAC | PA4（12 kHz 载波） |
+| 接收 ADC | PA0 |
+| 串口 TX/RX | PA9 / PA10（USART0，9600 8-N-1） |
+| 同步线 TX（可选） | PB0（2 ms 脉冲） |
+| 同步线 RX（可选） | PB1（触发 RX 捕获） |
+
+### 2.3 单板回环接线（模拟回环）
+
+PA4 → PA0 直连（建议串 1 kΩ 电阻限幅），无需换能器即可验证 DAC-ADC 链路。
+
+---
+
+## 3. 固件构建与烧录
+
+### 3.1 构建
+
+```
+UV4 -b MDK-ARM\GD32E503C_START.uvprojx -j0 -o build_log.txt
+```
+
+> **重要**：当前镜像约 40.5 KB，超过 MDK **评估版 32 KB 链接限制**（L6050U）。
+> 需先激活 Keil MDK（Project → License Management 输入有效序列号）方可链接成功。
+> 编译本身 0 Error 0 Warning；算法代码已通过 PC 单元测试（见 §10.3）。
+
+### 3.2 烧录（Keil）
+
+1. 打开 `MDK-ARM\GD32E503C_START.uvprojx`
+2. Options → Utilities → Settings：
+   - 首次：**Erase Full Chip**；地址 `0x08000000`；勾选 Program + Verify
+3. Flash → Download，等待 "Verify OK"
+
+### 3.3 烧录（命令行）
+
+```
+UV4 -f MDK-ARM\GD32E503C_START.uvprojx -j0   # 下载（需已配置下载器）
+```
+
+---
+
+## 4. 串口终端
+
+### 4.1 参数
+
+| 参数 | 值 |
+|---|---|
+| 波特率 | **9600** |
+| 数据/停止/校验 | 8 / 1 / 无 |
+| 行结束 | `\r` 或 `\r\n` |
+
+推荐工具：PuTTY / MobaXterm / `python -m serial.tools.miniterm COM6 9600`。
+
+### 4.2 上电横幅
+
+```
+========================================
+ GD32E508VE SC-FDE Underwater Modem
+========================================
+PHY : QPSK, 4 ksym/s, 12 kHz carrier
+FEC : none (baseline), payload <= 18 bytes
+EQ  : MMSE-FDE (baseline)
+
+Select node role:
+  1: local diagnostic (no external wiring)
+  ...
+role>
+```
+
+---
+
+## 5. 角色与命令总览
+
+### 5.1 角色选择（上电）
+
+| 键 | 角色 | 用途 |
+|---|---|---|
+| 1 | local diagnostic | 单板回环/自动测试/错误注入（无外部接线） |
+| 2 | transmitter | 发射文本 / burst |
+| 3 | receiver | 接收一帧 / 同步线触发 |
+| 4 | manual transceiver | 发射 + 接收 |
+| 5 | requester | 请求-应答握手（发请求方） |
+| 6 | responder | 请求-应答握手（应答方） |
+| 7 | slot A | 时隙 A：突发发射 + 表决 |
+| 8 | slot B | 时隙 B：表决 + 应答突发 |
+| 9 | requester no-sync | 唤醒音 + 请求突发（无同步线） |
+| A | responder no-sync | 能量监听 + 应答突发 |
+
+### 5.2 角色内命令
+
+`0` 在任何角色下都返回角色选择。`4` 切换下一均衡器（循环 41 种）。
+
+| 角色 | 命令 | 功能 |
+|---|---|---|
+| **1 diag** | `3` | 数字回环（当前模式，固定 "SC-FDE"） |
+| | `5` | DAC-ADC 模拟自回环（输入文本） |
+| | `6` | **200 轮自动压测**（含错误注入，统计 ok/sync/crc/data_match） |
+| | `7` | 设置错误注入百分比（0-100，0=关） |
+| **2 tx** | `1` | 发射文本（含 TX 预览） |
+| | `6` | burst TX：20 帧 + 50 ms 间隔 |
+| | `7` | burst TX + PB0 同步脉冲 |
+| **3 rx** | `2` | 接收一帧（能量检测触发） |
+| | `6` | 同步线触发接收（等 PB1 脉冲） |
+| **4 transceiver** | `1` / `2` | 同 tx/rx |
+| | `6` / `7` | 同 tx 角色 |
+| **5 requester** | `1` | 输入 1 字节 → 请求帧 → 等应答（4 s）→ MATCH 报告；空行退出 |
+| **6 responder** | `1` | 循环监听；收到请求即回显应答；任意键退出 |
+| **7 slot A** | `1` | 输入 1 字节（空=idle）→ 5 帧突发 → 收对端 5 帧 → 3/5 表决；空行退出 |
+| **8 slot B** | `1` | 收 5 帧 → 3/5 表决 → 回显 5 帧突发；空行退出 |
+| **9 requester no-sync** | `1` | 输入 1 字节 → 唤醒音(200 ms)+3 帧请求 → 等应答；空行退出 |
+| **A responder no-sync** | `1` | 能量监听 → 应答突发 3 帧；任意键退出 |
+
+---
+
+## 6. 41 种模式详解
+
+菜单 `4` 按枚举顺序循环；模式名显示在 `[角色] equalizer=...` 行。
+
+### 6.1 标准帧族（31 种，payload ≤ 18 B）
+
+| 族 | 模式 | 原理 | 适用 |
+|---|---|---|---|
+| 基线 | AUTO | 固定模式依次尝试至 CRC 通过 | 通用 |
+| ch3 FDE | MMSE-FDE / ZF-FDE / MF-FDE / IB-DFE | 频域单抽头均衡 ± 迭代判决反馈 | 频选信道（深零点多时用 ZF/IB-DFE） |
+| ch3 时域 | NLMS-TDE | 16 抽头时域 NLMS 均衡 | 训练充分、时变信道 |
+| ch3 迭代 | HTFDE / SD-IBDFE / HD-IBDFE / ICE-SD / ICE-HD | 混合时频 / 软硬迭代块 DFE（4 次迭代） | 强频选，ICE 变体在线更新信道 |
+| ch2 DFE | DFE / LMS-DFE / NLMS-DFE / RLS-DFE / DPLL-DFE | 时域判决反馈（已知/自适应） | 长多径，DPLL 含载波跟踪 |
+| ch2 C 级 | FBLMS / PTR-DFE / SUBBAND-PTR-DFE / MC-LMS-DFE / MC-NLMS-DFE / MC-RLS-DFE | 频域块 LMS / 被动时反 + DFE / 多通道自适应（2 伪分支） | 时反聚焦、多径抑制 |
+
+### 6.2 turbo 帧族（6 种，payload ≤ 6 B）
+
+FD-TURBO / FD-DFE / TF-TURBO / BITF-TURBO / BLMS-TF-TURBO / TD-TURBO：
+卷积编码 + 交织 + BCJR 软反馈迭代。发射链自动切到卷积编码帧。
+
+### 6.3 CCK 帧族（7 种，payload ≤ 10 B）
+
+CCK-MFB / CCK-RAKE / CCK-DFE / CCK-BIDFE / CCK-BIDFE2 / CCK-TR-DIV / CCK-FDE：
+IEEE 802.11b 互补码键控（8 bit/码字、256 码本、8-chip），独立帧
+（UW1|UW2|16 码字|UW3，224 符号）。发射链自动切换。
+
+### 6.4 CSK 帧族（3 种，payload ≤ 6 B）
+
+CSK-MF / CSK-SOFT-SIC / CSK-ESE：
+循环移位键控（8-chip 低旁瓣根序列、M=4、48 符号帧，512 符号）。
+ESE 单用户输出 = MF 回退（与 MATLAB 导出一致）。
+
+### 6.5 模式选择建议
+
+- 回环验收：任意模式（数字回环无信道时全部可通过）。
+- 实际水声信道：先 AUTO；再手工对比 MMSE-FDE / NLMS-DFE / FDE-IBDFE 族。
+- 强多径：PTR-DFE / RLS-DFE / SD-IBDFE。
+- 突发短包：turbo 族（编码增益）。
+- 教学演示：CCK / CSK 族（独立调制链）。
+
+---
+
+## 7. 单板验证操作
+
+### 7.1 数字回环（角色 1，命令 3）
+
+```
+[local diagnostic] equalizer=MMSE-FDE error=0%
+  3: digital loopback with selected equalizer
+cmd> 3
+Digital loopback with MMSE-FDE...
+sync=1.000 start=0 CFO=0 Hz EQ=MMSE-FDE
+RX OK: seq=85 len=6 hex=53 43 2D 46 44 45  text=SC-FDE
+```
+
+41 种模式逐个验证：反复按 `4`（切换模式）+ `3`（回环），每模式应 RX OK。
+
+### 7.2 自动压测（角色 1，命令 6）
+
+```
+cmd> 6
+Auto test: 200 rounds, MMSE-FDE, error=0%...
+  round 50/200: ok=50
+  ...
+Auto test done: ok=200/200 sync=200 crc=200 data_match=200
+```
+
+`ok` 应为 200/200；切到抗噪弱模式（如 ZF-FDE）可观察差异。
+
+### 7.3 错误注入（角色 1，命令 7 + 3/6）
+
+```
+cmd> 7
+Error percent (0-100, 0=off)> 10
+Error injection: 10% symbol blocks flipped.
+cmd> 3     # 数字回环 → 观察偶发 RX FAIL
+```
+
+- 0-5%：多数模式仍通过；10%+：自适应/迭代模式（NLMS-DFE、SD-IBDFE、
+  turbo 族）表现更好——用于**板载抗噪分级对比**。
+- 与自动测试（命令 6）组合可得到每种模式的统计通过率。
+
+### 7.4 模拟回环（角色 1，命令 5）
+
+PA4→PA0 接线（串 1 kΩ）。输入文本（≤18 B）或回车用 "SC-FDE1234"：
+
+```
+cmd> 5
+Analog self-loopback with MMSE-FDE...
+Text (max 18 bytes): HELLO
+ADC min=... max=... mean=... clipped=... samples=...
+RX OK: seq=170 len=5 hex=48 45 4C 4C 4F  text=HELLO
+```
+
+检查 `clipped=0`（削波则串电阻或降发射幅度）。
+
+---
+
+## 8. 两板通信操作
+
+### 8.1 请求-应答握手（角色 5 ↔ 6）
+
+```
+板 A（requester）:              板 B（responder）:
+role> 5                         role> 6
+cmd> 1                          cmd> 1
+req byte> A                     [Responder] listening...
+Request 0x41 seq=0xA1...        Request 0x41 -> reply 0x41
+Reply 0x41 -> MATCH
+```
+
+### 8.2 时隙表决（角色 7 ↔ 8）
+
+```
+板 A（slot A）:                 板 B（slot B）:
+cmd> 1                          cmd> 1
+slot byte> K                    Listening for slot A burst...
+TX burst x5: ...                Vote: majority 0x4B
+... waiting peer burst...       Echo burst x5: ...
+Vote: majority 0x4B
+```
+
+A 输入 `K`（0x4B）→ 5 帧突发；B 收 5 帧 → 3/5 表决 → 回显 5 帧；A 再表决验证。
+任一方输错（如只收 3 帧一致）不构成多数 → `NO MAJORITY`。
+
+### 8.3 no-sync 唤醒（角色 9 ↔ A）
+
+不需要 PB0/PB1，也不依赖精确时刻：
+
+```
+板 A: role> 9, cmd> 1, req byte> Z   → 唤醒音 200ms + 3 帧请求突发
+板 B: role> A, cmd> 1                → 能量检测触发 → 应答突发 3 帧
+板 A: Reply 0x5A -> MATCH
+```
+
+### 8.4 burst TX + 同步线（角色 2/3）
+
+```
+发射端（tx）:  cmd> 7   → 每帧前发 PB0 2ms 脉冲，共 20 帧
+接收端（rx）:  cmd> 6   → 等 PB1 脉冲后立即整窗捕获（无需能量阈值）
+```
+
+接线：A 板 PB0 → B 板 PB1（+共地）。
+
+### 8.5 手动收发（角色 4）
+
+`1` 发射文本、`2` 接收一帧（能量触发，5 s 超时）；`4` 切换模式后收发
+按新模式的帧族自动工作。
+
+---
+
+## 9. MAC 协议层
+
+### 9.1 帧格式（包）
+
+```
+[0xA5][0x5A][len][seq][payload...][CRC16]
+```
+
+| 字段 | 含义 |
+|---|---|
+| A5 5A | 魔数 |
+| len | payload 字节数（≤18/10/6 按模式族） |
+| seq | 应用序号或**协议标签** |
+| payload | 用户数据 |
+| CRC16 | CRC-16/CCITT |
+
+### 9.2 协议标签（seq 字段）
+
+| seq | 帧类型 | 说明 |
+|---|---|---|
+| 0xA1 | 请求帧 | payload = 1 字节请求数据 |
+| 0xA2 | 应答帧 | payload = 回显数据 |
+| 0x00 + len=0 | idle 保活帧 | 时隙间隙/无数据时占位 |
+| 其他 | 普通数据 | 手动收发 |
+
+### 9.3 表决规则（slot A/B）
+
+- 发射：用户数据**重复 5 帧**（50 ms 间隔），无数据时发 idle。
+- 接收：首个有效非 idle 帧开启表决窗；**满 5 帧或收到 idle 时定论**；
+  同值样本 **≥3** 为多数，否则 `NO MAJORITY`。
+
+---
+
+## 10. 自动化脚本
+
+脚本位于 `porting_stm32/hardware/`，需 `pyserial`：
+`pip install pyserial`。
+
+### 10.1 单板 300 帧压测
+
+```
+python single_board_loopback.py --port COM6
+```
+
+### 10.2 41 模式全量扫（菜单 4 + 3）
+
+```
+python mode_sweep_loopback.py --port COM6 --repeats 1
+```
+
+输出 `results/mode_sweep_<时间戳>.csv/.log`；退出码 0 = 全过。
+`--timeout 15` 可给 CCK/CSK（较长解码）留余量。
+
+### 10.3 PC 单元测试（无需硬件）
+
+```
+cd porting_stm32/pc_tests
+cmake -S . -B build && cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+8 项：fft / ldpc / equalizer / end_to_end（41 模式回环）/ turbo / **cck** / **csk** / **protocol**。
+
+---
+
+## 11. 验收清单
+
+### 11.1 最低验收（烧录后）
+
+- [ ] 上电横幅出现，无 HardFault 循环
+- [ ] 角色 1 → `3`：MMSE-FDE 数字回环 RX OK（"SC-FDE"）
+- [ ] 连按 `4` 循环 41 次模式名无异常
+- [ ] 角色 1 → `5`：模拟回环 RX OK（接线后）
+
+### 11.2 完整验收
+
+- [ ] `mode_sweep_loopback.py`：41 模式全 PASS
+- [ ] 自动压测 200/200（error=0%）
+- [ ] 错误注入 10%：记录各模式通过率（自适应族 ≥ FDE 族）
+- [ ] 两板握手 MATCH（5↔6）、时隙表决 majority（7↔8）、no-sync MATCH（9↔A）
+- [ ] burst TX + 同步线 RX 收包正常
+
+---
+
+## 12. 故障排查
+
+| 现象 | 处理 |
+|---|---|
+| 无横幅 | 串口 9600 8-N-1；PA9/PA10 接反；USB-TTL 3.3V；共地 |
+| 乱码 | 波特率/电平 |
+| 回环 RX FAIL | 确认模式在**对应帧族**（turbo 模式需 turbo 帧，回环命令 3 自动处理）；错误注入>10% 属预期 |
+| CCK/CSK 回环超时 | 解码耗时长（DFE/BiDFE 候选搜索），脚本加 `--timeout 15` |
+| 两板不通 | 换能器方向、增益；先单板模拟回环确认 PHY；`clipped` 计数 |
+| 下载失败 | SWD 四线；全片擦除 |
+| L6050U | **Keil 未激活**（32 KB 限制），见 §3.1 |
+| responder 卡监听 | 按任意键退出 |
+
+---
+
+## 13. 附录
+
+### 13.1 枚举顺序（菜单 4 循环）
+
+AUTO → MMSE-FDE → ZF-FDE → MF-FDE → IB-DFE → NLMS-TDE → HTFDE →
+SD-IBDFE → HD-IBDFE → ICE-SD-IBDFE → ICE-HD-IBDFE → DFE → LMS-DFE →
+NLMS-DFE → RLS-DFE → DPLL-DFE → FBLMS → FD-TURBO → FD-DFE → TF-TURBO →
+BITF-TURBO → BLMS-TF-TURBO → TD-TURBO → FDDA-TEQ → TDDA-TEQ → FDDA-DFE-TEQ →
+PTR-DFE → SUBBAND-PTR-DFE → MC-LMS-DFE → MC-NLMS-DFE → MC-RLS-DFE →
+CCK-MFB → CCK-RAKE → CCK-DFE → CCK-BIDFE → CCK-BIDFE2 → CCK-TR-DIV →
+CCK-FDE → CSK-MF → CSK-SOFT-SIC → CSK-ESE
+
+### 13.2 帧族与载荷上限
+
+| 帧族 | 帧结构 | payload 上限 |
+|---|---|---|
+| 标准 | UW1(32)\|UW2(32)\|QPSK(96)\|UW3(32) = 192 符号 | 18 B |
+| turbo | 同标准帧，DATA 为卷积编码 | 6 B |
+| CCK | UW1\|UW2\|16 码字(128 chips)\|UW3 = 224 符号 | 10 B |
+| CSK | UW1\|UW2\|48 符号×8 chips\|UW3 = 512 符号 | 6 B |
+
+### 13.3 资源与限制
+
+- RX 捕获：8192 采样（BSP DMA 缓冲 8192）
+- Keil 评估版：代码 ≤ 32 KB（当前 40.5 KB，需激活）
+- 芯片：GD32E508VET6（Cortex-M33 @180 MHz，512 KB Flash / 128 KB SRAM）

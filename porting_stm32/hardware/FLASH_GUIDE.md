@@ -30,6 +30,32 @@
 | ch5 CCK | CCK-MFB / CCK-RAKE / CCK-DFE / CCK-BIDFE / CCK-BIDFE2 / CCK-TR-DIV / CCK-FDE | **CCK 帧**（224 符号，8-bit 码字 ×16，payload ≤ 10B） | 802.11b 互补码键控，独立调制解调器 |
 | ch6 CSK | CSK-MF / CSK-SOFT-SIC / CSK-ESE | **CSK 帧**（512 符号，8-chip 循环移位 ×48，payload ≤ 6B） | 扩频循环移位键控，独立调制解调器 |
 
+### 1.2 MAC 协议层（自 01 DSSS 工程移植）
+
+角色选择扩展为 8 项，5-8 为协议角色（`scfde_protocol.c` 纯逻辑 + `scfde_app.c` 状态机）：
+
+| 角色 | 协议行为 |
+|---|---|
+| 5 requester | 输入 1 字节 → 发**请求帧**（seq=0xA1）→ 等**应答帧**（seq=0xA2，4s 超时）→ 比对报告 |
+| 6 responder | 循环监听 → 收到请求帧 → **回显应答**（seq=0xA2） |
+| 7 slot A | 每轮输入 1 字节（回车=idle）→ **5 帧突发**（50ms 间隔）→ 收听对端突发 → **3/5 多数表决** |
+| 8 slot B | 收听 A 槽突发 → **3/5 表决** → 回显表决结果 5 帧突发 |
+
+帧类型标签放在包 `seq` 字段：0xA1=请求、0xA2=应答、0x00+len=0=**idle 保活帧**。
+表决语义与 01 一致：满 5 帧或收到 idle 时定论，样本 ≥3 相同才算多数。
+
+### 1.3 01-DSSS 其余特性移植（全部完成）
+
+| 特性 | 位置 | 说明 |
+|---|---|---|
+| 单板自动测试 | diag 角色命令 6 | 200 轮数字回环压测（当前等化器），统计 ok/sync/crc/data_match，每 50 轮进度 |
+| 信道错误注入 | diag 角色命令 7 | `error%`（0-100，xorshift PRNG）按符号块 180° 翻转注入，配合菜单 3/6 使用 |
+| no-sync 唤醒 | 角色 9/A | requester：200ms 唤醒音 + 50ms gap + 3 帧请求突发；responder：能量检测监听 + 3 帧应答突发（无 PB0/PB1 依赖） |
+| 同步脉冲线 | tx 角色命令 7 / rx 角色命令 6 | PB0 发 2ms 脉冲 → PB1 触发 RX 窗口（`half_duplex_sync_*`，BSP 已具备） |
+| burst TX | tx 角色命令 6 | 20 帧 + 50ms gap（可加同步脉冲） |
+| TX 预览 | 命令 1 发射时 | 打印包 hex + 采样数 |
+| 仿真 RX | 并入自动测试 | 数字回环样本 + 错误注入 = 仿真接收流 |
+
 ## 2. 烧录准备
 
 ### 2.1 下载器与接线（SWD）
@@ -123,7 +149,7 @@ role>
 
 ## 6. Keil 评估版 32KB 限制（重要）
 
-当前镜像约 **37.2KB** 代码（37172 B，编译 0 Error 0 Warning），超过 MDK 未激活
+当前镜像约 **40.5KB** 代码（40480 B，编译 0 Error 0 Warning），超过 MDK 未激活
 （评估版）的 32KB 链接限制（`L6050U: code size exceeds the maximum allowed`）。
 **需要激活 Keil MDK**（Project → License Management 填入有效序列号，或联网激活
 MDK-Professional）后才能完成链接并生成 `Project.hex`。激活后重新构建：
@@ -133,4 +159,4 @@ UV4 -b MDK-ARM\GD32E503C_START.uvprojx -j0 -o build_log.txt
 ```
 
 全部算法代码已通过 PC 单元测试（`porting_stm32/pc_tests`，GCC 编译，
-**7 项测试全 PASS**：fft/ldpc/equalizer/end_to_end(41 模式)/turbo/cck/csk）。
+**8 项测试全 PASS**：fft/ldpc/equalizer/end_to_end(41 模式)/turbo/cck/csk/protocol）。

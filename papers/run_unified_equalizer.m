@@ -242,6 +242,8 @@ results.ber = totalErrors ./ totalBits;
 results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
+results.outputs = recv.outputs;
+results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "qpsk";
 end
@@ -311,6 +313,8 @@ results.ber = totalErrors ./ totalBits;
 results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
+results.outputs = recv.outputs;
+results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "cck";
 end
@@ -385,6 +389,8 @@ results.ber = totalErrors ./ totalBits;
 results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
+results.outputs = recv.outputs;
+results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "csk";
 end
@@ -535,6 +541,8 @@ results.ber = totalErrors ./ totalBits;
 results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
+results.outputs = recv.outputs;
+results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "turbo";
 end

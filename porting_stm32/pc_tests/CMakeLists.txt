@@ -20,6 +20,7 @@ set(SCFDE_CORE_SOURCES
     ${FIRMWARE_DIR}/scfde_turbo.c
     ${FIRMWARE_DIR}/scfde_cck.c
     ${FIRMWARE_DIR}/scfde_csk.c
+    ${FIRMWARE_DIR}/scfde_protocol.c
 )
 
 # Platform-independent algorithm library (public API tests link against it).
@@ -42,6 +43,7 @@ add_scfde_test(test_end_to_end)   # full digital loopback, all equalizer modes
 add_scfde_test(test_turbo)         # conv code + interleaver + BCJR + turbo loopback
 add_scfde_test(test_cck)          # CCK modem loopback, all 7 receivers
 add_scfde_test(test_csk)          # CSK modem loopback, all 3 receivers
+add_scfde_test(test_protocol)     # MAC protocol: frame tags + slot voting
 
 # Static-include tests compile the firmware sources themselves and therefore
 # must not link scfde_core (duplicate symbols).
