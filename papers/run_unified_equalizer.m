@@ -58,16 +58,30 @@ switch lower(cfg.scenario)
             "scenario must be qpsk, turbo, cck, csk, or auto.");
 end
 
-% BER statistics metadata: total bits, error bits and the 95%
-% Clopper-Pearson interval per equalizer.  A zero-error result is
-% reported as an interval, not as an exact BER = 0.
-if isfield(results, "totalBits")
-    results.errorBits = round(results.ber .* results.totalBits);
-    [ciLo, ciHi] = clopper_pearson_95(results.errorBits, results.totalBits);
-    results.berLower95 = ciLo;
-    results.berUpper95 = ciHi;
-    results.totalBits = results.totalBits;
-    results.reachedTarget = results.totalBits >= 1;
+% BER statistics metadata: exact per-equalizer error counts, total bit
+% counts and the 95% Clopper-Pearson interval.  The scenarios return
+% exact integer vectors; this common postprocessing validates their
+% shape instead of reconstructing errors from BER.  A zero-error result
+% is reported as an interval, not as an exact BER = 0.
+if isfield(results, "totalBits") && isfield(results, "errorBits")
+    errors = double(results.errorBits(:).');
+    bits = double(results.totalBits(:).');
+    if isscalar(bits) && ~isscalar(errors)
+        bits = repmat(bits, size(errors));
+    end
+    if ~isequal(size(errors), size(bits)) || ...
+            numel(errors) ~= numel(results.ids) || ...
+            any(bits <= 0) || any(errors < 0) || any(errors > bits)
+        error("SCFDE:MetricShape", ...
+            "errorBits and totalBits must be valid per-equalizer vectors.");
+    end
+    results.errorBits = errors;
+    results.totalBits = bits;
+    results.ber = errors ./ bits;
+    [ciLo, ciHi] = clopper_pearson_95(errors, bits);
+    results.berLower95 = ciLo(:).';
+    results.berUpper95 = ciHi(:).';
+    results.reachedTarget = bits >= 1;
 end
 results.gitCommit = git_commit_short();
 results.matlabVersion = version;
@@ -200,6 +214,7 @@ for frame = 1:cfg.frameCount
     end
 end
 results.ber = totalErrors ./ totalBits;
+results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
@@ -208,13 +223,17 @@ end
 
 %% Chapter 5 CCK link
 function results = run_cck_scenario(cfg)
+if cfg.symbols < 4
+    error("SCFDE:FrameTooShort", ...
+        "CCK scenario requires at least 4 eight-chip symbols for 32 training chips.");
+end
 [book, bitTable] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 imp = scfde.equalizers.ch5_short_turbo_channel();
 nv = 10^(-cfg.snrDb / 10);
 link = struct("noiseVariance", nv, "receiverCandidateLimit", 128, ...
     "turboIterations", 3, "snrDb", cfg.snrDb);
 totalErrors = [];
-totalBits = 0;
+totalBits = [];
 for frame = 1:cfg.frameCount
     idx = randi(size(book, 1), 1, cfg.symbols);
     chips = reshape(book(idx, :).', 1, []);
@@ -229,6 +248,7 @@ for frame = 1:cfg.frameCount
     recv = scfde.receiver_bank_pluggable(ch, src, link);
     if isempty(totalErrors)
         totalErrors = zeros(1, numel(recv.ids));
+        totalBits = zeros(1, numel(recv.ids));
         results.ids = recv.ids;
         results.names = recv.names;
     end
@@ -259,10 +279,11 @@ for frame = 1:cfg.frameCount
         txBits = reshape(bitTable(idx, :).', 1, []);
         rxBits = reshape(bitTable(detectedIdx, :).', 1, []);
         totalErrors(eq) = totalErrors(eq) + sum(rxBits ~= txBits);
+        totalBits(eq) = totalBits(eq) + numel(txBits);
     end
-    totalBits = totalBits + numel(txBits);
 end
-results.ber = totalErrors / totalBits;
+results.ber = totalErrors ./ totalBits;
+results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
@@ -284,6 +305,7 @@ dicts = scfde.equalizers.ch6_conventional_dictionaries(book, channels, 1);
 totalErrors = 0;
 totalBits = 0;
 totalErrors = [];
+totalBits = [];
 for frame = 1:cfg.frameCount
     idx6 = randi(4, cfg.symbols, 1);
     received = zeros(cfg.symbols, codeLength);
@@ -300,6 +322,7 @@ for frame = 1:cfg.frameCount
     recv = scfde.receiver_bank_pluggable(ch, src, link);
     if isempty(totalErrors)
         totalErrors = zeros(1, numel(recv.ids));
+        totalBits = zeros(1, numel(recv.ids));
         results.ids = recv.ids;
         results.names = recv.names;
     end
@@ -331,10 +354,11 @@ for frame = 1:cfg.frameCount
         txBits = reshape(bits(idx6, :).', 1, []);
         rxBits = reshape(bits(det, :).', 1, []);
         totalErrors(eq) = totalErrors(eq) + sum(rxBits ~= txBits);
+        totalBits(eq) = totalBits(eq) + numel(txBits);
     end
-    totalBits = totalBits + numel(txBits);
 end
-results.ber = totalErrors / totalBits;
+results.ber = totalErrors ./ totalBits;
+results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;
@@ -389,7 +413,7 @@ link = struct("noiseVariance", nv, "iterations", 3, ...
     "fddaBlockLength", 32, "fddaFfLength", 32, "fddaFbLength", 10, ...
     "permutation", [], "snrDb", cfg.snrDb);
 totalErrors = [];
-totalBits = 0;
+totalBits = [];
 % Interleaver is generated ONCE by the scenario and passed through the
 % link; the modules must not reset the global RNG.
 permutation = randperm(2 * infoBits);
@@ -413,6 +437,7 @@ for frame = 1:cfg.frameCount
     recv = scfde.receiver_bank_pluggable(ch, src, link);
     if isempty(totalErrors)
         totalErrors = zeros(1, numel(recv.ids));
+        totalBits = zeros(1, numel(recv.ids));
         results.ids = recv.ids;
         results.names = recv.names;
     end
@@ -421,10 +446,11 @@ for frame = 1:cfg.frameCount
         out = recv.outputs{eq}(:).';
         totalErrors(eq) = totalErrors(eq) + ...
             sum(out(1:numel(ref)) ~= ref);
+        totalBits(eq) = totalBits(eq) + numel(ref);
     end
-    totalBits = totalBits + numel(ref);
 end
-results.ber = totalErrors / totalBits;
+results.ber = totalErrors ./ totalBits;
+results.errorBits = totalErrors;
 results.totalBits = totalBits;
 results.traces = recv.traces;
 results.config = link;

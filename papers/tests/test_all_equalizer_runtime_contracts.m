@@ -143,6 +143,36 @@ verifyEqual(testCase, trace.outputDomain, "information-symbols");
 verifyEqual(testCase, numel(trace.equalizedFrame), 1280);
 end
 
+function testCckAndCskReturnPerMethodExactCounts(testCase)
+cases = { ...
+    struct("equalizers", {{"cck-rake", "cck-dfe"}}, ...
+        "scenario", "cck", "symbols", 8), ...
+    struct("equalizers", {{"csk-matched-filter", "csk-ese"}}, ...
+        "scenario", "csk", "symbols", 8)};
+for k = 1:numel(cases)
+    cfg = cases{k};
+    cfg.frameCount = 1;
+    cfg.makePlot = false;
+    cfg.randomSeed = 42;
+    result = run_unified_equalizer(cfg);
+    verifySize(testCase, result.ber, [1, 2]);
+    verifySize(testCase, result.errorBits, [1, 2]);
+    verifySize(testCase, result.totalBits, [1, 2]);
+    verifyEqual(testCase, result.ber, ...
+        result.errorBits ./ result.totalBits, "AbsTol", 0);
+    verifyTrue(testCase, all(result.ber >= result.berLower95) && ...
+        all(result.ber <= result.berUpper95));
+end
+end
+
+function testCckShortFrameRaisesContractError(testCase)
+verifyError(testCase, ...
+    @() run_unified_equalizer(struct("equalizers", "cck-rake", ...
+        "scenario", "cck", "symbols", 3, "frameCount", 1, ...
+        "makePlot", false, "randomSeed", 42)), ...
+    "SCFDE:FrameTooShort");
+end
+
 function [channel, source, cfg] = buildTurboFixture()
 rng(42, "twister");
 information = randi([0 1], 1, 512);
