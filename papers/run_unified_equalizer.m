@@ -42,6 +42,8 @@ rng(cfg.randomSeed, "twister");
 
 if strcmpi(cfg.scenario, "auto")
     cfg.scenario = infer_scenario(cfg.equalizers);
+else
+    validate_scenario_ids(cfg.scenario, cfg.equalizers);
 end
 
 switch lower(cfg.scenario)
@@ -156,7 +158,8 @@ link = struct("trainingSymbols", 64, "dataSymbols", dataSymbols, ...
     "lmsStep", 0.008, "nlmsStep", 0.35, ...
     "rlsForgettingFactor", 0.985, "rlsInitialInverseCorrelation", 100, ...
     "dpllProportionalGain", 0.020, "dpllIntegralGain", 0.0004, ...
-    "snrDb", cfg.snrDb, "noiseVariance", 10^(-cfg.snrDb / 10), ...
+    "snrDb", cfg.snrDb, "scenario", "qpsk", ...
+    "noiseVariance", 10^(-cfg.snrDb / 10), ...
     "modulation", "qpsk", ...
     "iterations", 4, "infoBits", 120, ...
     "turboDecoderMode", "Log-MAP", "baselineDecoder", "Log-MAP", ...
@@ -231,7 +234,7 @@ end
 imp = scfde.equalizers.ch5_short_turbo_channel();
 nv = 10^(-cfg.snrDb / 10);
 link = struct("noiseVariance", nv, "receiverCandidateLimit", 128, ...
-    "turboIterations", 3, "snrDb", cfg.snrDb);
+    "turboIterations", 3, "snrDb", cfg.snrDb, "scenario", "cck");
 totalErrors = [];
 totalBits = [];
 for frame = 1:cfg.frameCount
@@ -299,11 +302,10 @@ imp = [1, 0.4 * exp(1j * 0.3), 0.15 * exp(-1j * 0.6)];
 nv = 1 / (size(bits, 2) * 10^(cfg.snrDb / 10));
 link = struct("noiseVariance", nv, "codeLength", codeLength, ...
     "cskOrder", 4, "conventionalUsers", 1, "idmaUsers", 1, ...
-    "innerIterations", 3, "outerIterations", 2, "snrDb", cfg.snrDb);
+    "innerIterations", 3, "outerIterations", 2, "snrDb", cfg.snrDb, ...
+    "scenario", "csk");
 channels = scfde.equalizers.ch6_dictionary_channels(imp, 1, codeLength);
 dicts = scfde.equalizers.ch6_conventional_dictionaries(book, channels, 1);
-totalErrors = 0;
-totalBits = 0;
 totalErrors = [];
 totalBits = [];
 for frame = 1:cfg.frameCount
@@ -366,6 +368,10 @@ results.scenario = "csk";
 end
 
 function scenario = infer_scenario(equalizers)
+% Resolve the scenario from the equalizer registry: every requested ID
+% must map to exactly ONE scenario.  Mixed-scenario requests are
+% rejected (SCFDE:MixedScenarios) instead of guessing a priority.
+registry = scfde.equalizer_registry();
 ids = strings(1, 0);
 if iscell(equalizers)
     for k = 1:numel(equalizers)
@@ -376,23 +382,69 @@ if iscell(equalizers)
 elseif ischar(equalizers) || isstring(equalizers)
     ids = string(equalizers);
 end
-if any(contains(ids, "cck-"))
-    scenario = "cck";
-elseif any(contains(ids, "csk-"))
-    scenario = "csk";
-elseif any(contains(ids, "turbo") | contains(ids, "teq") | ...
-        contains(ids, "fd-dfe"))
-    scenario = "turbo";
-else
-    scenario = "qpsk";
+if isempty(ids)
+    error("SCFDE:MixedScenarios", ...
+        "scenario=auto requires at least one built-in equalizer ID.");
 end
+scenarios = strings(1, 0);
+for k = 1:numel(ids)
+    match = find(registry.id == ids(k), 1);
+    if isempty(match)
+        error("SCFDE:UnknownEqualizer", "Unknown equalizer ID: %s.", ids(k));
+    end
+    scenarios(end + 1) = registry.scenario(match); %#ok<AGROW>
+end
+uniqueScenarios = unique(scenarios);
+if numel(uniqueScenarios) > 1
+    error("SCFDE:MixedScenarios", ...
+        "scenario=auto cannot mix %s: requested %s.", ...
+        strjoin(uniqueScenarios, ", "), strjoin(ids, ", "));
+end
+scenario = uniqueScenarios(1);
+end
+
+function validate_scenario_ids(scenario, equalizers)
+% With an explicit scenario every built-in requested ID must belong to
+% that scenario; function handles (custom modules) are not checked.
+registry = scfde.equalizer_registry();
+requested = equalizers;
+if iscell(requested)
+    for k = 1:numel(requested)
+        item = requested{k};
+        if ischar(item) || isstring(item)
+            validate_id(string(item));
+        end
+    end
+elseif ischar(requested) || isstring(requested)
+    if requested ~= "all"
+        validate_id(string(requested));
+    end
+end
+
+    function validate_id(id)
+        match = find(registry.id == id, 1);
+        if isempty(match)
+            error("SCFDE:UnknownEqualizer", ...
+                "Unknown equalizer ID: %s.", id);
+        end
+        % fblms is a dual-scenario module: its registered scenario is
+        % turbo (decoded information decisions), while the QPSK
+        % scenario keeps its frame-symbol output (documented in the
+        % traceability matrix, Task 5 of the runtime-contract repair).
+        dualScenario = (id == "fblms") && (string(scenario) == "qpsk");
+        if ~dualScenario && registry.scenario(match) ~= string(scenario)
+            error("SCFDE:MixedScenarios", ...
+                "Equalizer %s belongs to scenario %s, not %s.", ...
+                id, registry.scenario(match), string(scenario));
+        end
+    end
 end
 
 %% Chapter 4 turbo link (convolutional-coded BPSK frame)
 function results = run_turbo_scenario(cfg)
 % Chapter-4 coded frame matching the book FDDA-TEQ simulation
 % parameters (Fig. 4-29..4-32): convolutional code (7,5) octal, rate
-% 1/2, blocks of 256 training + 1024 info symbols, I_inner=2,
+% 1/2, blocks of 256 training + 1024 coded data symbols (512 information bits), I_inner=2,
 % I_outer=3, mu_f=0.2, mu_b=0.01.  The frame is [training; data]:
 % the first 256 symbols are an independent training sequence (used by
 % the adaptive FDDA-TEQ feedforward/feedback updates), followed by the
@@ -411,7 +463,7 @@ link = struct("noiseVariance", nv, "iterations", 3, ...
     "blmsRegularization", 1e-3, "turboDamping", 0.75, ...
     "fddaStepFf", 0.2, "fddaStepFb", 0.01, ...
     "fddaBlockLength", 32, "fddaFfLength", 32, "fddaFbLength", 10, ...
-    "permutation", [], "snrDb", cfg.snrDb);
+    "permutation", [], "snrDb", cfg.snrDb, "scenario", "turbo");
 totalErrors = [];
 totalBits = [];
 % Interleaver is generated ONCE by the scenario and passed through the
@@ -472,7 +524,3 @@ exportgraphics(fig, path, "Resolution", 150);
 close(fig);
 end
 
-function symbol = hard_qpsk(value)
-symbol = ((1 - 2 * (real(value) < 0)) + ...
-    1j * (1 - 2 * (imag(value) < 0))) / sqrt(2);
-end

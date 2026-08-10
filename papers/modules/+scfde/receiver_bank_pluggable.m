@@ -28,7 +28,7 @@ if isfield(cfg, "equalizers")
 else
     requested = "all";
 end
-modules = resolve_equalizer_modules(requested);
+modules = resolve_equalizer_modules(requested, cfg);
 
 registry = scfde.equalizer_registry();
 receiver.names = strings(1, numel(modules));
@@ -71,7 +71,7 @@ for moduleIndex = 1:numel(modules)
 end
 end
 
-function modules = resolve_equalizer_modules(requested)
+function modules = resolve_equalizer_modules(requested, cfg)
 if isa(requested, "function_handle")
     modules = {requested};
     return;
@@ -82,19 +82,17 @@ if iscell(requested)
 end
 requested = string(requested);
 if isscalar(requested) && requested == "all"
-    % "all" runs the symbol-aligned equalizers (ch2 TDE + ch3 FDE) that
-    % share the same frame structure. Chapter 4/5/6 equalizers use their
-    % own frame formats and must be selected explicitly by ID.
-    modules = {@scfde.equalizers.conventional_dfe, ...
-        @scfde.equalizers.lms_dfe, @scfde.equalizers.nlms_dfe, ...
-        @scfde.equalizers.rls_dfe, @scfde.equalizers.dpll_dfe, ...
-        @scfde.equalizers.mc_lms_dfe, @scfde.equalizers.mc_nlms_dfe, ...
-        @scfde.equalizers.mc_rls_dfe, @scfde.equalizers.ptr_dfe, ...
-        @scfde.equalizers.subband_ptr_dfe, ...
-        @scfde.equalizers.mmse_fde, @scfde.equalizers.zf_fde, ...
-        @scfde.equalizers.htfde, @scfde.equalizers.sd_ibdfe, ...
-        @scfde.equalizers.hd_ibdfe, @scfde.equalizers.ice_sd_ibdfe, ...
-        @scfde.equalizers.ice_hd_ibdfe};
+    % "all" resolves to every registered equalizer of the CURRENT
+    % scenario (cfg.scenario, default qpsk): 17 qpsk, 10 turbo,
+    % 7 cck or 3 csk modules.  Each scenario owns its frame format,
+    % so mixing scenarios inside one receiver bank is impossible.
+    scenario = "qpsk";
+    if isfield(cfg, "scenario") && ~isempty(cfg.scenario)
+        scenario = string(cfg.scenario);
+    end
+    registry = scfde.equalizer_registry();
+    selected = registry.scenario == scenario;
+    modules = registry.module(selected);
     return;
 end
 if isstring(requested) && ~isscalar(requested)

@@ -99,6 +99,8 @@ un_all_equalizers.m 独立运行 37 个 ID，37/37 PASS（单次运行，1 帧/I
 - 计量精确化：errorBits/	otalBits 为逐方法整数向量，er = errorBits ./ totalBits，Clopper-Pearson 95% 区间逐方法报告；不用 round(ber .* totalBits) 重建。
 - CCK 边界：symbols < 4 触发 SCFDE:FrameTooShort（非索引异常）。
 - 可复现性：同 seed 精确复现 errorBits/totalBits/BER；异 seed 至少一个误码数变化；结果元数据记录源代码 gitCommit。
+- 跨场景契约：scenario=auto 查询注册表，多场景组合触发 SCFDE:MixedScenarios（不再按优先级猜测）；显式指定场景时验证所有内置 ID 属于该场景；"all" 按当前场景解析为 17/10/7/3 全部方法。
+- blms 为双场景模块：注册主场景 turbo（解码信息判决），同时允许 qpsk 场景保留框符号输出（同一时间仅在一个场景运行）。
 - 算法等级 A/B/C 不因运行时修复而改变；运行完成不等于公式实现等级。
 
 ## 已知缺口（对应 README）
