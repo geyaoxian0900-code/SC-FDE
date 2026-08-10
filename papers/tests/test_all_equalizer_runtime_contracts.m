@@ -250,6 +250,28 @@ verifyEqual(testCase, resultQpsk.scenario, "qpsk");
 verifyEqual(testCase, numel(resultQpsk.ids), 3);
 end
 
+function testBellhopChannelModeSmoke(testCase)
+% channelMode="bellhop" must run the qpsk and turbo scenarios through
+% the Bellhop shallow-water channel; skipped when the Bellhop toolbox
+% executable is not installed.
+toolboxRoot = "D:\MATLAB\atWin10_2020_11_4\atWin10_2020_11_4";
+if ~isfile(fullfile(toolboxRoot, "windows-bin-20201102", "bellhop.exe"))
+    return;
+end
+r1 = run_unified_equalizer(struct("equalizers", "htfde", ...
+    "scenario", "qpsk", "channelMode", "bellhop", ...
+    "frameCount", 1, "snrDb", 12, "makePlot", false, ...
+    "randomSeed", 42));
+verifyEqual(testCase, numel(r1.ber), 1);
+verifyTrue(testCase, isfinite(r1.ber) && r1.ber >= 0 && r1.ber <= 1);
+r2 = run_unified_equalizer(struct("equalizers", "fd-turbo", ...
+    "scenario", "turbo", "channelMode", "bellhop", ...
+    "frameCount", 1, "snrDb", 12, "makePlot", false, ...
+    "randomSeed", 42));
+verifyEqual(testCase, r2.totalBits, 512);
+verifyTrue(testCase, isfinite(r2.ber) && r2.ber >= 0 && r2.ber <= 1);
+end
+
 function testAllResolvesPerScenario(testCase)
 % "all" must resolve to every registered equalizer of the CURRENT
 % scenario: 17 qpsk, 10 turbo, 7 cck, 3 csk.

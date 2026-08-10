@@ -1,0 +1,129 @@
+ BELLHOP/BELLHOP3D
+
+ BELLHOP- SC-FDE generated shallow-water Bellhop arrivals                        
+ frequency =  0.1200E+05 Hz
+
+ Dummy parameter NMedia =            1
+
+     C-linear approximation to SSP
+     Attenuation units: dB/wavelength
+     VACUUM
+
+ Depth =     100.00 m
+
+ Sound speed profile:
+   z (m)     alphaR (m/s)   betaR  rho (g/cm^3)  alphaI     betaI
+
+      0.00      1500.00      0.00     1.00       0.0000    0.0000
+    100.00      1490.00      0.00     1.00       0.0000    0.0000
+
+                                 ( RMS roughness =   0.00     )
+     ACOUSTO-ELASTIC half-space
+    100.00      1700.00      0.00     1.80       0.8000    0.0000
+
+ __________________________________________________________________________
+
+ Number of Source   depths, Sz =            1
+ Source   depths, Sz (m)
+   20.0000    
+
+
+ __________________________________________________________________________
+
+ Number of Receiver depths, Rz =            1
+ Receiver depths, Rz (m)
+   30.0000    
+
+
+ __________________________________________________________________________
+
+ Number of Receiver ranges, Rr =            1
+ Receiver ranges, Rr (km)
+   1.00000    
+
+
+ Arrivals calculation, ASCII  file output
+ Geometric hat beams in Cartesian coordinates
+ Point source (cylindrical coordinates)
+ Rectilinear receiver grid: Receivers at Rr( : ) x Rz( : )
+ __________________________________________________________________________
+
+ Number of beams in elevation   =         1000
+ Beam take-off angles (degrees)
+  -80.0000      -79.8398      -79.6797      -79.5195      -79.3594    
+  -79.1992      -79.0390      -78.8789      -78.7187      -78.5586    
+          ... 
+   80.0000    
+
+ __________________________________________________________________________
+
+
+ Step length,       deltas =   0.000     m
+
+ Maximum ray depth, Box%z  =   120.0     m
+ Maximum ray range, Box%r  =   1.100    km
+ No beam shift in effect
+
+
+ Step length,       deltas =   10.00     m (automatically selected)
+
+ ( Maximum # of arrivals =     20000000 )
+
+Tracing beam       1    -80.00
+
+ Geometric hat beams                     
+ halfwidth  =    14.215064434042976     
+ epsilonOpt =  (  0.0000000000000000     ,  7617786.2756290575     )
+ EpsMult    =    1.0000000000000000     
+
+Tracing beam      21    -76.80
+Tracing beam      41    -73.59
+Tracing beam      61    -70.39
+Tracing beam      81    -67.19
+Tracing beam     101    -63.98
+Tracing beam     121    -60.78
+Tracing beam     141    -57.58
+Tracing beam     161    -54.37
+Tracing beam     181    -51.17
+Tracing beam     201    -47.97
+Tracing beam     221    -44.76
+Tracing beam     241    -41.56
+Tracing beam     261    -38.36
+Tracing beam     281    -35.16
+Tracing beam     301    -31.95
+Tracing beam     321    -28.75
+Tracing beam     341    -25.55
+Tracing beam     361    -22.34
+Tracing beam     381    -19.14
+Tracing beam     401    -15.94
+Tracing beam     421    -12.73
+Tracing beam     441     -9.53
+Tracing beam     461     -6.33
+Tracing beam     481     -3.12
+Tracing beam     501      0.08
+Tracing beam     521      3.28
+Tracing beam     541      6.49
+Tracing beam     561      9.69
+Tracing beam     581     12.89
+Tracing beam     601     16.10
+Tracing beam     621     19.30
+Tracing beam     641     22.50
+Tracing beam     661     25.71
+Tracing beam     681     28.91
+Tracing beam     701     32.11
+Tracing beam     721     35.32
+Tracing beam     741     38.52
+Tracing beam     761     41.72
+Tracing beam     781     44.92
+Tracing beam     801     48.13
+Tracing beam     821     51.33
+Tracing beam     841     54.53
+Tracing beam     861     57.74
+Tracing beam     881     60.94
+Tracing beam     901     64.14
+Tracing beam     921     67.35
+Tracing beam     941     70.55
+Tracing beam     961     73.75
+Tracing beam     981     76.96
+
+ CPU Time =       0.312E-01s

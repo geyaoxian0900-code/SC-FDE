@@ -18,6 +18,11 @@ function results = run_unified_equalizer(options)
 %   snrDb       - passband/EsN0 SNR in dB (default 18)
 %   symbols     - data blocks (default 8)
 %   frameCount  - Monte Carlo frames (default 50)
+%   channelMode - "synthetic" (default) fixed path tables, or "bellhop"
+%                 shallow-water arrivals sampled at the symbol rate
+%                 (qpsk and turbo scenarios; requires the Bellhop
+%                 toolbox executable)
+%   bellhopOptions - options passed to scfde_bellhop_channel
 %   makePlot    - draw a BER bar/line figure (default true)
 %   randomSeed  - RNG seed (default 42)
 %
@@ -141,6 +146,14 @@ else
 end
 end
 
+function value = field_default(options, name, defaultValue)
+if isfield(options, name) && ~isempty(options.(name))
+    value = options.(name);
+else
+    value = defaultValue;
+end
+end
+
 %% Shared QPSK link (Chapters 2 and 3 equalizers)
 function results = run_qpsk_scenario(cfg)
 N = 184;              % block length
@@ -167,12 +180,21 @@ link = struct("trainingSymbols", 64, "dataSymbols", dataSymbols, ...
     "blmsStep", 0.06, "blmsLeakage", 1e-3, ...
     "blmsRegularization", 1e-3, "turboDamping", 0.75);
 link.equalizers = cfg.equalizers;
-% Build the multipath impulse response honoring the configured delays.
-impulse = zeros(1, N);
-for path = 1:numel(link.pathGains)
-    impulse(link.pathDelays(path) + 1) = link.pathGains(path);
+% Build the multipath impulse response honoring the configured delays;
+% channelMode="bellhop" samples a Bellhop shallow-water run instead of
+% the synthetic path table (quasi-static channel, one realization per
+% scenario call).
+if strcmpi(field_default(cfg, "channelMode", "synthetic"), "bellhop")
+    impulse = scfde_bellhop_impulse(field_default(cfg, "bellhopOptions", struct()), ...
+        link.symbolRate, 32);
+    impulse = [impulse, zeros(1, N - numel(impulse))];
+else
+    impulse = zeros(1, N);
+    for path = 1:numel(link.pathGains)
+        impulse(link.pathDelays(path) + 1) = link.pathGains(path);
+    end
+    impulse = impulse / norm(impulse);
 end
-impulse = impulse / norm(impulse);
 H = fft(impulse);
 totalErrors = zeros(1, 0);
 totalBits = zeros(1, 0);
@@ -456,7 +478,12 @@ function results = run_turbo_scenario(cfg)
 % chains), which is recorded as a modulation deviation.
 infoBits = 512;                 % 1024 coded bits = 512 info (rate 1/2)
 trainingSymbols = 256;
-imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+if strcmpi(field_default(cfg, "channelMode", "synthetic"), "bellhop")
+    imp = scfde_bellhop_impulse(field_default(cfg, "bellhopOptions", struct()), ...
+        4000, 32);
+else
+    imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
+end
 nv = 10^(-cfg.snrDb / 10);
 link = struct("noiseVariance", nv, "iterations", 3, ...
     "infoBits", infoBits, "trainingSymbols", trainingSymbols, ...

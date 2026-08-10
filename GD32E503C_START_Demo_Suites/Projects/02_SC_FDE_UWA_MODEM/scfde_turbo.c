@@ -38,8 +38,10 @@ static const uint8_t turbo_out[SCFDE_TURBO_STATES][2][2] = {
 /* Fixed 192-bit interleaver (deterministic LCG-based permutation)     */
 /* ------------------------------------------------------------------ */
 
-#define TURBO_PERM_A 137u
-#define TURBO_PERM_C 187u
+/* Hull-Dobell compliant LCG for full period 192: A=1 mod 12 (37),
+   C coprime to 192 (17). */
+#define TURBO_PERM_A 37u
+#define TURBO_PERM_C 17u
 #define TURBO_PERM_M 192u
 
 static uint16_t turbo_perm[SCFDE_TURBO_CODE_BITS];
@@ -139,7 +141,8 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
     uint16_t t;
     uint8_t s, u, c;
 
-    /* branch metrics: gamma = 0.5 * sum((1-2*out)*llr) */
+    /* branch metrics: gamma = 0.5 * sum(out * llr) with the LLR convention
+       positive = bit 1 (P(b=1)/P(b=0)) */
     for (t = 0u; t < SCFDE_TURBO_TIME; t++)
     {
         float l0 = coded_llr[2u * t];
@@ -148,8 +151,8 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
         {
             for (u = 0u; u < 2u; u++)
             {
-                float b0 = (1.0f - 2.0f * (float)turbo_out[s][u][0]) * l0;
-                float b1 = (1.0f - 2.0f * (float)turbo_out[s][u][1]) * l1;
+                float b0 = (float)turbo_out[s][u][0] * l0;
+                float b1 = (float)turbo_out[s][u][1] * l1;
                 gamma_metric[t][s][u] = 0.5f * (b0 + b1);
             }
         }
@@ -215,7 +218,7 @@ void scfde_turbo_bcjr(const float *coded_llr, float *info_llr,
                 input_value[u] = turbo_log_combine(input_value[u], path, max_log);
             }
         }
-        info_llr[t] = input_value[0] - input_value[1];
+        info_llr[t] = input_value[1] - input_value[0];
     }
     for (t = 0u; t < SCFDE_TURBO_TIME; t++)
     {
