@@ -173,6 +173,31 @@ verifyError(testCase, ...
     "SCFDE:FrameTooShort");
 end
 
+function testRegistryHasCompleteScenarioMetadata(testCase)
+registry = scfde.equalizer_registry();
+verifyEqual(testCase, numel(registry.id), 37);
+verifyEqual(testCase, numel(registry.chapter), 37);
+verifyEqual(testCase, numel(registry.scenario), 37);
+verifyEqual(testCase, sum(registry.scenario == "qpsk"), 17);
+verifyEqual(testCase, sum(registry.scenario == "turbo"), 10);
+verifyEqual(testCase, sum(registry.scenario == "cck"), 7);
+verifyEqual(testCase, sum(registry.scenario == "csk"), 3);
+end
+
+function testAll37EqualizersCompleteSmokeRun(testCase)
+report = run_all_equalizers(struct("frameCount", 1, ...
+    "snrDb", 18, "symbols", 8, "randomSeed", 42));
+verifyEqual(testCase, height(report), 37);
+verifyEqual(testCase, sum(report.status == "PASS"), 37, ...
+    strjoin(report.message(report.status ~= "PASS"), newline));
+verifyTrue(testCase, all(isfinite(report.ber)));
+verifyTrue(testCase, all(report.ber >= 0 & report.ber <= 1));
+verifyTrue(testCase, all(report.errorBits >= 0));
+verifyTrue(testCase, all(report.totalBits > 0));
+verifyTrue(testCase, all(report.ber >= report.berLower95) && ...
+    all(report.ber <= report.berUpper95));
+end
+
 function [channel, source, cfg] = buildTurboFixture()
 rng(42, "twister");
 information = randi([0 1], 1, 512);
