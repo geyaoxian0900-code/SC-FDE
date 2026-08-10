@@ -132,6 +132,17 @@ for id = ids
 end
 end
 
+function testFblmsTurboReturnsDecodedInformation(testCase)
+result = run_unified_equalizer(struct("equalizers", "fblms", ...
+    "scenario", "turbo", "frameCount", 1, "snrDb", 18, ...
+    "makePlot", false, "randomSeed", 42));
+verifyEqual(testCase, result.totalBits, 512);
+verifyTrue(testCase, result.ber >= 0 && result.ber <= 1);
+trace = result.traces{1};
+verifyEqual(testCase, trace.outputDomain, "information-symbols");
+verifyEqual(testCase, numel(trace.equalizedFrame), 1280);
+end
+
 function [channel, source, cfg] = buildTurboFixture()
 rng(42, "twister");
 information = randi([0 1], 1, 512);

@@ -35,9 +35,29 @@ end
 [output, ~, trace] = scfde.equalizers.fblms_equalizer(received, ...
     reference, trainLength, filterLength, blockLength, step, epsilon, ...
     useDecisionFeedback, decisionFcn);
-% Align the output length with the reference.
-n = min(numel(output), numel(reference));
-decisions = output(1:n);
+% Turbo scenario: decode the equalized data segment through the (7,5)
+% BCJR and return exactly 512 information-symbol decisions.  The QPSK
+% scenario keeps the frame-symbol output.
+if isfield(cfg, "permutation") && ~isempty(cfg.permutation)
+    frame = scfde.equalizers.ch4_turbo_frame_contract(channel, source, cfg);
+    dataEqualized = output(frame.dataIndices);
+    amplitude = mean(abs(real(dataEqualized)));
+    llrFrame = zeros(1, frame.frameLength);
+    llrFrame(frame.dataIndices) = 2 * real(dataEqualized) / ...
+        max(amplitude, 1e-12) / max(cfg.noiseVariance, 1e-6);
+    previous = zeros(1, frame.frameLength);
+    previous(frame.trainingIndices) = frame.trainingSymbols;
+    [bits, ~] = scfde.equalizers.ch4_decoder_feedback_frame( ...
+        llrFrame, frame, previous, 1, cfg.turboDecoderMode);
+    decisions = 1 - 2 * bits;
+    trace.equalizedFrame = output;
+    trace.outputDomain = "information-symbols";
+else
+    % Align the output length with the reference.
+    n = min(numel(output), numel(reference));
+    decisions = output(1:n);
+    trace.outputDomain = "frame-symbols";
+end
 receiver = scfde.equalizers.pack_equalizer("FBLMS", "fblms", ...
     decisions, zeros(size(decisions)), decisions, trace);
 end
