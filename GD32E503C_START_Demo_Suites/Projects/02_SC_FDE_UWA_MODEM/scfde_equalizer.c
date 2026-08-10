@@ -1100,7 +1100,7 @@ static void ptr_dfe_equalize(const scfde_complex_t *frame, uint16_t frame_symbol
     const uint16_t ff = SCFDE_DFE_FF_TAPS;
     const uint16_t fb = SCFDE_DFE_FB_TAPS;
     uint16_t delay = impulse_taps / 2u;
-    uint16_t eq_taps;
+    uint16_t eq_taps = (uint16_t)(2u * impulse_taps - 1u);
     uint16_t n, m;
     static scfde_complex_t tr[SCFDE_PTR_MAX_TAPS];
     static scfde_complex_t filtered[192 + SCFDE_PTR_MAX_TAPS];

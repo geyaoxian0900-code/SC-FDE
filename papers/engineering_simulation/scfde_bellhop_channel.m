@@ -2,7 +2,7 @@ function [pathDelaysMs, pathGains, info] = scfde_bellhop_channel(options)
 %SCFDE_BELLHOP_CHANNEL Run Bellhop and convert arrivals to a sampled channel.
 
 toolboxRoot = get_field(options, "bellhopRoot", ...
-    "D:\MATLAB\atWin10_2020_11_4\atWin10_2020_11_4");
+    "D:\MATLAB\bellhop_modern");
 waterDepth = get_field(options, "bellhopWaterDepth", 100);
 sourceDepth = get_field(options, "bellhopSourceDepth", 20);
 receiverDepth = get_field(options, "bellhopReceiverDepth", 30);
