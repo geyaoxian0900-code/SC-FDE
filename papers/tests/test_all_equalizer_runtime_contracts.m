@@ -104,6 +104,34 @@ for id = ids
 end
 end
 
+function testAdvancedTurboModulesReturnInformationDomain(testCase)
+ids = ["tf-turbo", "bitf-turbo", "blms-tf-turbo", ...
+    "tdda-teq", "fdda-dfe-teq"];
+for id = ids
+    result = run_unified_equalizer(struct("equalizers", id, ...
+        "scenario", "turbo", "frameCount", 1, ...
+        "snrDb", 18, "makePlot", false, "randomSeed", 42));
+    verifyEqual(testCase, result.totalBits, 512);
+    verifyTrue(testCase, isfinite(result.ber) && result.ber >= 0 && result.ber <= 1);
+end
+end
+
+function testAdvancedTurboWrappersPreserveRng(testCase)
+[channel, source, cfg] = buildTurboFixture();
+registry = scfde.equalizer_registry();
+ids = ["tf-turbo", "bitf-turbo", "blms-tf-turbo", ...
+    "tdda-teq", "fdda-dfe-teq"];
+for id = ids
+    match = find(registry.id == id, 1);
+    before = rng;
+    receiver = registry.module{match}(channel, source, cfg);
+    after = rng;
+    verifyEqual(testCase, after, before, ...
+        "Equalizer wrapper must not mutate caller RNG state");
+    verifyEqual(testCase, numel(receiver.outputs{1}), 512);
+end
+end
+
 function [channel, source, cfg] = buildTurboFixture()
 rng(42, "twister");
 information = randi([0 1], 1, 512);
