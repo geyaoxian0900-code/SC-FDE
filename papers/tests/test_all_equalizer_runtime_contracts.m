@@ -198,6 +198,25 @@ verifyTrue(testCase, all(report.ber >= report.berLower95) && ...
     all(report.ber <= report.berUpper95));
 end
 
+function testAllTurboWrappersPreserveRng(testCase)
+% Every Chapter-4 wrapper must preserve the caller RNG state and return
+% exactly 512 information decisions when called directly.
+[channel, source, cfg] = buildTurboFixture();
+registry = scfde.equalizer_registry();
+turboIds = registry.id(registry.scenario == "turbo");
+verifyEqual(testCase, numel(turboIds), 10);
+for id = turboIds
+    match = find(registry.id == id, 1);
+    before = rng;
+    receiver = registry.module{match}(channel, source, cfg);
+    after = rng;
+    verifyEqual(testCase, after, before, ...
+        "Equalizer wrapper " + id + " must not mutate caller RNG state");
+    verifyEqual(testCase, numel(receiver.outputs{1}), 512, ...
+        "Equalizer " + id + " must return 512 information decisions");
+end
+end
+
 function [channel, source, cfg] = buildTurboFixture()
 rng(42, "twister");
 information = randi([0 1], 1, 512);
