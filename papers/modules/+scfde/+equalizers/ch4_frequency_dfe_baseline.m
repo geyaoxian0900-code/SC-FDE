@@ -23,6 +23,7 @@ trace = scfde.equalizers.ch4_initialize_trace(cfg.iterations, N, []);
 for iteration = 1:cfg.iterations
     trace = scfde.equalizers.ch4_save_trace(trace, iteration, equalizerLlr, decoderLlr, ...
         softFrame, []);
+    trace.softEstimates(iteration, :) = estimate;
 end
 trace.finalChannel = H;
 end

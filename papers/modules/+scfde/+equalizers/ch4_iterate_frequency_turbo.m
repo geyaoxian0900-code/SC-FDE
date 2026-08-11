@@ -27,6 +27,7 @@ for iteration = 1:cfg.iterations
     curve(iteration) = mean(bits ~= frame.informationBits);
     trace = scfde.equalizers.ch4_save_trace(trace, iteration, equalizerLlr, decoderLlr, ...
         softSymbols, scfde.equalizers.ch4_channel_nmse(Hest, Hreference));
+    trace.softEstimates(iteration, :) = estimate;
 end
 trace.finalChannel = Hest;
 end

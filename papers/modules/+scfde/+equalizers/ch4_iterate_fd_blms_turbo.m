@@ -30,6 +30,7 @@ for iteration = 1:cfg.iterations
     curve(iteration) = mean(bits ~= frame.informationBits);
     trace = scfde.equalizers.ch4_save_trace(trace, iteration, equalizerLlr, decoderLlr, ...
         softSymbols, []);
+    trace.softEstimates(iteration, :) = estimate;
     trace.frequencyWeights(iteration, :) = weights;
     trace.weightNmse(iteration) = scfde.equalizers.ch4_channel_nmse(weights, referenceWeights);
     trace.errorPower(iteration) = mean(abs(residual).^2);

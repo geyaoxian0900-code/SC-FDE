@@ -108,13 +108,14 @@ for k = 1:nMethods
             out = result.outputs{k}(:).';
         elseif isHard(out)
             % Hard-decision estimates (turbo decoders report decisions):
-            % fall back to the decoder soft LLR of the last iteration
-            % when available so the soft constellation is visible.
+            % use the COMPLEX equalizer output of the last iteration
+            % (softEstimates, data segment) so the 2D constellation is
+            % visible instead of the real-valued LLR line.
             if strcmpi(scenario, "turbo") && isfield(result, "traces") && ...
                     numel(result.traces) >= k && ...
-                    isfield(result.traces{k}, "equalizerLlr")
-                llr = result.traces{k}.equalizerLlr(end, :);
-                out = tanh(llr / 2);
+                    isfield(result.traces{k}, "softEstimates")
+                est = result.traces{k}.softEstimates(end, :);
+                out = est(257:min(1280, numel(est)));
             end
         end
     else
