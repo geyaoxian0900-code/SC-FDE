@@ -41,7 +41,12 @@ for symbol = 1:symbols
         book(mfIndices(symbol), :);
 end
 infoIndices = squeeze(outerDecision(end, :, 1)).';
+% Soft chip output: circular matched filter of the received chips
+% with the channel (consistent with csk_matched_filter), so the
+% constellation shows the soft spreading-chip estimates.
+softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
+    fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CSK-IDMA-ESE", "csk-ese", ...
-    decisions, zeros(size(decisions)), decisions, ...
+    decisions, zeros(size(decisions)), softChips, ...
     struct("indices", mfIndices, "infoIndices", infoIndices));
 end
