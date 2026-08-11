@@ -58,21 +58,27 @@ received = received + sqrt(noiseVariance / 2) * ...
     (randn(size(received)) + 1j * randn(size(received)));
 
 nMethods = numel(result.ids);
-% Compact grid: the raw received constellation takes the top-left cell
-% (merged over 2x2 cells), the 17 equalized constellations fill the
-% remaining cells - one screen, roughly square constellation axes.
+% Compact grid: the raw received constellation takes a 2x2 SQUARE
+% block at the top left (cells 1,2,5,6), the 17 equalized
+% constellations fill the remaining cells - one screen, square
+% constellation axes everywhere.
 cols = 4;
-gridRows = ceil((nMethods + 1) / cols);
+gridRows = ceil((nMethods + 4) / cols);
 fig = figure("Color", "w", "Position", [40, 40, 1400, 340 * gridRows], "Visible", "off");
-% Top-left: the RAW received constellation (before any equalization) -
-% the same input for every equalizer.
-subplot(gridRows, cols, [1, 2]);
+% Top-left 2x2: the RAW received constellation (before any
+% equalization) - the same input for every equalizer.
+subplot(gridRows, cols, [1, 2, 5, 6]);
 plot(real(received), imag(received), ".", "MarkerSize", 4); hold on;
 plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
 grid on; axis equal; axis([-2 2 -2 2]);
 title(sprintf("Received (no equalization), SNR %g dB", snrDb), "FontSize", 9);
-% Remaining cells: one equalized soft-output constellation per method.
+% Remaining cells: one equalized soft-output constellation per method
+% (skipping the 2x2 received block at cells 1,2,5,6).
+cellIndex = 3;
 for k = 1:nMethods
+    if cellIndex == 5
+        cellIndex = 7;
+    end
     if isfield(result, "estimates") && numel(result.estimates) >= k && ...
             ~isempty(result.estimates{k})
         out = result.estimates{k}(:).';
@@ -86,7 +92,8 @@ for k = 1:nMethods
     if peak > 0
         out = out / peak;
     end
-    subplot(gridRows, cols, k + 1);
+    subplot(gridRows, cols, cellIndex);
+    cellIndex = cellIndex + 1;
     plot(real(out(abs(out) > 1e-3)), imag(out(abs(out) > 1e-3)), ...
         ".", "MarkerSize", 4); hold on;
     plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
