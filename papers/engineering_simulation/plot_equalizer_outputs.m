@@ -106,6 +106,16 @@ for k = 1:nMethods
         out = result.estimates{k}(:).';
         if max(abs(out)) < 1e-9
             out = result.outputs{k}(:).';
+        elseif isHard(out)
+            % Hard-decision estimates (turbo decoders report decisions):
+            % fall back to the decoder soft LLR of the last iteration
+            % when available so the soft constellation is visible.
+            if strcmpi(scenario, "turbo") && isfield(result, "traces") && ...
+                    numel(result.traces) >= k && ...
+                    isfield(result.traces{k}, "equalizerLlr")
+                llr = result.traces{k}.equalizerLlr(end, :);
+                out = tanh(llr / 2);
+            end
         end
     else
         out = result.outputs{k}(:).';
@@ -208,6 +218,13 @@ switch lower(scenario)
         error("SCFDE:UnknownScenario", "Unknown scenario: %s", scenario);
 end
 received = received(:).';
+end
+
+function isHard = isHard(symbols)
+% True when the output collapses onto a few theoretical constellation
+% points (hard decisions) rather than a soft cloud.
+rounded = round(real(symbols) * 10) / 10 + 1j * round(imag(symbols) * 10) / 10;
+isHard = numel(unique(rounded)) <= 4;
 end
 
 function value = field_default(options, name, defaultValue)

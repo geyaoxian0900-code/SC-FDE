@@ -21,6 +21,11 @@ for symbol = 1:symbolCount
     [detected(symbol), ~] = scfde.equalizers.ch6_hard_dictionary_detect(obs, dicts{1});
     decisions((symbol - 1) * codeLength + (1:codeLength)) = book(detected(symbol), :);
 end
+% Soft chip output: circular matched filter of the received chips with
+% the channel, so the constellation shows the soft spreading-chip
+% estimates instead of the hard decisions.
+N = numel(channel.received);
+softChips = ifft(conj(fft(channel.impulse, N)) .* fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CSK-MF", "csk-matched-filter", ...
-    decisions, zeros(size(decisions)), decisions, struct("indices", detected));
+    decisions, zeros(size(decisions)), softChips, struct("indices", detected));
 end
