@@ -9,9 +9,8 @@ root = scfde.equalizers.ch6_select_csk_root(codeLength);
 [book, ~] = scfde.equalizers.ch6_csk_codebook(root, M);
 users = 1;
 if isfield(cfg, "conventionalUsers"), users = cfg.conventionalUsers; end
-channels = scfde.equalizers.ch6_dictionary_channels( ...
-    channel.impulse, users, codeLength);
-dicts = scfde.equalizers.ch6_conventional_dictionaries(book, channels, users);
+dicts = scfde.equalizers.ch6_conventional_dictionaries( ...
+    book, channel.impulse, users);
 symbolCount = min(floor(numel(channel.received) / codeLength), ...
     floor(numel(source.data) / codeLength));
 decisions = zeros(1, symbolCount * codeLength);

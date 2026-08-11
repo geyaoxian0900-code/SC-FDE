@@ -63,14 +63,14 @@ if doSanity
         theoretical = qfunc(sqrt(10^(8 / 10)));
         fprintf("  %-16s AWGN BER = %.4e (theoretical %.4e)\n", id, ber, theoretical);
     end
-    fprintf("\n--- Sanity 3: constellation moment Mx and MMSE lambda ---\n");
+    fprintf("\n--- Sanity 3: constellation moments (mx, Mx) and MMSE lambda ---\n");
     [Mx, lambda] = moment_and_lambda_check();
-    assert(abs(Mx - 1) < 1e-9, ...
-        "Mx = %g, but the scenario declares unit-energy QPSK (Mx must be 1)", Mx);
-    fprintf("  Mx = mean(|x|^2) over the data segment = %.12g (unit-energy profile)\n", Mx);
-    fprintf("  lambda = N*sigma_w^2/Mx with sigma_w^2 = 10^(-snrDb/10) is the\n");
-    fprintf("  MMSE regularization used by ch3_mmse_frequency_equalize; checked\n");
-    fprintf("  lambda(scenario) = %.12g vs sigma_w^2 = %.12g\n", lambda, 10^(-8 / 10));
+    % Book (3-65): Mx = E|X_k|^2, frequency-domain moment (X = FFT{x}).
+    % mx = E|x_n|^2 = 1 (unit-energy QPSK) implies Mx = N via Parseval,
+    % and lambda = N*sigma_w^2/Mx = sigma_w^2/mx = sigma_w^2 - the exact
+    % regularisation used by ch3_mmse_frequency_equalize.
+    fprintf("  mx = E|x_n|^2 = 1, Mx = E|X_k|^2 = %g (= N*mx, book 3-65)\n", Mx);
+    fprintf("  lambda = N*sigma_w^2/Mx = sigma_w^2/mx = %.12g (checked in-function)\n", lambda);
     assert(abs(lambda - 10^(-8 / 10)) < 1e-12, ...
         "lambda = %g, expected 10^(-snrDb/10) = %g", lambda, 10^(-8 / 10));
     fprintf("\n--- Sanity 4: IBDFE unit gain |mean(C_k*H_k) - 1| ---\n");
@@ -117,20 +117,39 @@ end
 
 function [Mx, lambda] = moment_and_lambda_check()
 % Rebuild one frame exactly like run_method ("multipath" shape, SNR 8
-% dB) and return the data-segment constellation moment Mx together with
-% the MMSE regularization lambda the modules derive from the scenario.
-% The lambda convention (book ch. 3) is N*sigma_w^2/Mx; with the
-% unit-energy QPSK profile Mx = 1 this must equal sigma_w^2, so a
-% future modem change (e.g. x in +/-1 +/- 1j, Mx = 2) must update the
-% lambda definition here instead of silently renormalising.
+% dB) and verify the two moment definitions against each other and the
+% MMSE regularization lambda the modules derive from the scenario.
+% Book (3-65) defines Mx = E|X_k|^2 with X_k = FFT{x_n} the FREQUENCY
+% domain signal; for the MATLAB non-normalised FFT, Parseval gives
+% sum|X_k|^2 = N * sum|x_n|^2, hence Mx = N * mx (mx = E|x_n|^2).
+% The book lambda (3-71) is N*sigma_w^2/Mx, which equals
+% sigma_w^2/mx - the same regularisation the production MMSE path uses.
 N = 184;
 dataSymbols = 120;
 uwLength = N - dataSymbols;
 rng(1, "twister");
 bits = randi([0, 1], 1, 2 * dataSymbols);
 data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
-Mx = mean(abs(data).^2);
+uw = scfde.equalizers.ch3_zadoff_chu(uwLength, 1);
+block = [data, uw];
+mxTime = mean(abs(block).^2);
+X = fft(block);
+MxFreq = mean(abs(X).^2);
 lambda = 10^(-8 / 10);
+fprintf("  mx = E|x_n|^2 = %.12g (unit-energy QPSK)\n", mxTime);
+fprintf("  Mx = E|X_k|^2 = %.12g (book 3-65, Parseval: N*mx = %g)\n", ...
+    MxFreq, N * mxTime);
+assert(abs(mxTime - 1) < 1e-9, "mx = %g, expected 1 (unit-energy QPSK)", mxTime);
+assert(abs(MxFreq - N * mxTime) < 1e-9, ...
+    "Mx = %g, expected N*mx = %g (non-normalised FFT Parseval)", ...
+    MxFreq, N * mxTime);
+lambdaBook = N * lambda / MxFreq;
+lambdaExpected = lambda / mxTime;
+assert(abs(lambdaBook - lambdaExpected) < 1e-12, ...
+    "lambda book (%g) != sigma_w^2/mx (%g)", lambdaBook, lambdaExpected);
+assert(abs(lambdaBook - lambda) < 1e-12, ...
+    "lambda = %g, expected 10^(-snrDb/10) = %g", lambdaBook, lambda);
+Mx = MxFreq;
 end
 
 function check_ibdfe_unit_gain()

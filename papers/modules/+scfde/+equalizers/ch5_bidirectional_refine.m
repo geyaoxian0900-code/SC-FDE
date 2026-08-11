@@ -34,11 +34,11 @@ for block = 1:numel(initial)
     % block's convolution TAIL segment, whose own tail taps are
     % codeword-dependent and defeat any nearest-neighbour screen.
     active = 1:size(book, 1);
+    tailOffset = numel(received) - wordLength * numel(initial);
     local = zeros(1, numel(active));
     for candidate = 1:numel(active)
-        full = conv([zeros(1, memory), book(active(candidate), :)], channel);
-        predicted = conj(fliplr(full));
-        predicted = predicted(1:wordLength);
+        full = conv(book(active(candidate), :), channel);
+        predicted = conj(fliplr(full(tailOffset + 1:tailOffset + wordLength)));
         if any(state ~= 0)
             predicted(1:memory) = predicted(1:memory) + state;
         end
@@ -46,15 +46,19 @@ for block = 1:numel(initial)
             max(noiseVariance, 1e-8);
     end
     reverseScores(block, active) = local;
-    % State = convolution head of the previous reversed-stream block
-    % (= the FOLLOWING original block).
-    if block > 1
-        fullClean = conv(book(revInitial(block - 1), :), channel);
-        if numel(fullClean) > wordLength
-            state = conj(fliplr(fullClean(1:memory)));
-        else
-            state = zeros(1, memory);
-        end
+    % State update is NOT conditional: reverse block j's observation
+    % already contains the convolution head of the ORIGINAL block
+    % revInitial(j) (the following block, read backwards), so the state
+    % for block j+1 must be computed right after block j.  The previous
+    % "if block > 1" version loaded revInitial(block-1) at the START of
+    % block 2, so block 2 scored with state = 0 and block 3 reused the
+    % state that belonged to block 2 - one-block lag (masked by the
+    % forward branch under identity, visible under multipath).
+    fullClean = conv(book(revInitial(block), :), channel);
+    if numel(fullClean) > wordLength
+        state = conj(fliplr(fullClean(1:memory)));
+    else
+        state = zeros(1, memory);
     end
 end
 % The reverse pass scores the reversed stream, whose block j is the

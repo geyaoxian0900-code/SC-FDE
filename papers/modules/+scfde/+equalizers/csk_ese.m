@@ -17,10 +17,15 @@ if isfield(cfg, "innerIterations"), innerIterations = cfg.innerIterations; end
 if isfield(cfg, "outerIterations"), outerIterations = cfg.outerIterations; end
 root = scfde.equalizers.ch6_select_csk_root(codeLength);
 [book, bits] = scfde.equalizers.ch6_csk_codebook(root, M);
-channels = scfde.equalizers.ch6_dictionary_channels( ...
-    channel.impulse, users, codeLength);
-[dicts, userChannels] = scfde.equalizers.ch6_idma_dictionaries(book, channels, users, cfg);
-conventional = scfde.equalizers.ch6_conventional_dictionaries(book, channels, users);
+% The dictionary builders derive the per-user channels themselves
+% (ch6_idma_dictionaries / ch6_conventional_dictionaries call
+% ch6_dictionary_channels internally); passing a pre-built users x
+% codeLength channel matrix here would re-derive the users from its
+% first row (multi-user channels broken).
+[dicts, userChannels] = scfde.equalizers.ch6_idma_dictionaries( ...
+    book, channel.impulse, users, cfg);
+conventional = scfde.equalizers.ch6_conventional_dictionaries( ...
+    book, channel.impulse, users);
 % The repetition/interleaver pair comes from the SCENARIO (cfg.pair) so
 % the decoder assumes the SAME structure that was transmitted; a local
 % random pair would misalign the repetition code.

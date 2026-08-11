@@ -10,9 +10,8 @@ symbols = min(floor(numel(channel.received) / codeLength), ...
     floor(numel(source.data) / codeLength));
 root = scfde.equalizers.ch6_select_csk_root(codeLength);
 [book, bits] = scfde.equalizers.ch6_csk_codebook(root, M);
-channels = scfde.equalizers.ch6_dictionary_channels( ...
-    channel.impulse, users, codeLength);
-dicts = scfde.equalizers.ch6_conventional_dictionaries(book, channels, users);
+dicts = scfde.equalizers.ch6_conventional_dictionaries( ...
+    book, channel.impulse, users);
 iterations = 4;
 if isfield(cfg, "innerIterations"), iterations = cfg.innerIterations; end
 received = reshape(channel.received(1:symbols * codeLength), codeLength, symbols).';

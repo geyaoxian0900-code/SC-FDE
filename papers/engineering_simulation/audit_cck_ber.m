@@ -51,14 +51,21 @@ fprintf("  oracle BER = %.4e (%d/%d)\n", oracleErrors / oracleBits, ...
     oracleErrors, oracleBits);
 
 % --- 3) bidirectional structural tests (cck-bidfe, cck-bidfe2) ---------
-fprintf("\n--- 3) Bidirectional forward/reverse/combined oracle ---\n");
+fprintf("\n--- 3) Bidirectional stage oracles (independent forward/reverse/combined/refined) ---\n");
 for id = ["cck-bidfe", "cck-bidfe2"]
     [fErr, fBits] = run_bidi(id, "forward", snrDb, frames, seed, book, bitTable);
     [rErr, rBits] = run_bidi(id, "reverse", snrDb, frames, seed, book, bitTable);
     [cErr, cBits] = run_bidi(id, "combined", snrDb, frames, seed, book, bitTable);
-    fprintf("  %-12s forward %.4e (%d/%d) | reverse %.4e (%d/%d) | combined %.4e (%d/%d)\n", ...
-        id, fErr / fBits, fErr, fBits, rErr / rBits, rErr, rBits, ...
-        cErr / cBits, cErr, cBits);
+    if id == "cck-bidfe2"
+        [nErr, nBits] = run_bidi(id, "refined", snrDb, frames, seed, book, bitTable);
+        fprintf("  %-12s forward %.4e (%d/%d) | reverse %.4e (%d/%d) | combined %.4e (%d/%d) | refined %.4e (%d/%d)\n", ...
+            id, fErr / fBits, fErr, fBits, rErr / rBits, rErr, rBits, ...
+            cErr / cBits, cErr, cBits, nErr / nBits, nErr, nBits);
+    else
+        fprintf("  %-12s forward %.4e (%d/%d) | reverse %.4e (%d/%d) | combined %.4e (%d/%d)\n", ...
+            id, fErr / fBits, fErr, fBits, rErr / rBits, rErr, rBits, ...
+            cErr / cBits, cErr, cBits);
+    end
 end
 
 % --- 4) per-method reported BER with CI --------------------------------
@@ -103,13 +110,17 @@ for frame = 1:frames
         det = trace.indices(:);
         det = det(1:min(8, numel(det)));
         if numel(det) < 8
-            % Short index trace: fill with the correlation oracle so
-            % the bit comparison stays aligned.
-            det = [det(:).', oracle_indices(received, book)];
-            det = det(1:8);
+            % A detector that drops blocks is an ERROR: padding with
+            % the correlation oracle used to mask block-truncation
+            % bugs and still report BER 0.
+            error("SCFDE:AuditBlockDrop", ...
+                "%s returned %d blocks (expected 8) - block truncation", ...
+                id, numel(det));
         end
     else
-        det = oracle_indices(received, book);
+        % Modules must expose their index trace (cck-fde previously
+        % returned only 'history' and silently fell back to the oracle).
+        error("SCFDE:AuditNoTrace", "%s trace lacks indices", id);
     end
     txBits = reshape(bitTable(idx, :).', 1, []);
     rxBits = reshape(bitTable(det, :).', 1, []);
@@ -121,44 +132,44 @@ bits = totalBits;
 end
 
 function [err, bits] = run_bidi(id, direction, snrDb, frames, seed, book, bitTable)
-% Directional oracle: forward uses the received chips, reverse uses the
-% time-reversed received chips (the reverse path must align
-% decision(i) <-> tx(i) after reversal, NOT tx(N-i+1)).
-registry = scfde.equalizer_registry();
-module = registry.module{find(registry.id == id, 1)};
+% Directional oracles run the THREE pipeline stages INDEPENDENTLY
+% (plus the BiDFE-2 refinement), NOT the module's combined trace:
+%   forward  = ch5_dfe_detect
+%   reverse  = ch5_backward_dfe_detect (already in ORIGINAL block
+%              order - the module flips back internally, so no post-hoc
+%              flip here; a flip would compare tx(i) against tx(N-i+1))
+%   combined = ch5_fuse_scores(S_f, S_r)
+%   refined  = ch5_bidirectional_refine (BiDFE-2 only)
+% A detector that drops blocks is an ERROR (the old oracle fallback
+% padded short outputs, masking block-truncation bugs).
 totalErrors = 0;
 totalBits = 0;
 rng(seed, "twister");
 for frame = 1:frames
     idx = randi(size(book, 1), 1, 8);
     [received, nv] = make_frame(idx, snrDb, "multipath");
-    % Bidirectional modules internally combine both directions; the
-    % direction flag selects which side of the trace to verify.
-    ch = struct("received", received, "impulse", scfde.equalizers.ch5_short_turbo_channel(), ...
-        "branches", [received; received]);
-    src = struct("data", reshape(book(idx, :).', 1, []), ...
-        "tx", received, "training", received(1:32));
-    cfg = struct("noiseVariance", nv, "receiverCandidateLimit", 128, ...
-        "turboIterations", 3, "snrDb", snrDb);
-    receiver = module(ch, src, cfg);
-    trace = receiver.traces{1};
-    if isfield(trace, "indices")
-        det = trace.indices(:);
-        det = det(1:min(8, numel(det)));
-        if numel(det) < 8
-            % Short index trace: fill with the correlation oracle so
-            % the bit comparison stays aligned.
-            det = [det(:).', oracle_indices(received, book)];
-            det = det(1:8);
-        end
-    else
-        det = oracle_indices(received, book);
+    imp = scfde.equalizers.ch5_short_turbo_channel();
+    switch lower(string(direction))
+        case "forward"
+            det = scfde.equalizers.ch5_dfe_detect(received, book, imp, nv, 128);
+        case "reverse"
+            det = scfde.equalizers.ch5_backward_dfe_detect(received, book, imp, nv, 128);
+        case "combined"
+            [~, fwdS] = scfde.equalizers.ch5_dfe_detect(received, book, imp, nv, 128);
+            [~, bwS] = scfde.equalizers.ch5_backward_dfe_detect(received, book, imp, nv, 128);
+            det = scfde.equalizers.ch5_fuse_scores(fwdS, bwS);
+        case "refined"
+            [~, fwdS] = scfde.equalizers.ch5_dfe_detect(received, book, imp, nv, 128);
+            [~, bwS] = scfde.equalizers.ch5_backward_dfe_detect(received, book, imp, nv, 128);
+            bi1 = scfde.equalizers.ch5_fuse_scores(fwdS, bwS);
+            det = scfde.equalizers.ch5_bidirectional_refine(received, book, imp, bi1, nv, 128);
+        otherwise
+            error("SCFDE:AuditBidi", "unknown direction %s", direction);
     end
-    if strcmpi(direction, "reverse")
-        % After time reversal the detection order must still map to the
-        % transmitted order: check decision(i) against tx(i).
-        det = fliplr(det);
-    end
+    det = det(:).';
+    assert(numel(det) == 8, ...
+        "%s %s returned %d blocks (expected 8) - block truncation", ...
+        id, direction, numel(det));
     txBits = reshape(bitTable(idx, :).', 1, []);
     rxBits = reshape(bitTable(det, :).', 1, []);
     totalErrors = totalErrors + sum(rxBits ~= txBits);
