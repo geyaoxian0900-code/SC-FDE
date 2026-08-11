@@ -1,6 +1,9 @@
 function [detected, scores] = ch5_dfe_detect(received, book, channel, noiseVariance, limit)
 wordLength = size(book, 2);
-blockCount = floor((numel(received) - numel(channel) + 1) / wordLength);
+% Full codeword blocks: ceil covers the last block even when the
+        % channel-tail overlap leaves fewer than memory samples at the
+        % end (identity channels then detect all 8 blocks instead of 7).
+        blockCount = ceil((numel(received) - numel(channel) + 1) / wordLength);
 memory = numel(channel) - 1;
 state = zeros(1, memory);
 detected = zeros(1, blockCount);
