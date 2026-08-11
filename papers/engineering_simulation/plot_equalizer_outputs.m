@@ -1,17 +1,18 @@
 function plot_equalizer_outputs(options)
-%PLOT_EQUALIZER_OUTPUTS Equalized output constellation for every
-% requested equalizer on the SAME received frame.
+%PLOT_EQUALIZER_OUTPUTS Received constellation vs equalized output
+% constellation for every requested equalizer on the SAME frame.
 %   PLOT_EQUALIZER_OUTPUTS()                      % all 17 QPSK methods
 %   PLOT_EQUALIZER_OUTPUTS(STRUCT("equalizers", {"mmse-fde","zf-fde"}))
 %
-% A single QPSK frame (Chapter 2/3 link: 120 data + 64 UW, 3-path
-% channel, fixed seed) is equalized by each registered method through
-% the unified entry; the equalizer's raw output symbols (before slicing)
-% are plotted as a constellation per method together with its BER.
+% The SAME QPSK frame (Chapter 2/3 link: 120 data + 64 UW, 3-path
+% channel, fixed seed) is used twice:
+%   - LEFT  : the RAW received constellation (downconverted symbols
+%             before any equalization) - identical for every method;
+%   - RIGHT : the equalizer's soft output constellation (estimates).
 %
 % Outputs (papers/results/equalizer_outputs/):
-%   equalizer_outputs.png - constellation grid
-%   equalizer_outputs.mat - outputs, ids, ber and the received frame
+%   equalizer_outputs.png - received vs equalized grid
+%   equalizer_outputs.mat - received symbols, outputs, ids, ber
 %
 % OPTIONS:
 %   equalizers - IDs (default all 17 qpsk methods)
@@ -33,57 +34,71 @@ result = run_unified_equalizer(struct("equalizers", {equalizers}, ...
     "scenario", "qpsk", "snrDb", snrDb, "frameCount", 1, ...
     "makePlot", false, "randomSeed", randomSeed));
 
+% Rebuild the SAME frame that the scenario transmitted: reproduce the
+% qpsk link (N=184, 120 data + 64 UW, training 64, 3-path channel)
+% with the same seed, so the received constellation matches the
+% equalizer inputs exactly.
+N = 184;
+dataSymbols = 120;
+uwLength = N - dataSymbols;
+impulse = zeros(1, N);
+impulse(1) = 1;
+impulse(2) = 0.7 * exp(1j * 0.5);
+impulse(4) = 0.3 * exp(-1j * 0.8);
+impulse = impulse / norm(impulse);
+H = fft(impulse);
+noiseVariance = 10^(-snrDb / 10);
+rng(randomSeed, "twister");
+bits = randi([0, 1], 1, 2 * dataSymbols);
+data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
+uw = scfde.equalizers.ch3_zadoff_chu(uwLength, 1);
+block = [data, uw];
+received = ifft(H .* fft(block));
+received = received + sqrt(noiseVariance / 2) * ...
+    (randn(size(received)) + 1j * randn(size(received)));
+
 nMethods = numel(result.ids);
-cols = 4;
-rows = ceil(nMethods / cols);
-fig = figure("Color", "w", "Position", [40, 40, 1400, 320 * rows], "Visible", "off");
+rows = nMethods + 1;
+fig = figure("Color", "w", "Position", [40, 40, 900, 240 * rows], "Visible", "off");
+% Row 1: the RAW received constellation (before any equalization) -
+% the same input for every equalizer.
+subplot(rows, 1, 1);
+plot(real(received), imag(received), ".", "MarkerSize", 5); hold on;
+plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
+grid on; axis equal; axis([-2 2 -2 2]);
+title(sprintf("Received (no equalization), SNR %g dB - the input to all %d equalizers", ...
+    snrDb, nMethods), "FontSize", 10);
+% Rows 2..N+1: one equalized soft-output constellation per method.
 for k = 1:nMethods
-    subplot(rows, cols, k);
-    % Draw the SOFT equalizer output (estimates) when available - the
-    % hard decisions in outputs{1} collapse every method to 4 points.
-    % A zero soft output (e.g. a PTR front end whose DFE does not
-    % converge on this frame) falls back to the hard decisions and is
-    % annotated.
-    hardFallback = false;
     if isfield(result, "estimates") && numel(result.estimates) >= k && ...
             ~isempty(result.estimates{k})
         out = result.estimates{k}(:).';
         if max(abs(out)) < 1e-9
             out = result.outputs{k}(:).';
-            hardFallback = true;
         end
     else
         out = result.outputs{k}(:).';
     end
-    % Normalize every method to its own peak magnitude so the soft
-    % constellations are compared at the same scale (a PTR front end
-    % concentrates its energy on a few correlation peaks while the
-    % equalized methods deliver unit-amplitude symbol estimates).
     peak = max(abs(out));
     if peak > 0
         out = out / peak;
     end
+    subplot(rows, 1, k + 1);
     plot(real(out(abs(out) > 1e-3)), imag(out(abs(out) > 1e-3)), ...
         ".", "MarkerSize", 5); hold on;
     plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
     grid on; axis equal; axis([-2 2 -2 2]);
-    if hardFallback
-        title(sprintf("%s\nBER=%.4g (%d/%d) [soft=0, hard shown]", ...
-            result.ids(k), result.ber(k), result.errorBits(k), ...
-            result.totalBits(k)), "FontSize", 9);
-    else
-        title(sprintf("%s\nBER=%.4g (%d/%d)", result.ids(k), ...
-            result.ber(k), result.errorBits(k), result.totalBits(k)), ...
-            "FontSize", 9);
-    end
+    title(sprintf("%s  BER=%.4g (%d/%d)", result.ids(k), ...
+        result.ber(k), result.errorBits(k), result.totalBits(k)), ...
+        "FontSize", 9);
 end
-sgtitle(sprintf("Equalized output constellations - one QPSK frame, SNR %g dB, seed %d", ...
+sgtitle(sprintf("Received vs equalized constellations - one QPSK frame, SNR %g dB, seed %d", ...
     snrDb, randomSeed));
 outDir = fullfile(fileparts(fileparts(mfilename("fullpath"))), ...
     "results", "equalizer_outputs");
 if ~exist(outDir, "dir"), mkdir(outDir); end
 pngPath = fullfile(outDir, "equalizer_outputs.png");
-exportgraphics(fig, pngPath, "Resolution", 120);
+exportgraphics(fig, pngPath, "Resolution", 110);
 close(fig);
 outputs = result.outputs;
 estimates = result.estimates;
@@ -91,9 +106,10 @@ ids = result.ids;
 ber = result.ber;
 errorBits = result.errorBits;
 totalBits = result.totalBits;
-save(fullfile(outDir, "equalizer_outputs.mat"), "outputs", "estimates", ...
-    "ids", "ber", "errorBits", "totalBits", "snrDb", "randomSeed");
-fprintf("Equalized outputs saved: %s\n", pngPath);
+save(fullfile(outDir, "equalizer_outputs.mat"), "received", "outputs", ...
+    "estimates", "ids", "ber", "errorBits", "totalBits", ...
+    "snrDb", "randomSeed");
+fprintf("Received vs equalized outputs saved: %s\n", pngPath);
 for k = 1:nMethods
     fprintf("  %-18s BER=%.4g (%d/%d)\n", ids(k), ber(k), ...
         errorBits(k), totalBits(k));
