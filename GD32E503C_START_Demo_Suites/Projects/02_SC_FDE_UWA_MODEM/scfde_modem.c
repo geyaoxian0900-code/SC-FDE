@@ -954,10 +954,8 @@ static void turbo_iterate(scfde_equalizer_mode_t mode,
                 /* adaptive weight update (leaky BLMS): operate on a local
                    copy of the channel (the caller buffer is const) */
                 memcpy(g_turbo_h, channel, size * sizeof(scfde_complex_t));
-                for (n = 0u; n < size; n++)
-                {
-                    estimate[n].re = 0.0f; estimate[n].im = 0.0f;
-                }
+                /* residual = soft - estimate uses the estimate just
+                   computed above (it must NOT be zeroed first). */
                 scfde_complex_t residual[SCFDE_FFT_SIZE];
                 for (n = 0u; n < size; n++)
                 {
@@ -977,16 +975,17 @@ static void turbo_iterate(scfde_equalizer_mode_t mode,
                     g_turbo_h[n].im = 0.999f * g_turbo_h[n].im +
                                     0.06f * num.im / den;
                 }
-                /* re-equalize with the updated channel (MMSE) */
+                /* re-equalize with the UPDATED channel (MMSE) - the
+                   previous code reused the stale channel buffer. */
                 for (n = 0u; n < size; n++)
                 {
-                    float p = scfde_complex_power(channel[n]);
+                    float p = scfde_complex_power(g_turbo_h[n]);
                     float den = p + noise_variance;
                     if (den < 1.0e-12f) { den = 1.0e-12f; }
-                    estimate[n].re = (y[n].re * channel[n].re +
-                                      y[n].im * channel[n].im) / den;
-                    estimate[n].im = (y[n].im * channel[n].re -
-                                      y[n].re * channel[n].im) / den;
+                    estimate[n].re = (y[n].re * g_turbo_h[n].re +
+                                      y[n].im * g_turbo_h[n].im) / den;
+                    estimate[n].im = (y[n].im * g_turbo_h[n].re -
+                                      y[n].re * g_turbo_h[n].im) / den;
                 }
             }
         }
@@ -1010,10 +1009,15 @@ static void turbo_iterate(scfde_equalizer_mode_t mode,
                 float p = scfde_complex_power(channel[r]);
                 float den = p + noise_variance;
                 if (den < 1.0e-12f) { den = 1.0e-12f; }
-                reverse[r].re = (reverse[r].re * channel[r].re +
-                                 reverse[r].im * channel[r].im) / den;
-                reverse[r].im = (reverse[r].im * channel[r].re -
-                                 reverse[r].re * channel[r].im) / den;
+                /* Complex division must use the ORIGINAL real/imag
+                   parts: the previous code overwrote .re before
+                   computing .im, corrupting the imaginary part. */
+                float rev_re = reverse[r].re;
+                float rev_im = reverse[r].im;
+                reverse[r].re = (rev_re * channel[r].re +
+                                 rev_im * channel[r].im) / den;
+                reverse[r].im = (rev_im * channel[r].re -
+                                 rev_re * channel[r].im) / den;
             }
             scfde_fft(reverse, size, 1u);
             for (r = 0u; r < size; r++)

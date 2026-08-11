@@ -370,11 +370,33 @@ static void csk_receive_soft_sic(uint16_t *detected)
     }
 }
 
-/* ESE (book 6.3): the single-user export equals the matched-filter hard
-   decisions, matching the MATLAB fallback in csk_ese. */
+/* ESE (book 6.3): the C firmware receiver is single-user, so the
+   multiuser IDMA iterations (mean cancellation, interference variance,
+   repeated soft detection) of ch6_csk_idma_detect cannot run; the
+   single-user ESE reduces to SOFT-POSTERIOR detection (distance ->
+   normalized weights -> posterior-mean soft chips -> decision), i.e.
+   it is NOT a matched filter.  Each symbol is soft-detected with a
+   short smoothing loop over the soft chips. */
 static void csk_receive_ese(uint16_t *detected)
 {
-    csk_receive_mf(detected);
+    uint16_t n, c, iter;
+    scfde_complex_t soft[SCFDE_CSK_SYMBOLS][SCFDE_CSK_CODE_LENGTH];
+    memset(soft, 0, sizeof(soft));
+    for (iter = 0u; iter < 2u; iter++)
+    {
+        for (n = 0u; n < SCFDE_CSK_SYMBOLS; n++)
+        {
+            scfde_complex_t expected[SCFDE_CSK_CODE_LENGTH];
+            uint16_t decision;
+            csk_soft_detect(g_symbols[n], 0.001f, &decision, expected);
+            detected[n] = decision;
+            for (c = 0u; c < SCFDE_CSK_CODE_LENGTH; c++)
+            {
+                soft[n][c].re = 0.5f * soft[n][c].re + 0.5f * expected[c].re;
+                soft[n][c].im = 0.5f * soft[n][c].im + 0.5f * expected[c].im;
+            }
+        }
+    }
 }
 
 static void csk_packet_from_indices(const uint16_t *detected)

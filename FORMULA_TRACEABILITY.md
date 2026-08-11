@@ -108,6 +108,20 @@ un_unified_equalizer 支持 channelMode="bellhop"（qpsk/turbo 场景），通�
 - blms 为双场景模块：注册主场景 turbo（解码信息判决），同时允许 qpsk 场景保留框符号输出（同一时间仅在一个场景运行）。
 - 算法等级 A/B/C 不因运行时修复而改变；运行完成不等于公式实现等级。
 
+## 全书复审修复（2026-08-11）
+
+已确认并修复：
+- C 版 IBDFE Γ = (1/N)Σ A_k H_k（补 /N）；原来前馈系数小 N 倍。
+- unified csk-ese BER 改用真正 ESE 输出（infoIndices→码符号映射），不再用 MF；ch6_repeated_symbol_indices 信息符号码字改为无重复 randperm（原 randi 可重复导致映射不唯一）；统一 csk 场景改为发送重复码帧（pair 由场景传入）。
+- C BITF-Turbo 反向复数除法原地覆盖 bug（保存 a/b 后计算 re/im）。
+- C BLMS-TF-Turbo：residual 用已算 estimate（不再清零），重新均衡用更新后的 g_turbo_h。
+- C FBLMS/FDDA overlap-save front_tail 索引补 n_f 偏移（取 current 块尾部）。
+- C CCK-FDE residual 变差时直接保留上一轮 detected（不再覆盖为当前更差结果）。
+- DPLL 相位误差改为书中 Im{p(ŝ+q)*}（MATLAB 与 C 统一）。
+- C csk_receive_ese 从 MF wrapper 升级为软后验检测（距离加权后验均值；单用户退化，多用户 IDMA 迭代在 MATLAB ch6_csk_idma_detect）。
+
+工程近似标注（非书中逐式 A 级）：circular PTR 模块（书中时域线性卷积意义）、ICE 训练构造（[u,u,u,u]、简化软概率（有理函数加权）、ESE damping=0.58（工程默认）、第4章卷积码 (7,5)_8 vs 书中 (171,133)_8。
+
 ## 已知缺口（对应 README）
 
 1. **HTFDE 可靠度缩放**（第3章）：工程设置，未按原文逐式（待办 P1）

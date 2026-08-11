@@ -602,6 +602,11 @@ static void ibdfe_grade_a(scfde_complex_t *channel, scfde_complex_t *block,
             gamma_re += channel_work[n].re * channel[n].re - channel_work[n].im * channel[n].im;
             gamma_im += channel_work[n].re * channel[n].im + channel_work[n].im * channel[n].re;
         }
+        /* Book Eq. (3-87): Gamma = (1/N) * sum_n A_n H_n.  Without the
+           /N the feedforward coefficients come out N times too small
+           (the soft estimates and reliability are then scaled by 1/N). */
+        gamma_re /= (float)size;
+        gamma_im /= (float)size;
         float gamma_norm = sqrtf(gamma_re * gamma_re + gamma_im * gamma_im);
         if (gamma_norm < 1.0e-12f) { gamma_norm = 1.0e-12f; }
         for (n = 0; n < size; n++)
@@ -717,7 +722,7 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
             }
             for (i = 0; i < n_f; i++)
             {
-                front_tail[i] = input_block[n_block - n_f + i];
+                front_tail[i] = input_block[n_block + i];
             }
             scfde_fft(input_block, fft_len, 0u);
             for (i = 0; i < fft_len; i++)
@@ -772,7 +777,12 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
             memset(weights, 0, fft_len * sizeof(scfde_complex_t));
             for (i = 0; i < n_f; i++)
             {
-                weights[i] = filtered[i];
+                /* The current block occupies input_block[n_f .. n_f+n_block-1];
+                   its last n_f samples (input_block[n_f+n_block-n_f+i] =
+                   input_block[n_block+i]) become the next block's history.
+                   (The previous indexing took the pre-block history
+                   region instead - an overlap-save state misalignment.) */
+                front_tail[i] = input_block[n_block + i];
             }
             scfde_fft(weights, fft_len, 0u);
         }
@@ -1077,8 +1087,21 @@ static void dfe_adaptive(scfde_equalizer_mode_t mode,
                 ff_est.im += g_dfe_weights[k].re * input[k].im +
                              g_dfe_weights[k].im * input[k].re;
             }
-            /* phaseError = imag(ff_est * conj(decision)) */
-            phase_error = ff_est.im * decision.re - ff_est.re * decision.im;
+            /* Book phase detector: phi = Im{ p (shat + q)* } with p the
+               feedforward output and q the feedback contribution
+               (input[ff..ff+fb-1] = -decision history):
+                 Im{p conj(shat)} + Im{p conj(q)}. */
+            float q_re = 0.0f, q_im = 0.0f;
+            for (k = 0u; k < fb; k++)
+            {
+                uint32_t idx = ff + k;
+                q_re += g_dfe_weights[idx].re * input[idx].re -
+                        g_dfe_weights[idx].im * input[idx].im;
+                q_im += g_dfe_weights[idx].re * input[idx].im +
+                        g_dfe_weights[idx].im * input[idx].re;
+            }
+            phase_error = (ff_est.im * decision.re - ff_est.re * decision.im) +
+                          (ff_est.im * q_re - ff_est.re * q_im);
             frequency += SCFDE_DPLL_INTEGRAL_GAIN * phase_error;
             phase += frequency + SCFDE_DPLL_PROP_GAIN * phase_error;
         }
@@ -1508,7 +1531,7 @@ static void fdda_equalize(scfde_equalizer_mode_t mode,
             }
             for (i = 0; i < n_f; i++)
             {
-                front_tail[i] = input_block[n_block - n_f + i];
+                front_tail[i] = input_block[n_block + i];
             }
             scfde_fft(input_block, fft_len, 0u);
             for (i = 0; i < fft_len; i++)

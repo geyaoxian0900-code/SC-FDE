@@ -38,8 +38,14 @@ for symbolIndex = firstSymbol:lastSymbol
     [weights, inverseCorrelation] = scfde.equalizers.adaptive_update(weights, inverseCorrelation, ...
         input, error, cfg, updateRule);
     if useDpll
+        % Book phase detector: phi = Im{ p (shat + q)* } with p the
+        % feedforward output and q the feedback term:
+        %   Im{p conj(shat)} + Im{p conj(q)}.
+        % The previous code computed Im{p (conj(shat) - q)} (missing
+        % the conjugate on q and using the wrong sign).
         phaseError = imag(feedforwardEstimate * ...
-            (conj(decisions(symbolIndex)) - feedbackTerm));
+            conj(decisions(symbolIndex))) + ...
+            imag(feedforwardEstimate * conj(feedbackTerm));
         frequency = frequency + cfg.dpllIntegralGain * phaseError;
         phase = phase + frequency + cfg.dpllProportionalGain * phaseError;
     end

@@ -21,26 +21,41 @@ channels = scfde.equalizers.ch6_dictionary_channels( ...
     channel.impulse, users, codeLength);
 [dicts, userChannels] = scfde.equalizers.ch6_idma_dictionaries(book, channels, users);
 conventional = scfde.equalizers.ch6_conventional_dictionaries(book, channels, users);
-pair = scfde.equalizers.ch6_repeated_symbol_indices(M, symbols, users);
+% The repetition/interleaver pair comes from the SCENARIO (cfg.pair) so
+% the decoder assumes the SAME structure that was transmitted; a local
+% random pair would misalign the repetition code.
+if isfield(cfg, "pair") && ~isempty(cfg.pair)
+    pair = cfg.pair;
+else
+    pair = scfde.equalizers.ch6_repeated_symbol_indices(M, symbols, users);
+end
 received = reshape(channel.received(1:symbols * codeLength), codeLength, symbols).';
 noiseVariance = cfg.noiseVariance * ones(1, users);
 transmitted = zeros(users, symbols, codeLength);
 [innerDecision, outerDecision, ~, ~, ~, ~] = scfde.equalizers.ch6_csk_idma_detect( ...
     received, dicts, userChannels, noiseVariance, pair, ...
     innerIterations, outerIterations, transmitted, false, 0.9);
-% Fallback hard decisions on codeword indices (matched filter against the
-% conventional dictionary, matching the unified link's transmitted frame)
-mfIndices = zeros(1, symbols);
-for symbol = 1:symbols
-    [mfIndices(symbol), ~] = scfde.equalizers.ch6_hard_dictionary_detect( ...
-        received(symbol, :), conventional{1});
+% The ESE/IDMA decisions ARE the exported codeword indices (repetition
+% outer decoding, last outer iteration, user 1).  The previous version
+% exported a matched-filter hard decision instead, which made the
+% unified BER measure the MF and not the ESE.  outerDecision holds one
+% index per INFORMATION symbol (repetition-1/2); pair.indices maps each
+% of the symbols transmitted codewords to its information symbol, so
+% the exported codeword indices are infoIndices(pair.indices(:,1)).
+infoIndices = squeeze(outerDecision(end, :, 1)).';
+% Map each transmitted codeword to its INFORMATION symbol: codeword s
+% carries the code index pair.indices(s,1), which belongs to the
+% information symbol k with pair.information(k,1) == pair.indices(s,1).
+infoOf = zeros(1, symbols);
+for s = 1:symbols
+    infoOf(s) = find(pair.information(:, 1) == pair.indices(s, 1), 1);
 end
+codeIndices = infoIndices(infoOf).';
 decisions = zeros(1, symbols * codeLength);
 for symbol = 1:symbols
     decisions((symbol - 1) * codeLength + (1:codeLength)) = ...
-        book(mfIndices(symbol), :);
+        book(codeIndices(symbol), :);
 end
-infoIndices = squeeze(outerDecision(end, :, 1)).';
 % Soft chip output: circular matched filter of the received chips
 % with the channel (consistent with csk_matched_filter), so the
 % constellation shows the soft spreading-chip estimates.
@@ -48,5 +63,5 @@ softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
     fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CSK-IDMA-ESE", "csk-ese", ...
     decisions, zeros(size(decisions)), softChips, ...
-    struct("indices", mfIndices, "infoIndices", infoIndices));
+    struct("indices", codeIndices, "infoIndices", infoIndices));
 end

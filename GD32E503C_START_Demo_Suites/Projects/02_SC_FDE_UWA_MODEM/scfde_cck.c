@@ -844,12 +844,11 @@ static void cck_receive_fde(uint16_t *detected, float noise_variance)
                 if ((iteration > 0u) &&
                     (residual_energy[iteration] > residual_energy[iteration - 1u]))
                 {
-                    /* keep previous detection: detected already holds the
-                       previous iteration's indices; stop updating. */
-                    for (block = 0u; block < SCFDE_CCK_WORDS; block++)
-                    {
-                        detected[block] = idx[block];
-                    }
+                    /* Keep the previous detection: detected already
+                       holds the better previous iteration's indices.
+                       (The previous code copied the CURRENT worse idx
+                       into detected before returning - exactly the
+                       opposite of the comment.) */
                     return;
                 }
                 for (block = 0u; block < SCFDE_CCK_WORDS; block++)
