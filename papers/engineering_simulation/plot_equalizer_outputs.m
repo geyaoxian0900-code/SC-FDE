@@ -58,17 +58,20 @@ received = received + sqrt(noiseVariance / 2) * ...
     (randn(size(received)) + 1j * randn(size(received)));
 
 nMethods = numel(result.ids);
-rows = nMethods + 1;
-fig = figure("Color", "w", "Position", [40, 40, 900, 240 * rows], "Visible", "off");
-% Row 1: the RAW received constellation (before any equalization) -
+% Compact grid: the raw received constellation takes the top-left cell
+% (merged over 2x2 cells), the 17 equalized constellations fill the
+% remaining cells - one screen, roughly square constellation axes.
+cols = 4;
+gridRows = ceil((nMethods + 1) / cols);
+fig = figure("Color", "w", "Position", [40, 40, 1400, 340 * gridRows], "Visible", "off");
+% Top-left: the RAW received constellation (before any equalization) -
 % the same input for every equalizer.
-subplot(rows, 1, 1);
-plot(real(received), imag(received), ".", "MarkerSize", 5); hold on;
+subplot(gridRows, cols, [1, 2]);
+plot(real(received), imag(received), ".", "MarkerSize", 4); hold on;
 plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
 grid on; axis equal; axis([-2 2 -2 2]);
-title(sprintf("Received (no equalization), SNR %g dB - the input to all %d equalizers", ...
-    snrDb, nMethods), "FontSize", 10);
-% Rows 2..N+1: one equalized soft-output constellation per method.
+title(sprintf("Received (no equalization), SNR %g dB", snrDb), "FontSize", 9);
+% Remaining cells: one equalized soft-output constellation per method.
 for k = 1:nMethods
     if isfield(result, "estimates") && numel(result.estimates) >= k && ...
             ~isempty(result.estimates{k})
@@ -83,14 +86,13 @@ for k = 1:nMethods
     if peak > 0
         out = out / peak;
     end
-    subplot(rows, 1, k + 1);
+    subplot(gridRows, cols, k + 1);
     plot(real(out(abs(out) > 1e-3)), imag(out(abs(out) > 1e-3)), ...
-        ".", "MarkerSize", 5); hold on;
+        ".", "MarkerSize", 4); hold on;
     plot([-1 1 1 -1 -1] / sqrt(2), [-1 -1 1 1 -1] / sqrt(2), "r--", "LineWidth", 1);
     grid on; axis equal; axis([-2 2 -2 2]);
-    title(sprintf("%s  BER=%.4g (%d/%d)", result.ids(k), ...
-        result.ber(k), result.errorBits(k), result.totalBits(k)), ...
-        "FontSize", 9);
+    title(sprintf("%s  BER=%.4g", result.ids(k), result.ber(k)), ...
+        "FontSize", 8);
 end
 sgtitle(sprintf("Received vs equalized constellations - one QPSK frame, SNR %g dB, seed %d", ...
     snrDb, randomSeed));
