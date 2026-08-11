@@ -48,7 +48,7 @@ snrGrid = 0:2:12;
 berGrid = zeros(numel(ids), numel(snrGrid));
 for s = 1:numel(snrGrid)
     for k = 1:numel(ids)
-        [e, b] = run_method(ids(k), frames, 100 + s, "awgn", snrGrid(s), seed);
+        [e, b] = run_method(ids(k), frames, snrGrid(s), "awgn", snrGrid(s), seed);
         berGrid(k, s) = e / b;
     end
 end
