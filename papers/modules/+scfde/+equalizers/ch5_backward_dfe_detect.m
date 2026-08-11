@@ -31,27 +31,58 @@ for block = 1:blockCount
     % reverse misses).  The row indices of reverseBook equal the
     % original book indices, so the selected candidates are used with
     % the original codebook for the prediction.
-    active = scfde.equalizers.ch5_candidate_list(observation, ...
-        conj(fliplr(book)), min(limit, size(book, 1)));
+    % Under multipath the observation's leading taps also carry the
+    % KNOWN spill of the following ORIGINAL block (the state); remove
+    % it before the nearest-neighbour screen, or the true codeword
+    % falls out of the top-`limit` list (multipath reverse misses).
+    screenObs = observation;
+    if any(state ~= 0)
+        screenObs(1:memory) = screenObs(1:memory) - state;
+    end
+    % The reversed-stream observation is the FRAME-TAIL segment of the
+    % original block's convolution (5:12), which includes the block's
+    % OWN tail taps (9:12).  Those taps are codeword-dependent, so no
+    % pre-screen can remove them: a nearest-neighbour screen over the
+    % reversed codebook rows drops the true codeword under multipath
+    % (verified: true index outside the top-128 list on blocks 2-8).
+    % The reverse path therefore scores ALL codebook rows.
+    active = 1:size(book, 1);
     local = zeros(1, numel(active));
     for candidate = 1:numel(active)
-        full = conv([state, book(active(candidate), :)], channel);
+        full = conv([zeros(1, memory), book(active(candidate), :)], channel);
         predicted = conj(fliplr(full));
-        % The original block's 8 samples are the middle segment of the
-        % convolution; after reversal they sit at (memory+1 : memory+8).
-        predicted = predicted(memory + 1:memory + wordLength);
+        % The reversed stream reads the frame from its TAIL: block j
+        % observes the ORIGINAL block (N-j+1) convolution segment
+        % (5:12) (the frame-tail offset), so after the reversal the
+        % predicted block sits in the FIRST wordLength samples, not the
+        % middle (the middle segment is the frame-HEAD model used by
+        % the forward DFE and mismatches the tail by 4 samples - the
+        % multipath reverse path detected 160/160 wrong blocks while
+        % identity stayed exact).
+        predicted = predicted(1:wordLength);
+        % The ORIGINAL following block's convolution head (1:memory)
+        % spills into this window's last taps and, after the reversal,
+        % lands in the FIRST memory taps of the observation.
+        if numel(state) == memory && any(state ~= 0)
+            predicted(1:memory) = predicted(1:memory) + state;
+        end
         local(candidate) = -sum(abs(observation - predicted).^2) / ...
             max(noiseVariance, 1e-8);
     end
     scores(block, active) = local;
     [~, best] = max(local);
     detected(block) = active(best);
-    % Reverse-domain state: the channel tail of the current ORIGINAL
-    % codeword as it appears at the head of the reversed stream
-    % (fliplr(full)(1:memory)).
-    full = conv([state, book(detected(block), :)], channel);
-    reversed = conj(fliplr(full));
-    state = reversed(1:memory);
+    % Reverse-domain state: the convolution head of the current
+    % ORIGINAL codeword (the following block, read backwards) as it
+    % appears in the next observation's leading taps.  Only channels
+    % with a non-trivial tail spread the following block into the
+    % window (identity channels have no inter-block spill: state = 0).
+    fullClean = conv(book(detected(block), :), channel);
+    if numel(fullClean) > wordLength
+        state = conj(fliplr(fullClean(1:memory)));
+    else
+        state = zeros(1, memory);
+    end
 end
 detected = fliplr(detected);
 scores = flipud(scores);

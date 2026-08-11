@@ -83,7 +83,15 @@ rng(scenarioSeed, "twister");
 for frame = 1:frames
     idx = randi(size(book, 1), 1, 8);
     [received, nv] = make_frame(idx, snrDb, channelMode);
-    ch = struct("received", received, "impulse", scfde.equalizers.ch5_short_turbo_channel(), ...
+    % Identity/AWGN audits send the signal through an IDENTITY channel:
+    % the module must assume the same channel it actually sees, or the
+    % mismatch (5-tap assumed, identity sent) produces spurious errors.
+    if strcmpi(channelMode, "identity") || strcmpi(channelMode, "awgn")
+        chImpulse = [1, 0, 0];
+    else
+        chImpulse = scfde.equalizers.ch5_short_turbo_channel();
+    end
+    ch = struct("received", received, "impulse", chImpulse, ...
         "branches", [received; received]);
     src = struct("data", reshape(book(idx, :).', 1, []), ...
         "tx", received, "training", received(1:32));
