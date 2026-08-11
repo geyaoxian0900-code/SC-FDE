@@ -115,7 +115,10 @@ for k = 1:nMethods
                     numel(result.traces) >= k && ...
                     isfield(result.traces{k}, "softEstimates")
                 est = result.traces{k}.softEstimates(end, :);
-                out = est(257:min(1280, numel(est)));
+                if numel(est) > 1024
+                    est = est(257:1280);
+                end
+                out = est;
             end
         end
     else

@@ -236,6 +236,7 @@ for outer = 1:outerIterations
             mean(abs(dataOut - referenceData).^2);
         trace.decisionBer(outer) = ...
             mean(decisionFn(dataOut) ~= referenceData);
+        trace.softEstimates(outer, :) = dataOut;
     end
     if outer < outerIterations
         softData = softFn(outer, dataOut);

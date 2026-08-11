@@ -51,6 +51,7 @@ if isfield(cfg, "permutation") && ~isempty(cfg.permutation)
         llrFrame, frame, previous, 1, cfg.turboDecoderMode);
     decisions = 1 - 2 * bits;
     trace.equalizedFrame = output;
+    trace.softEstimates = output;
     trace.outputDomain = "information-symbols";
 else
     % Align the output length with the reference.
