@@ -13,7 +13,8 @@ decisions = cck_indices_to_symbols(detected, source, book);
 softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
     fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CCK-FDE-IBDFE", "cck-fde", ...
-    decisions, zeros(size(decisions)), softChips, struct("history", history));
+    decisions, zeros(size(decisions)), softChips, ...
+    struct("history", history, "indices", detected));
 end
 
 function decisions = cck_indices_to_symbols(detected, source, book)

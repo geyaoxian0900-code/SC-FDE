@@ -48,22 +48,24 @@ for block = 1:blockCount
     % The reverse path therefore scores ALL codebook rows.
     active = 1:size(book, 1);
     local = zeros(1, numel(active));
+    % The reversed stream reads the frame from its TAIL: block j
+    % observes the ORIGINAL block (N-j+1) convolution segment starting
+    % tailOffset = numel(received) - wordLength*blockCount samples into
+    % the block's own convolution (a multipath frame carries memory
+    % tail samples, so the segment is (5:12) - the flipped first
+    % wordLength taps of the full convolution; an identity frame has no
+    % tail, so the segment is the block itself (1:8) and flipping the
+    % full convolution would pick up the channel's zero padding -
+    % reverse path detected 0/2700 blocks identity, 5 lengths x 100
+    % seeds, while multipath (with its tail) masked the bug).
+    tailOffset = numel(received) - wordLength * blockCount;
     for candidate = 1:numel(active)
-        full = conv([zeros(1, memory), book(active(candidate), :)], channel);
-        predicted = conj(fliplr(full));
-        % The reversed stream reads the frame from its TAIL: block j
-        % observes the ORIGINAL block (N-j+1) convolution segment
-        % (5:12) (the frame-tail offset), so after the reversal the
-        % predicted block sits in the FIRST wordLength samples, not the
-        % middle (the middle segment is the frame-HEAD model used by
-        % the forward DFE and mismatches the tail by 4 samples - the
-        % multipath reverse path detected 160/160 wrong blocks while
-        % identity stayed exact).
-        predicted = predicted(1:wordLength);
+        full = conv(book(active(candidate), :), channel);
+        predicted = conj(fliplr(full(tailOffset + 1:tailOffset + wordLength)));
         % The ORIGINAL following block's convolution head (1:memory)
         % spills into this window's last taps and, after the reversal,
         % lands in the FIRST memory taps of the observation.
-        if numel(state) == memory && any(state ~= 0)
+        if any(state ~= 0)
             predicted(1:memory) = predicted(1:memory) + state;
         end
         local(candidate) = -sum(abs(observation - predicted).^2) / ...

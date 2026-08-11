@@ -1,8 +1,15 @@
 function [detected, history] = ch5_fde_cck_detect(received, book, channel, noiseVariance, iterations)
 wordLength = size(book, 2);
-blockCount = floor((numel(received) - numel(channel) + 1) / wordLength);
+% ceil keeps the last block even when the channel-tail overlap leaves
+% fewer than memory samples at the end (floor gave blockCount 0 for a
+% single 8-chip codeword: fft([]) -> empty .* product crash).
+blockCount = ceil((numel(received) - numel(channel) + 1) / wordLength);
 lengthFrame = blockCount * wordLength;
-received = received(1:lengthFrame);
+if numel(received) < lengthFrame
+    received = [received, zeros(1, lengthFrame - numel(received))];
+else
+    received = received(1:lengthFrame);
+end
 H = fft([channel, zeros(1, lengthFrame - numel(channel))]);
 Y = fft(received);
 soft = zeros(1, lengthFrame);
