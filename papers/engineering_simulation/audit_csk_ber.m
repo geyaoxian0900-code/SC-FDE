@@ -36,22 +36,31 @@ fprintf("\n--- 2) Cyclic shift correlation oracle (shifts 0,1,M-1) ---\n");
 rng(seed, "twister");
 shiftErrors = zeros(1, 3);
 shiftBits = zeros(1, 3);
-shifts = [0, 1, codeLength - 1];
+% Boundary shifts 0 / 1 / M-1: the codebook holds M = 4 rows
+% (circshift(root, 0..M-1)), so a shift of codeLength-1 = 62 moves the
+% 63-tap root OUT of the codebook and the oracle would have to guess
+% among rows it was never sent (it scored 0.76 there).  The true cyclic
+% boundary is M-1.
+shifts = [0, 1, size(book, 1) - 1];
 for si = 1:3
     for frame = 1:frames
         shift = shifts(si);
         for rep = 1:4
             sym = randi(4);
-            c0 = book(sym, :);
-            cShift = circshift(c0, [0, shift]);
+            % CSK encoding selects a codebook ROW (a cyclic shift of
+            % the root); a boundary-shift test therefore transmits the
+            % shifted ROW - circshift(c0, shift) on the 63-tap root
+            % moves OUT of the 4-row codebook for sym near the edge
+            % (root shifted 4 taps is not a stored row) and the oracle
+            % then guesses among rows that were never sent.
+            symSent = mod(sym - 1 + shift, size(book, 1)) + 1;
+            cShift = book(symSent, :);
             obs = cShift + sqrt(10^(-snrDb / 10) / 2) * ...
                 (randn(size(cShift)) + 1j * randn(size(cShift)));
             m = abs(book * obs.');
             [~, kHat] = max(m);
-            % The shift-index ambiguity is resolved by the codebook
-            % (each shift is a distinct codeword for the root family).
             shiftErrors(si) = shiftErrors(si) + ...
-                sum(bits(kHat, :) ~= bits(sym, :));
+                sum(bits(kHat, :) ~= bits(symSent, :));
             shiftBits(si) = shiftBits(si) + numel(bits(sym, :));
         end
     end
