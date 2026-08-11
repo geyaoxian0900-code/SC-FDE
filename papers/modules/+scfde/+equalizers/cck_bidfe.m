@@ -10,8 +10,14 @@ if isfield(cfg, "receiverCandidateLimit"), limit = cfg.receiverCandidateLimit; e
     channel.received, book, channel.impulse, cfg.noiseVariance, limit);
 detected = scfde.equalizers.ch5_fuse_scores(forwardScores, backwardScores);
 decisions = cck_indices_to_symbols(detected, source, book);
+% Soft chip output: circular matched filter of the received chips
+% with the channel (consistent with cck_rake), so the constellation
+% shows the soft axial-QPSK chip estimates instead of the hard
+% decisions.
+softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
+    fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CCK-BiDFE-1", "cck-bidfe", ...
-    decisions, zeros(size(decisions)), decisions, ...
+    decisions, zeros(size(decisions)), softChips, ...
     struct("indices", detected, "forward", forward));
 end
 
