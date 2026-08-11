@@ -67,7 +67,7 @@ fprintf("\n--- 3) Independent BER vs reported (SNR %d dB, %d frames) ---\n", ...
     snrDb, frames);
 alpha = 0.05;
 for id = ids
-    [err, bits] = run_method(id, frames, 42, "multipath", snrDb, seed);
+    [err, bits] = run_method(id, frames, snrDb, "multipath", 0, seed);
     ber = err / bits;
     [lo, hi] = clopper_pearson(err, bits, alpha);
     r = run_unified_equalizer(struct("equalizers", char(id), ...

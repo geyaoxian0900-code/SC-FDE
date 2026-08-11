@@ -63,6 +63,18 @@ if doSanity
         theoretical = qfunc(sqrt(10^(8 / 10)));
         fprintf("  %-16s AWGN BER = %.4e (theoretical %.4e)\n", id, ber, theoretical);
     end
+    fprintf("\n--- Sanity 3: constellation moment Mx and MMSE lambda ---\n");
+    [Mx, lambda] = moment_and_lambda_check();
+    assert(abs(Mx - 1) < 1e-9, ...
+        "Mx = %g, but the scenario declares unit-energy QPSK (Mx must be 1)", Mx);
+    fprintf("  Mx = mean(|x|^2) over the data segment = %.12g (unit-energy profile)\n", Mx);
+    fprintf("  lambda = N*sigma_w^2/Mx with sigma_w^2 = 10^(-snrDb/10) is the\n");
+    fprintf("  MMSE regularization used by ch3_mmse_frequency_equalize; checked\n");
+    fprintf("  lambda(scenario) = %.12g vs sigma_w^2 = %.12g\n", lambda, 10^(-8 / 10));
+    assert(abs(lambda - 10^(-8 / 10)) < 1e-12, ...
+        "lambda = %g, expected 10^(-snrDb/10) = %g", lambda, 10^(-8 / 10));
+    fprintf("\n--- Sanity 4: IBDFE unit gain |mean(C_k*H_k) - 1| ---\n");
+    check_ibdfe_unit_gain();
 end
 
 if doSweep
@@ -100,6 +112,70 @@ for id = ids
         "scenario", "qpsk", "snrDb", snrDb, "frameCount", frames, ...
         "makePlot", false, "randomSeed", 42));
     fprintf("  %-16s independent=%.4e scenario=%.4e\n", id, indep, r.ber);
+end
+end
+
+function [Mx, lambda] = moment_and_lambda_check()
+% Rebuild one frame exactly like run_method ("multipath" shape, SNR 8
+% dB) and return the data-segment constellation moment Mx together with
+% the MMSE regularization lambda the modules derive from the scenario.
+% The lambda convention (book ch. 3) is N*sigma_w^2/Mx; with the
+% unit-energy QPSK profile Mx = 1 this must equal sigma_w^2, so a
+% future modem change (e.g. x in +/-1 +/- 1j, Mx = 2) must update the
+% lambda definition here instead of silently renormalising.
+N = 184;
+dataSymbols = 120;
+uwLength = N - dataSymbols;
+rng(1, "twister");
+bits = randi([0, 1], 1, 2 * dataSymbols);
+data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
+Mx = mean(abs(data).^2);
+lambda = 10^(-8 / 10);
+end
+
+function check_ibdfe_unit_gain()
+% The IBDFE feedforward weights are normalised by Gamma =
+% mean(A .* H) (ch3_ibdfe_equalize), so the residual loop gain
+% |mean(C_k * H_k) - 1| must be zero at every iteration; the trace
+% normalization field records it and guards the /N convention that
+% fixed the earlier IBDFE bug.
+N = 184;
+dataSymbols = 120;
+uwLength = N - dataSymbols;
+nv = 10^(-12 / 10);
+rng(7, "twister");
+for channelMode = ["identity", "multipath"]
+    bits = randi([0, 1], 1, 2 * dataSymbols);
+    data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
+    uw = scfde.equalizers.ch3_zadoff_chu(uwLength, 1);
+    block = [data, uw];
+    impulse = zeros(1, N);
+    impulse(1) = 1;
+    if channelMode == "multipath"
+        impulse(2) = 0.7 * exp(1j * 0.5);
+        impulse(4) = 0.3 * exp(-1j * 0.8);
+        impulse = impulse / norm(impulse);
+    end
+    H = fft(impulse);
+    received = ifft(H .* fft(block)) + sqrt(nv / 2) * ...
+        (randn(size(block)) + 1j * randn(size(block)));
+    ch = struct("received", received, "impulse", impulse, ...
+        "branches", [received; received]);
+    src = struct("data", data, "tx", block, "training", block(1:64));
+    cfg = struct("trainingSymbols", 64, "dataSymbols", dataSymbols, ...
+        "uwLength", uwLength, "fftSize", N, "noiseVariance", nv, ...
+        "snrDb", 12, "ibdfeIterations", 4, "channelRegularization", 0.1, ...
+        "channelEstimateLength", numel(impulse));
+    r = scfde.equalizers.sd_ibdfe(ch, src, cfg);
+    normTrace = r.traces{1}.normalization;
+    for iteration = 1:numel(normTrace)
+        gainError = abs(normTrace(iteration) - 1);
+        fprintf("  %-10s iter %d: |mean(C.*H) - 1| = %.3e\n", ...
+            channelMode, iteration, gainError);
+        assert(gainError < 1e-6, ...
+            "IBDFE unit-gain invariant broken on %s (iter %d): %g", ...
+            channelMode, iteration, gainError);
+    end
 end
 end
 
