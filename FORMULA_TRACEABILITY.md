@@ -32,7 +32,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 ## 第 1 章 绪论（书页 1~14，理论章）
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (1-1) 声速经验式 `c=1449.2+4.6t-0.055t²+0.00029t³+(1.34-0.01t)(S-35)+0.016H` | 2-3 | t,S,H → c；实数/scalar | — | — | scfde.book_formulas.ch1_sound_speed | — | test_book_formulas_ch1 | BOOK-EXACT | OK |
 | (1-2) `A(l,f)=l^k[α(f)]^l` 传播损失 | 2-3 | l,f,k → A | — | — | scfde.book_formulas.ch1_propagation_loss | — | test_book_formulas_ch1 | BOOK-EXACT | OK |
 | (1-3) `TL=k·10lg(1000/l)+l·10·lgα(f)` | 2-3 | l,f → TL(dB) | dB | — | scfde.book_formulas.ch1_propagation_loss | — | test_book_formulas_ch1 | BOOK-EXACT | OK |
@@ -51,7 +51,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 ## 第 2 章 单载波时域均衡（书页 14~43）
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (2-1) `s(t)=a(t)cos(2πf_c t+φ_k)=s_I cos-s_Q sin` | 14 | 已调信号 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT | OK |
 | (2-2) `s(t)=Re{u(t)e^{j2πf_c t}}` | 17-18 | 复包络 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT | OK |
 | (2-3) `u(t)=Σa(n)g(t-nT)` | 17-18 | 成形 | — | — | scfde.book_formulas.ch2_pulse_shaped | — | test_book_formulas_ch2 | BOOK-EXACT | OK |
@@ -92,7 +92,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 ## 第 3 章 单载波频域均衡与同步（书页 45~74）★ 模板章
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (3-1) `s=[s_0…s_{N-1}]^T` | 47-48 | 数据块 | — | 帧构造 | — | — | — | BOOK-EXACT | OK |
 | (3-2) `h=[h_0…h_{L-1}]^T` | 47-48 | 信道 | — | channel.impulse | — | — | — | BOOK-EXACT | OK |
 | (3-3) `r_k=Σh_i s_{k-i}+w_k` | 47-48 | 线性卷积 | — | apply_multipath | — | — | — | BOOK-EXACT | OK |
@@ -142,7 +142,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 ## 第 4 章 单载波迭代均衡（书页 75~112）
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (4-1) `y_n=Σh_l x_{n-l}+w_n` | 75-76 | 信道模型 | — | 帧/信道构造 | — | — | — | BOOK-EXACT | OK |
 | (4-2) `L(c_k)=ln[P(0)/P(1)]` | 75-76 | LLR 定义 | — | ch4_bcjr_log_domain | — | — | — | BOOK-EXACT | OK |
 | (4-3) `L(c_k | y)=ln[P(0 | y)/P(1 | y)]` | 75-76 | — | — | — | BOOK-EXACT | OK |
@@ -190,7 +190,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 ## 第 5 章 单载波互补码键控扩频（书页 122~164）
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (5-1)~(5-7) | 123-124 | 扫描缺失（CCK 码本生成区） | — | — | — | — | — | SCAN-MISSING | N/A |
 | (5-8) Golay 递推 `[A_k;B_k]=[A_{k-1} B_{k-1};B_{k-1} -A_{k-1}]` | 125-128 | 互补对 | — | ch5_golay_complementary_pair | — | — | — | BOOK-EXACT | OK |
 | (5-9) A_1/B_1/A_2/B_2 序列 | 125-128 | 码本 | — | ch5_cck_codebook | — | — | — | OCR-UNCERTAIN | N/A |
@@ -237,7 +237,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 ## 第 6 章 单载波循环移位扩频（书页 166~196）
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 | (6-1) `I(t)=Σs(n)Σc(l)g(t-lT_c)` | 167-168 | DSSS 基带 | — | ch6_csk_codebook 基础 | — | — | — | OCR-UNCERTAIN | N/A |
 | (6-2) `R=1/(L T_c)` | 167-168 | 速率 | — | — | scfde.book_formulas.ch6_spreading_rate | — | test_book_formulas_ch6 | BOOK-EXACT | OK |
 | (6-3) `R=log₂M/(L T_c)` | 167-168 | M 元速率 | — | — | scfde.book_formulas.ch6_spreading_rate | — | test_book_formulas_ch6 | BOOK-EXACT | OK |

@@ -398,6 +398,10 @@ end
 end
 
 function g = run_channel_regression(a)
+% Identity-channel regression: for turbo/cck/csk the unified entry runs
+% the identity channel and the BER must be EXACTLY 0 (identity sanity,
+% not a performance benchmark).  qpsk-scenario algorithms use the audit
+% identity/AWGN sanity instead.
 g = "OPEN";
 if a.scenario == "qpsk"
     try
@@ -414,13 +418,8 @@ try
         "scenario", a.scenario, "frameCount", 1, "snrDb", 60, ...
         "symbols", 8, "makePlot", false, "randomSeed", 1, ...
         "channelMode", "identity"));
-    if strcmp(a.scenario, "turbo")
-        if result.ber(1) == 0
-            g = "PASS";
-        else
-            g = "FAIL";
-        end
-    elseif all(isfinite(result.ber))
+    if isfield(result, "ber") && all(isfinite(result.ber)) && ...
+            all(result.ber == 0)
         g = "PASS";
     else
         g = "FAIL";
@@ -494,8 +493,9 @@ function coverage = audit_global_formula_coverage(papersDir)
 coverage = struct("total", 0, "bookExact", 0, "algEquiv", 0, ...
     "scanMissing", 0, "ocrUncertain", 0, "sourceInconsistent", 0, ...
     "engineering", 0, "theoryOnly", 0, "paramUnrecoverable", 0, ...
-    "unknown", 0, "duplicateIds", 0, ...
-    "missingImplementationRefs", 0, "invalidImplementationRefs", 0);
+    "unknown", 0, "duplicateIds", 0, "invalidColumnRows", 0, ...
+    "missingImplementationRefs", 0, "invalidImplementationRefs", 0, ...
+    "missingTestRefs", 0, "invalidTestRefs", 0, "evidenceClosed", 0);
 coverage.unimplemented = {};
 seen = containers.Map("KeyType", "char", "ValueType", "logical");
 try
@@ -511,22 +511,21 @@ for i = 1:numel(lines)
     end
     cells = strtrim(split(line, "|"));
     cells(cells == "") = [];
-    if numel(cells) < 6
-        continue;
-    end
     ids = book_acceptance.parse_equation_ids(cells(1));
     if isempty(ids)
         continue;
     end
+    n = numel(ids);
+    % hard 10-column schema: formula rows must have exactly 10 cells
+    if numel(cells) ~= 10
+        coverage.invalidColumnRows = coverage.invalidColumnRows + n;
+        continue;
+    end
     fs = cells(end - 1);
     ps = cells(end);
-    prod = "—";
-    oracle = "—";
-    if numel(cells) >= 6
-        prod = cells(5);
-        oracle = cells(6);
-    end
-    n = numel(ids);
+    prod = cells(5);
+    oracle = cells(6);
+    testRef = cells(8);
     coverage.total = coverage.total + n;
     if fs == "SCAN-MISSING"
         coverage.scanMissing = coverage.scanMissing + n;
@@ -552,26 +551,38 @@ for i = 1:numel(lines)
     if ps == "PARAM-UNRECOVERABLE"
         coverage.paramUnrecoverable = coverage.paramUnrecoverable + n;
     end
-    % trace integrity: duplicate IDs, and implementation references for
-    % BOOK/ALG rows must exist
+    % structure integrity: duplicate IDs; implementation and test
+    % references for BOOK/ALG rows must exist
     if any(fs == ["BOOK-EXACT", "ALG-EQUIV"])
+        implOk = false;
         if prod == "—" && oracle == "—"
             coverage.missingImplementationRefs = ...
                 coverage.missingImplementationRefs + n;
+        else
+            for ref = [prod, oracle]
+                if ref == "—"
+                    continue;
+                end
+                st = check_ref_exists(ref, papersDir);
+                if st == 0
+                    coverage.invalidImplementationRefs = ...
+                        coverage.invalidImplementationRefs + n;
+                elseif st == 1
+                    implOk = true;
+                end
+            end
         end
-        for ref = [prod, oracle]
-            if ref == "—"
-                continue;
-            end
-            st = check_ref_exists(ref, papersDir);
-            if st == 0
-                fprintf("BAD %s ref=%s\\n", cells(1), ref);
-                coverage.invalidImplementationRefs = ...
-                    coverage.invalidImplementationRefs + n;
-            elseif st == -1
-                coverage.missingImplementationRefs = ...
-                    coverage.missingImplementationRefs + n;
-            end
+        testOk = false;
+        if testRef == "—"
+            coverage.missingTestRefs = coverage.missingTestRefs + n;
+        elseif ~check_test_ref_exists(testRef, papersDir)
+            fprintf("BADTEST %s test=%s\\n", cells(1), testRef);
+            coverage.invalidTestRefs = coverage.invalidTestRefs + n;
+        else
+            testOk = true;
+        end
+        if implOk && testOk
+            coverage.evidenceClosed = coverage.evidenceClosed + n;
         end
     end
     for id = ids
@@ -582,14 +593,51 @@ for i = 1:numel(lines)
         end
     end
 end
-coverage.traceIntegrity = coverage.unknown == 0 && ...
-    coverage.duplicateIds == 0 && ...
+coverage.traceStructureIntegrity = coverage.unknown == 0 && ...
+    coverage.duplicateIds == 0 && coverage.invalidColumnRows == 0 && ...
     coverage.missingImplementationRefs == 0 && ...
-    coverage.invalidImplementationRefs == 0;
-coverage.hardClosed = coverage.traceIntegrity && ...
-    coverage.scanMissing == 0 && coverage.ocrUncertain == 0 && ...
-    isempty(coverage.unimplemented) && coverage.engineering == 0 && ...
-    coverage.sourceInconsistent == 0;
+    coverage.invalidImplementationRefs == 0 && ...
+    coverage.missingTestRefs == 0 && coverage.invalidTestRefs == 0;
+coverage.sourceIntegrity = coverage.sourceInconsistent == 0;
+coverage.hardClosed = coverage.traceStructureIntegrity && ...
+    coverage.sourceIntegrity && coverage.scanMissing == 0 && ...
+    coverage.ocrUncertain == 0 && isempty(coverage.unimplemented) && ...
+    coverage.engineering == 0;
+end
+function ok = check_test_ref_exists(ref, papersDir)
+% Test reference: "file" or "file/testCase"; the file must exist in
+% papers/tests and, when a test case is given, the function must exist.
+ok = false;
+try
+    ref = string(ref);
+    parts = split(ref, "/");
+    if numel(parts) == 1
+        file = parts(1);
+        testCase = "";
+    elseif numel(parts) == 2
+        file = parts(1);
+        testCase = parts(2);
+    else
+        return;
+    end
+    if ~endsWith(file, ".m")
+        path = fullfile(papersDir, "tests", file + ".m");
+    else
+        path = fullfile(papersDir, "tests", file);
+    end
+    if ~isfile(path)
+        return;
+    end
+    if testCase == ""
+        ok = true;
+        return;
+    end
+    text = fileread(path);
+    pattern = "function\s+" + regexptranslate("escape", testCase) + "\s*\(";
+    ok = ~isempty(regexp(text, pattern, "once"));
+catch
+    ok = false;
+end
 end
 
 function st = check_ref_exists(ref, papersDir)
@@ -689,7 +737,8 @@ fprintf("\n=== FORMULA COVERAGE ===\n");
 fprintf("TOTAL EQUATION IDS:          %d\n", coverage.total);
 fprintf("BOOK-EXACT:                  %d\n", coverage.bookExact);
 fprintf("ALG-EQUIV:                   %d\n", coverage.algEquiv);
-fprintf("VERIFIED FORMULAS:           %d\n", verified);
+fprintf("FORMULA STATUS VERIFIED:     %d\n", verified);
+fprintf("FORMULA EVIDENCE CLOSED:     %d\n", coverage.evidenceClosed);
 fprintf("SCAN-MISSING:                %d\n", coverage.scanMissing);
 fprintf("OCR-UNCERTAIN:               %d\n", coverage.ocrUncertain);
 fprintf("SOURCE-INCONSISTENT:         %d\n", coverage.sourceInconsistent);
@@ -703,13 +752,16 @@ if ~isempty(coverage.unimplemented)
         fprintf("    unimplemented %s\n", names(ui));
     end
 end
-fprintf("TRACE INTEGRITY (unknown=%d, dup=%d, missingRef=%d, badRef=%d): %d\n", ...
-    coverage.unknown, coverage.duplicateIds, ...
+fprintf("TRACE STRUCTURE INTEGRITY (unknown=%d, dup=%d, colRows=%d, missingRef=%d, badRef=%d, missingTest=%d, badTest=%d): %d\n", ...
+    coverage.unknown, coverage.duplicateIds, coverage.invalidColumnRows, ...
     coverage.missingImplementationRefs, coverage.invalidImplementationRefs, ...
-    coverage.traceIntegrity);
+    coverage.missingTestRefs, coverage.invalidTestRefs, ...
+    coverage.traceStructureIntegrity);
+fprintf("SOURCE INTEGRITY (source-inconsistent=%d): %d\n", ...
+    coverage.sourceInconsistent, coverage.sourceIntegrity);
 fprintf("EXECUTABLE FORMULA CLOSURE:  %d/%d (%.1f%%)\n", ...
     verified, closureDenom, 100 * verified / max(closureDenom, 1));
-fprintf("HARD CLOSURE (integrity+scan+ocr+source+unimpl+eng=0): %d\n", ...
+fprintf("HARD CLOSURE (structure+source+scan+ocr+unimpl+eng=0): %d\n", ...
     coverage.hardClosed);
 
 fprintf("\n=== ALGORITHM ACCEPTANCE SUMMARY ===\n");
@@ -722,7 +774,9 @@ fprintf("FAILED ALGORITHMS:           %d\n", nFailAlgos);
 summary = struct("algorithms", numel(rows), "matlabHard", hard, ...
     "matlabReview", hard + curated, "totalIds", coverage.total, ...
     "verifiedFormulas", verified, "hardClosed", coverage.hardClosed, ...
-    "traceIntegrity", coverage.traceIntegrity, ...
+    "traceStructureIntegrity", coverage.traceStructureIntegrity, ...
+    "sourceIntegrity", coverage.sourceIntegrity, ...
+    "evidenceClosed", coverage.evidenceClosed, ...
     "failedGates", nFailGates, "failedAlgorithms", nFailAlgos, ...
     "executableUnimplemented", coverage.unimplemented);
 end
