@@ -1,4 +1,4 @@
-function tests = test_book_formulas_ch6
+﻿function tests = test_book_formulas_ch6
 %TEST_BOOK_FORMULAS_CH6  Chapter-6 executable formula oracles.
 %   eq.(6-2)/(6-3) spreading rates, (6-4)/(6-5) shift matrix and
 %   orthogonality, (6-7) CSK correlation detector, (6-38) PTR equivalent
@@ -8,7 +8,7 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(testCase)
-papersDir = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+papersDir = fileparts(fileparts(mfilename("fullpath")));
 addpath(fullfile(papersDir, "modules"));
 testCase.TestData.papersDir = papersDir;
 end
@@ -62,23 +62,20 @@ verifyEqual(testCase, max(abs(Q)), sum(abs(h).^2), "AbsTol", 1e-12);
 end
 
 function testEq610_612ShiftEstimate(testCase)
-% (6-10) theta = T^{-Delta} theta_a with theta_a the autocorrelation
-% (peak at position 1 when Delta = 0).  Sending shift Delta moves the
-% peak by Delta; (6-12) recovers Delta_hat = argmax theta (1-based
-% peak minus 1).  The detector must NOT pre-align the peak.
-thetaA = [0.9, 0.1, 0.2, 0.05];        % autocorrelation, peak at 1
-% Delta = 0 -> no shift, Delta_hat = 0
-[theta0, d0] = scfde.book_formulas.ch6_shift_estimate(thetaA, 0, 4);
-verifyEqual(testCase, theta0, thetaA(:), "AbsTol", 1e-12);
-verifyEqual(testCase, d0, 0, "AbsTol", 1e-12);
-% Delta = 2 -> peak moves to position 3, Delta_hat = 2
-[theta2, d2] = scfde.book_formulas.ch6_shift_estimate(thetaA, 2, 4);
-verifyEqual(testCase, theta2, circshift(thetaA(:), 2), "AbsTol", 1e-12);
-verifyEqual(testCase, theta2(3), 0.9, "AbsTol", 1e-12);
-verifyEqual(testCase, d2, 2, "AbsTol", 1e-12);
-% Delta = 3 -> wraps around, Delta_hat = 3
-[~, d3] = scfde.book_formulas.ch6_shift_estimate(thetaA, 3, 4);
-verifyEqual(testCase, d3, 3, "AbsTol", 1e-12);
+% (6-10) theta = T^{-Delta} theta_a (theta_a autocorrelation, peak at
+% position 1 when Delta = 0); (6-12) Delta_hat = argmax theta with
+% zero-based mapping.  The two equations are separate functions: the
+% relation builds theta from the KNOWN transmitted shift, the detector
+% recovers it.
+thetaA = [1; 0.2; 0.1; 0.2];
+for delta = 0:3
+    theta = scfde.book_formulas.ch6_shift_relation(thetaA, delta);
+    deltaHat = scfde.book_formulas.ch6_shift_detect(theta);
+    verifyEqual(testCase, deltaHat, delta, "AbsTol", 1e-12);
+end
+% peak position moves by delta (1-based): delta=2 -> peak at 3
+theta2 = scfde.book_formulas.ch6_shift_relation(thetaA, 2);
+verifyEqual(testCase, theta2(3), 1, "AbsTol", 1e-12);
 end
 
 function testEq641_642Moments(testCase)

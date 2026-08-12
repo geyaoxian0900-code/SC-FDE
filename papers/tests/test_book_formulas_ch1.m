@@ -1,4 +1,4 @@
-function tests = test_book_formulas_ch1
+﻿function tests = test_book_formulas_ch1
 %TEST_BOOK_FORMULAS_CH1  Chapter-1 executable formula oracles.
 %   eq.(1-1) sound speed, (1-2)/(1-3) propagation loss, (1-4) Thorp
 %   absorption, (1-5) Doppler spread, (1-6)~(1-8) noise PSD, (1-11)
@@ -9,7 +9,7 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(testCase)
-papersDir = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+papersDir = fileparts(fileparts(mfilename("fullpath")));
 addpath(fullfile(papersDir, "modules"));
 testCase.TestData.papersDir = papersDir;
 end

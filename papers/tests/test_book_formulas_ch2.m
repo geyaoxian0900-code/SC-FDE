@@ -1,4 +1,4 @@
-function tests = test_book_formulas_ch2
+﻿function tests = test_book_formulas_ch2
 %TEST_BOOK_FORMULAS_CH2  Chapter-2 executable formula oracles.
 %   eq.(2-1)/(2-2) passband model, (2-3) pulse shaping, (2-10) MSE,
 %   (2-11) Wiener solution, (2-13) LMS gradient, (2-15) convergence bound.
@@ -7,7 +7,7 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(testCase)
-papersDir = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+papersDir = fileparts(fileparts(mfilename("fullpath")));
 addpath(fullfile(papersDir, "modules"));
 testCase.TestData.papersDir = papersDir;
 end
@@ -73,29 +73,32 @@ end
 
 function testEq24_25ReceivedModel(testCase)
 % (2-5) r_k = e^{j theta} (d * h)_k + w_k (no Doppler in the sampled
-% model); with identity h -> phase-rotated d; with h = [1 0.5] the
-% ISI decomposition r_k = e^{j theta} d_k h_0 + e^{j theta} d_{k-1} h_1
-% holds.
+% model), FULL SUPPORT: with h = [1 0.5] the output has length
+% numel(d)+numel(h)-1 and the ISI decomposition
+% r_k = e^{j theta} d_k h_0 + e^{j theta} d_{k-1} h_1 holds.
 h = [1, 0.5];
 d = [1, -1, 1j];
 r = scfde.book_formulas.ch2_received_model(d, h, 0.4);
-expected = exp(1j * 0.4) * conv(d, h);
-verifyEqual(testCase, r, expected(1:numel(d)), "AbsTol", 1e-12);
-% ISI decomposition: r_2 = e^{j theta}(d_2 h_0 + d_1 h_1)
+verifyEqual(testCase, numel(r), numel(d) + numel(h) - 1);
+verifyEqual(testCase, r, exp(1j * 0.4) * conv(d, h), "AbsTol", 1e-12);
+% ISI decomposition on the sampled positions
 verifyEqual(testCase, r(2), exp(1j * 0.4) * (d(2) * h(1) + d(1) * h(2)), ...
     "AbsTol", 1e-12);
-% noise path must actually be used (parameter bug guard: w must not be
-% silently zeroed)
-w = 0.1 * (1 + 1j);
+% noise path must actually be used (parameter bug guard) and must span
+% the full support
+w = 0.1 * (1 + 1j) * ones(1, numel(d) + 1 - 1);   % h = [1]
 rn = scfde.book_formulas.ch2_received_model(d, [1], 0, w);
-verifyEqual(testCase, rn(1), d(1) + w, "AbsTol", 1e-12);
-% (2-4) continuous form: r'(t) = e^{j theta} sum_n d_n h(t-nT-tau) + w
-% (no Doppler exponential in the book)
-rc = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 0, 0.3);
-verifyEqual(testCase, rc, exp(1j * 0.3) * [1, 1], "AbsTol", 1e-12);
-rc2 = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 1, 0.3);
-verifyEqual(testCase, rc2(1), 0, "AbsTol", 1e-12);   % tau=1 delay
-verifyEqual(testCase, rc2(2), exp(1j * 0.3) * 1, "AbsTol", 1e-12);
+verifyEqual(testCase, rn(1), d(1) + w(1), "AbsTol", 1e-12);
+verifyEqual(testCase, rn(end), d(end) + w(end), "AbsTol", 1e-12);
+verifyError(testCase, @() scfde.book_formulas.ch2_received_model(d, h, 0, ...
+    0.1 * ones(1, 2)), "SCFDE:BookNoiseLength");
+% (2-4) continuous form, FULL SUPPORT: d=[1 1], h=1, tau=1 ->
+% e^{j theta} * [0 1 1] (delayed tail is NOT truncated)
+rc = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 1, 0.3);
+verifyEqual(testCase, rc, exp(1j * 0.3) * [0, 1, 1], "AbsTol", 1e-12);
+verifyEqual(testCase, numel(rc), numel([1, 1]) + numel([1]) + 1 - 1);
+rc2 = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 0, 0.3);
+verifyEqual(testCase, rc2, exp(1j * 0.3) * [1, 1], "AbsTol", 1e-12);
 end
 
 function testEq212_214LmsUpdate(testCase)

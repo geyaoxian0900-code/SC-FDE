@@ -1,4 +1,4 @@
-function tests = test_book_formulas_ch3
+﻿function tests = test_book_formulas_ch3
 %TEST_BOOK_FORMULAS_CH3  Chapter-3 executable formula oracles.
 %   eq.(3-27)/(3-28) spectral efficiency, (3-37) Doppler block model,
 %   (3-39)~(3-41) phase matrix approximation, (3-42)~(3-44) MMSE matrix
@@ -9,7 +9,7 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(testCase)
-papersDir = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+papersDir = fileparts(fileparts(mfilename("fullpath")));
 addpath(fullfile(papersDir, "modules"));
 testCase.TestData.papersDir = papersDir;
 end

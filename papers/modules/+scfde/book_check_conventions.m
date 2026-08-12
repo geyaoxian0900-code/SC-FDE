@@ -20,8 +20,9 @@ assert(abs(Mx - 32 * mean(abs(s).^2)) / 32 < 1e-12, ...
     "SCFDE:Convention", "Parseval M_x = N*m_x broken");
 
 sigma2 = 10^(-10 / 10);
-w = sqrt(sigma2 / 2) * (randn(64, 1) + 1j * randn(64, 1));
-assert(abs(mean(abs(fft(w)).^2) - 64 * sigma2) / (64 * sigma2) < 0.2, ...
+rng(77);                                   % deterministic sample set
+w = sqrt(sigma2 / 2) * (randn(1024, 1) + 1j * randn(1024, 1));
+assert(abs(mean(abs(fft(w)).^2) - 1024 * sigma2) / (1024 * sigma2) < 0.05, ...
     "SCFDE:Convention", "E|W_k|^2 = N*sigma_w^2 broken");
 
 L = 1.5;
