@@ -41,10 +41,10 @@
 | (1-6) 四类环境噪声谱（N_s/N_v/N_h/N_t） | 5-6 | f,s,w → N(dB re μPa) | dB | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
 | (1-7) `N(f)=N_s+N_v+N_h+N_t` | 5-6 | 分量 → 总噪声 | — | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
 | (1-8) `10lgN(f)=N_0-q·lgf` | 5-6 | f → N | dB；N0=50, q=18 | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
-| (1-9) `y(t)=∫h(t,τ)x(t-τ)dτ+n(t)` | 9-10 | h,x → y；时域 | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
-| (1-10) `h(t,τ)=Σa_p(t)δ(τ-τ_p(t))` 多径模型 | 9-10 | a_p,τ_p → h | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-9) `y(t)=∫h(t,τ)x(t-τ)dτ+n(t)` | 9-10 | h,x → y；时域 | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | ALG-EQUIV（静态离散特例 oracle；时变 a_p(t)/τ_p(t) 未覆盖） |
+| (1-10) `h(t,τ)=Σa_p(t)δ(τ-τ_p(t))` 多径模型 | 9-10 | a_p,τ_p → h | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | ALG-EQUIV（静态离散特例 oracle；时变 a_p(t)/τ_p(t) 未覆盖） |
 | (1-11) `I=速率×距离` | 13-14 | — | kbit/s·km | — | scfde.book_formulas.ch1_capacity_index | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
-| (1-12) `E=RbW` 带宽效率 | 13-14 | — | — | — | scfde.book_formulas.ch1_bandwidth_efficiency | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-12) `E=R_b/W` 带宽效率 | 13-14 | — | — | — | scfde.book_formulas.ch1_bandwidth_efficiency | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
 
 第1章结论：理论章，模型公式已登记；除信道建模（1-9/1-10）外多数不进入算法路径。
 
@@ -55,8 +55,8 @@
 | (2-1) `s(t)=a(t)cos(2πf_c t+φ_k)=s_I cos-s_Q sin` | 14 | 已调信号 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-2) `s(t)=Re{u(t)e^{j2πf_c t}}` | 17-18 | 复包络 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-3) `u(t)=Σa(n)g(t-nT)` | 17-18 | 成形 | — | — | scfde.book_formulas.ch2_pulse_shaped | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
-| (2-4) `r(t)=Σd_l h(t-τ_l)e^{j2πf_d t}+w(t)` | 17-18 | 接收模型 | — | — | scfde.book_formulas.ch2_received_model | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
-| (2-5) `r_k=e^{jθ}A_k+e^{jφ}Σd_m h_{k-m}+w_k` | 17-18 | 离散接收 | — | — | scfde.book_formulas.ch2_received_model | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-4) `r'(t)=Σ_n d_n h(t-nT-τ)e^{jθ}+w(t)` | 17-18 | 连续接收模型（无 Doppler 项） | — | — | scfde.book_formulas.ch2_received_continuous | — | test_book_formulas_ch2 | BOOK-EXACT（oracle，2026-08-12 回 book/5.png 核对：无 e^{j2πf_d t} 项） |
+| (2-5) `r_k=e^{jθ}Σ_l d_l h_{k-l}+w_k = e^{jθ}d_k h_0+e^{jθ}Σ_{l≠k} d_l h_{k-l}+w_k` | 17-18 | 离散接收（当前符号+ISI+AWGN） | — | — | scfde.book_formulas.ch2_received_model | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-6) `d̂_k=Σf_i^*r_{k-i}-Σb_j^*d̂_{k-j}` | 17-18 | DFE 结构；反馈为负 | — | `known_dfe_core.m`/`conventional_dfe.m` | — | test_modular_pipeline | ALG-EQUIV（抽头序需 oracle 核对） |
 | (2-7) `u_k=[d(k-N)…r(k+L-1)]^T` 输入向量 | 17-18 | DFE 输入 | — | `adaptive_dfe_core.m` | — | — | ALG-EQUIV |
 | (2-8) `w_k=[h(1)…f(-L+1)]^T` 权向量 | 17-18 | 权重结构 | — | `adaptive_dfe_core.m` | — | — | ALG-EQUIV |
@@ -247,7 +247,7 @@
 | (6-7) `â=1/G Re{F^{-1}{(Fa)^*⊙(Fo)}}` | 169-172 | 相关检测 | **1/G** | ch6_matched_filter_detect | — | — | ALG-EQUIV |
 | (6-8) `δ_Δ(g)` 冲击窗 | 169-172 | 判决 | — | — | — | — | —（未实现） |
 | (6-9) `θ=1/G Re{F^{-1}{(FS)^*⊙(Fu)}}` | 169-172 | 相关 | 1/G | — | — | — | —（未实现） |
-| (6-10) `θ=T^{-λ̂}â` | 169-172 | 移位估计 | — | — | scfde.book_formulas.ch6_shift_estimate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
+| (6-10) `θ=T^{-Δ}ϑ_a`（分析关系：发送移位 Δ 使相关输出=自相关序列的循环移位） | 169-172 | 移位关系 | — | — | scfde.book_formulas.ch6_shift_estimate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle，2026-08-12 回 book/40.png 核对） |
 | (6-11) `θ(g)=δ_Δ(g-Δ)` | 169-172 | 峰位置 | — | — | — | — | —（未实现） |
 | (6-12) `Δ̂=argmax_g θ` | 169-172 | 峰判决 | — | — | scfde.book_formulas.ch6_shift_estimate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
 | (6-13) `c_i(t)=ΣC_{i,k}φ(t-kT_c)` | 169-172 | 扩频波形 | — | — | scfde.book_formulas.ch6_spread_waveform | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |

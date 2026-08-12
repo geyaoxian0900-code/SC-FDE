@@ -62,19 +62,23 @@ verifyEqual(testCase, max(abs(Q)), sum(abs(h).^2), "AbsTol", 1e-12);
 end
 
 function testEq610_612ShiftEstimate(testCase)
-% (6-10) theta = T^{-lambda_hat} ahat: with a peak at position 3 the
-% estimated shift is lambda_hat = 2 and the shifted theta carries the
-% peak to position 1; (6-12) Delta_hat = argmax theta = 1.
-ahat = [0.1, 0.05, 0.9, 0.2];
-[theta, deltaHat] = scfde.book_formulas.ch6_shift_estimate(ahat, 4);
-verifyEqual(testCase, theta, circshift(ahat(:), -2), "AbsTol", 1e-12);
-verifyEqual(testCase, theta(1), 0.9, "AbsTol", 1e-12);
-verifyEqual(testCase, deltaHat, 1, "AbsTol", 1e-12);
-% a peak already at position 1 -> no shift
-[theta2, deltaHat2] = scfde.book_formulas.ch6_shift_estimate( ...
-    [0.9, 0.1, 0.2, 0.05], 4);
-verifyEqual(testCase, theta2, [0.9; 0.1; 0.2; 0.05], "AbsTol", 1e-12);
-verifyEqual(testCase, deltaHat2, 1, "AbsTol", 1e-12);
+% (6-10) theta = T^{-Delta} theta_a with theta_a the autocorrelation
+% (peak at position 1 when Delta = 0).  Sending shift Delta moves the
+% peak by Delta; (6-12) recovers Delta_hat = argmax theta (1-based
+% peak minus 1).  The detector must NOT pre-align the peak.
+thetaA = [0.9, 0.1, 0.2, 0.05];        % autocorrelation, peak at 1
+% Delta = 0 -> no shift, Delta_hat = 0
+[theta0, d0] = scfde.book_formulas.ch6_shift_estimate(thetaA, 0, 4);
+verifyEqual(testCase, theta0, thetaA(:), "AbsTol", 1e-12);
+verifyEqual(testCase, d0, 0, "AbsTol", 1e-12);
+% Delta = 2 -> peak moves to position 3, Delta_hat = 2
+[theta2, d2] = scfde.book_formulas.ch6_shift_estimate(thetaA, 2, 4);
+verifyEqual(testCase, theta2, circshift(thetaA(:), 2), "AbsTol", 1e-12);
+verifyEqual(testCase, theta2(3), 0.9, "AbsTol", 1e-12);
+verifyEqual(testCase, d2, 2, "AbsTol", 1e-12);
+% Delta = 3 -> wraps around, Delta_hat = 3
+[~, d3] = scfde.book_formulas.ch6_shift_estimate(thetaA, 3, 4);
+verifyEqual(testCase, d3, 3, "AbsTol", 1e-12);
 end
 
 function testEq641_642Moments(testCase)

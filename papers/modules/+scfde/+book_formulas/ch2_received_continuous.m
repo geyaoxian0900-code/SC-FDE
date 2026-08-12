@@ -1,19 +1,16 @@
-function r = ch2_received_continuous(d, h, delays, fd, Ts, w)
-%CH2_RECEIVED_CONTINUOUS  Book eq.(2-4): continuous multipath receive.
-%   r(t) = sum_l d_l h(t - tau_l) e^{j 2 pi fd t} + w(t)
-%   d: symbols, h: pulse/channel waveform, delays: path delays in
-%   samples, fd: Doppler shift, Ts: symbol period, w: noise.
-%   Discrete oracle of the continuous form (the Doppler exponential
-%   lives here, in eq. (2-4), not in the sampled model (2-5)).
-if nargin < 5 || isempty(Ts), Ts = 1; end
-if nargin < 6 || isempty(w), w = zeros(size(d)); end
-hfull = zeros(1, numel(h) + max(delays));
-for p = 1:numel(delays)
-    hfull(delays(p) + 1:delays(p) + numel(h)) = ...
-        hfull(delays(p) + 1:delays(p) + numel(h)) + h;
+function r = ch2_received_continuous(d, h, tau, theta, w)
+%CH2_RECEIVED_CONTINUOUS  Book eq.(2-4): continuous received signal.
+%   r'(t) = sum_n d_n h(t - nT - tau) e^{j theta} + w(t)
+%   d: symbol sequence, h: generalized channel impulse response,
+%   tau: fixed propagation delay, theta: fixed carrier phase, w: noise.
+%   Discrete oracle: r_k = e^{j theta} sum_n d_n h_{k-n-tau} + w_k.
+%   NOTE: the book has NO Doppler exponential in (2-4); the fixed
+%   phase e^{j theta} is the only carrier term (book/5.png page 18,
+%   verified 2026-08-12).
+if nargin < 5 || isempty(w)
+    w = zeros(size(d));
 end
-n = 0:numel(d) - 1;
-r = conv(d, hfull) .* [exp(1j * 2 * pi * fd * Ts * n), ...
-    zeros(1, numel(hfull) - 1)];
+hfull = [zeros(1, tau), h(:).'];
+r = exp(1j * theta) .* conv(d(:).', hfull);
 r = r(1:numel(d)) + w(:).';
 end

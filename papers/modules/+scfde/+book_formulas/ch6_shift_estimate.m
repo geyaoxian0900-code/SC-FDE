@@ -1,18 +1,21 @@
-function [theta, deltaHat] = ch6_shift_estimate(ahat, G)
-%CH6_SHIFT_ESTIMATE  Book eq.(6-10)/(6-11)/(6-12): cyclic-shift
-%   detection chain.
-%   lambda_hat = argmax_g |ahat(g)| - 1     (shift estimate)
-%   theta      = T^{-lambda_hat} ahat       (6-10, actual cyclic shift)
-%   theta(g)   = delta_Delta(g - Delta)     (6-11, peak reference)
-%   Delta_hat  = argmax_g theta             (6-12, peak position)
-%   Oracle: ahat correlation vector (length G); the returned theta has
-%   its peak moved to position 1 and Delta_hat = 1 for any input.
-if nargin < 2 || isempty(G)
-    G = numel(ahat);
+function [theta, deltaHat] = ch6_shift_estimate(thetaA, Delta, G)
+%CH6_SHIFT_ESTIMATE  Book eq.(6-10)/(6-12): cyclic-shift detection.
+%   theta   = T^{-Delta} theta_a        (6-10)
+%   Delta_hat = argmax_g theta(g)        (6-12)
+%   thetaA : the spreading-sequence autocorrelation vector (6-7), peak
+%            at position 1 for Delta = 0;
+%   Delta  : the TRANSMITTED cyclic shift applied by the CSK modulator;
+%   G      : sequence length (default numel(thetaA)).
+%   The oracle builds theta from the KNOWN transmitted shift and then
+%   recovers Delta_hat = argmax theta (MATLAB 1-based: peak-1).
+%   This is the analysis relation of (6-10): sending shift Delta moves
+%   the autocorrelation peak by Delta; the detector must NOT pre-align
+%   the peak (that would make Delta_hat identically 1).
+if nargin < 3 || isempty(G)
+    G = numel(thetaA);
 end
-ahat = ahat(:);
-[~, peak] = max(abs(ahat));
-lambdaHat = peak - 1;
-theta = circshift(ahat, -lambdaHat);      % T^{-lambda_hat} ahat (6-10)
-[~, deltaHat] = max(theta);               % (6-12)
+thetaA = thetaA(:);
+theta = circshift(thetaA, Delta);       % T^{-Delta} theta_a (6-10)
+[~, peak] = max(theta);                 % 1-based peak position
+deltaHat = peak - 1;                    % (6-12), mapped to shift units
 end

@@ -243,20 +243,37 @@ end
 lines = string(splitlines(text));
 for eq = a.equations
     if contains(eq, "..")
+        % range row: expand to every equation ID and check each one
         parts = split(eq, "..");
-        if ~row_admissible(lines, parts(1)) || ~row_admissible(lines, parts(2))
-            return;
+        ids = expand_range(parts(1), parts(2));
+        for id = ids
+            if ~row_admissible_one(lines, id)
+                return;
+            end
         end
         continue;
     end
-    if ~row_admissible(lines, eq)
+    if ~row_admissible_one(lines, eq)
         return;
     end
 end
 g = "PASS";
 end
 
-function ok = row_admissible(lines, eq)
+function ids = expand_range(a, b)
+% "3-42" ~ "3-44" -> ["3-42","3-43","3-44"] (chapter-number ranges)
+da = split(a, "-");
+db = split(b, "-");
+ch = da(1);
+startId = str2double(da(2));
+stopId = str2double(db(2));
+ids = strings(1, stopId - startId + 1);
+for k = startId:stopId
+    ids(k - startId + 1) = ch + "-" + string(k);
+end
+end
+
+function ok = row_admissible_one(lines, eq)
 ok = false;
 for i = 1:numel(lines)
     line = lines(i);
@@ -300,7 +317,8 @@ end
 if contains(body, "~")
     ends = split(body, "~");
     if numel(ends) == 2
-        m = (eq == ends(1)) || (eq == ends(2));
+        ids = expand_range(ends(1), ends(2));
+        m = any(ids == eq);
     end
 end
 end
@@ -511,17 +529,41 @@ for i = 1:numel(lines)
         continue;
     end
     status = cells(end);
+    if contains(body, "~")
+        ends = split(body, "~");
+        n = expand_count(ends(1), ends(2));
+        coverage.total = coverage.total + n;
+        if contains(status, "缺扫描页")
+            coverage.scanMissing = coverage.scanMissing + n;
+        elseif contains(status, "THEORY-ONLY")
+            coverage.theoryOnly = coverage.theoryOnly + n;
+        elseif contains(status, "未实现")
+            ids = expand_range(ends(1), ends(2));
+            for id = ids
+                coverage.unimplemented{end + 1} = "(" + id + ")"; %#ok<AGROW>
+            end
+        else
+            coverage.implemented = coverage.implemented + n;
+        end
+        continue;
+    end
     coverage.total = coverage.total + 1;
     if contains(status, "缺扫描页")
         coverage.scanMissing = coverage.scanMissing + 1;
     elseif contains(status, "THEORY-ONLY")
         coverage.theoryOnly = coverage.theoryOnly + 1;
     elseif contains(status, "未实现")
-        coverage.unimplemented{end + 1} = token; %#ok<AGROW>
+        coverage.unimplemented{end + 1} = "(" + body + ")"; %#ok<AGROW>
     else
         coverage.implemented = coverage.implemented + 1;
     end
 end
+end
+
+function n = expand_count(a, b)
+da = split(a, "-");
+db = split(b, "-");
+n = str2double(db(2)) - str2double(da(2)) + 1;
 end
 
 function print_matrix(rows)

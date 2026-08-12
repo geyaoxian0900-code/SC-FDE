@@ -89,9 +89,13 @@ verifyEqual(testCase, r(2), exp(1j * 0.4) * (d(2) * h(1) + d(1) * h(2)), ...
 w = 0.1 * (1 + 1j);
 rn = scfde.book_formulas.ch2_received_model(d, [1], 0, w);
 verifyEqual(testCase, rn(1), d(1) + w, "AbsTol", 1e-12);
-% (2-4) continuous form carries the Doppler exponential
-rc = scfde.book_formulas.ch2_received_continuous([1, 1], [1], [0], 0.1, 1);
-verifyEqual(testCase, rc, exp(1j * 2 * pi * 0.1 * (0:1)), "AbsTol", 1e-12);
+% (2-4) continuous form: r'(t) = e^{j theta} sum_n d_n h(t-nT-tau) + w
+% (no Doppler exponential in the book)
+rc = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 0, 0.3);
+verifyEqual(testCase, rc, exp(1j * 0.3) * [1, 1], "AbsTol", 1e-12);
+rc2 = scfde.book_formulas.ch2_received_continuous([1, 1], [1], 1, 0.3);
+verifyEqual(testCase, rc2(1), 0, "AbsTol", 1e-12);   % tau=1 delay
+verifyEqual(testCase, rc2(2), exp(1j * 0.3) * 1, "AbsTol", 1e-12);
 end
 
 function testEq212_214LmsUpdate(testCase)
