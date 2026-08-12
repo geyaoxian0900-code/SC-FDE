@@ -1,14 +1,16 @@
-function r = ch2_received_model(d, h, theta, fd, Ts, w)
-%CH2_RECEIVED_MODEL  Book eq.(2-4)/(2-5): discrete received signal.
-%   r(t) = sum_l d_l h(t - tau_l) e^{j2 pi fd t} + w(t)      (2-4)
-%   r_k  = e^{j theta} A_k + e^{j phi} sum_m d_m h_{k-m} + w_k (2-5)
-%   Discrete oracle: d symbol sequence, h channel impulse (delay 0 in
-%   the first tap), theta constant phase, fd Doppler shift, Ts symbol
-%   period, w additive noise (default zero).
-if nargin < 6 || isempty(Ts), Ts = 1; end
-if nargin < 7 || isempty(w), w = zeros(size(d)); end
-n = 0:numel(d) - 1;
-doppler = exp(1j * 2 * pi * fd * Ts * n);
-r = exp(1j * theta) .* conv(d, h) .* [doppler, zeros(1, numel(h) - 1)];
-r = r(1:numel(d)) + w;
+function r = ch2_received_model(d, h, theta, w)
+%CH2_RECEIVED_MODEL  Book eq.(2-5): sampled received signal.
+%   r_k = e^{j theta} sum_l d_l h_{k-l} + w_k
+%       = e^{j theta} d_k h_0
+%         + e^{j theta} sum_{l ~= k} d_l h_{k-l} + w_k   (current symbol
+%                                                         + ISI + AWGN)
+%   d: transmitted symbols, h: channel impulse (h_0 = first tap),
+%   theta: carrier phase, w: additive noise (default zero).
+%   The time-varying Doppler exponential belongs to the continuous
+%   model (2-4), not to (2-5); it is NOT applied here.
+if nargin < 4 || isempty(w)
+    w = zeros(size(d));
+end
+r = exp(1j * theta) .* conv(d(:).', h(:).');
+r = r(1:numel(d)) + w(:).';
 end

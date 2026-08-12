@@ -72,12 +72,26 @@ verifyEqual(testCase, scfde.book_formulas.ch2_lms_convergence_bound(eye(3)), 1, 
 end
 
 function testEq24_25ReceivedModel(testCase)
-% (2-5) r_k = e^{j theta} (d * h)_k + w_k (identity h -> phase-rotated d).
+% (2-5) r_k = e^{j theta} (d * h)_k + w_k (no Doppler in the sampled
+% model); with identity h -> phase-rotated d; with h = [1 0.5] the
+% ISI decomposition r_k = e^{j theta} d_k h_0 + e^{j theta} d_{k-1} h_1
+% holds.
 h = [1, 0.5];
 d = [1, -1, 1j];
-r = scfde.book_formulas.ch2_received_model(d, h, 0.4, 0, 1);
+r = scfde.book_formulas.ch2_received_model(d, h, 0.4);
 expected = exp(1j * 0.4) * conv(d, h);
 verifyEqual(testCase, r, expected(1:numel(d)), "AbsTol", 1e-12);
+% ISI decomposition: r_2 = e^{j theta}(d_2 h_0 + d_1 h_1)
+verifyEqual(testCase, r(2), exp(1j * 0.4) * (d(2) * h(1) + d(1) * h(2)), ...
+    "AbsTol", 1e-12);
+% noise path must actually be used (parameter bug guard: w must not be
+% silently zeroed)
+w = 0.1 * (1 + 1j);
+rn = scfde.book_formulas.ch2_received_model(d, [1], 0, w);
+verifyEqual(testCase, rn(1), d(1) + w, "AbsTol", 1e-12);
+% (2-4) continuous form carries the Doppler exponential
+rc = scfde.book_formulas.ch2_received_continuous([1, 1], [1], [0], 0.1, 1);
+verifyEqual(testCase, rc, exp(1j * 2 * pi * 0.1 * (0:1)), "AbsTol", 1e-12);
 end
 
 function testEq212_214LmsUpdate(testCase)

@@ -106,14 +106,14 @@
 | (3-32) 循环卷积逐行 | 51-52 | 展开式 | — | 同上 | — | — | BOOK-EXACT |
 | (3-37) `r=DHs+w`, `D=diag[e^{jθ_k}]` | 55-58 | 多普勒相位 | — | — | scfde.book_formulas.ch3_doppler_matrix | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-38) `R=Fr=ΦHS+W`, `Φ=FDF^H` | 55-58 | 频域模型 | 前向 DFT 无 1/N | — | scfde.book_formulas.ch3_freq_model | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
-| (3-39~3-41) `Φ≈λI`, `λ=(1/N)Σe^{jθ_p}` | 55-58 | 相位近似 | 1/N | — | — | — | —（未实现） |
-| (3-42~3-44) `C=(Ĥ^HΦ^HΦĤ+σ²I)^{-1}Ĥ^HΦ^H` | 55-58 | MMSE 矩阵解 | — | — | — | — | —（未实现） |
+| (3-39~3-41) `Φ≈λI`, `λ=(1/N)Σe^{jθ_p}` | 55-58 | 相位近似 | 1/N | scfde.book_formulas.ch3_phase_approx | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
+| (3-42~3-44) `C=(Ĥ^HΦ^HΦĤ+σ²I)^{-1}Ĥ^HΦ^H` | 55-58 | MMSE 矩阵解 | — | scfde.book_formulas.ch3_mmse_matrix | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-45) `ŝ=F^H CHFs+w̃=AĤs+w̃` | 55-58 | 时域输出 | IDFT 含 1/N | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-46) `ŝ_k=β_k s_k+w'_k` 相位补偿 | 55-58 | 残余相位 | — | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-47)~(3-63) | 59-62 | 扫描缺失（HTF-DFE 推导区；含 `C_k=(Ĥ_k^HΦ_k^HΦ_kĤ_k+σ²I)^{-1}Ĥ_k^HΦ_k^H`、`x_m=F^H ΣC_kR_k` 未标号转写） | — | — | — | — | 缺扫描页 |
 | (3-64) `X̂^l=(C^l)^H R-(B^l)^H X̂^{l-1}` | 63-64 | IBDFE 迭代 | — | `ch3_ibdfe_equalize.m` | C IBDFE | test_eq_3_87 | BOOK-EXACT |
 | (3-65) `M_Xk=E\|X_k\|², M_X̂k=E\|X̂_k\|²` | 63-64 | 频域能量 | M_x=N·m_x | `BOOK_CONVENTIONS` | — | **test_eq_3_65** | BOOK-EXACT |
-| (3-66) `r_{Xk,X̂k*}=E[X_k X̂_k^*]` | 63-64 | 相关 | — | — | — | — | —（OCR-UNCERTAIN，未实现） |
+| (3-66) `r_{Xk,X̂k*}=E[X_k X̂_k^*]` | 63-64 | 相关 | — | scfde.book_formulas.ch3_ibdfe_corr | — | test_book_formulas_ch3 | BOOK-EXACT（oracle，转写 *-1 系 OCR 噪声已注） |
 | (3-67) `J^IB=(1/N)ΣE\|x̂_k-x_k\|²` | 63-64 | MSE | 1/N | — | scfde.book_formulas.ch3_ibdfe_mse | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-68)~(3-80) | 65-66 | 扫描缺失（IBDFE 权重推导区） | — | — | — | — | 缺扫描页 |
 | (3-81) `B_k'=C_k'H_k^*-1` | 67-68 | 反馈系数 | — | `ch3_ibdfe_equalize.m`（B=CH-1） | C IBDFE | test_eq_3_87 | BOOK-EXACT（OCR 曾标 *t，核对后为 *） |
@@ -199,8 +199,8 @@
 | (5-12) 码片相关展开 | 125-128 | — | — | — | — | — | OCR-UNCERTAIN |
 | (5-13)~(5-23) | 129-130 | 扫描缺失（MF 界分析区） | — | — | — | — | 缺扫描页 |
 | (5-24) `argmin_i‖r-a_i‖²` ML 判决 | 129-132 | 检测 | — | ch5_nearest_book | — | — | BOOK-EXACT |
-| (5-25) 判决区域 Z_i | 129-132 | 检测 | — | — | — | — | —（未实现，理论） |
-| (5-26)~(5-28) 错误概率 P_e | 129-132 | 理论 | 1/KM | — | — | — | —（未实现，理论） |
+| (5-25) 判决区域 Z_i | 129-132 | 检测 | — | — | — | — | THEORY-ONLY |
+| (5-26)~(5-28) 错误概率 P_e | 129-132 | 理论 | 1/KM | — | — | — | THEORY-ONLY |
 | (5-29) 条件错误概率 | 129-132 | 理论 | — | — | — | — | OCR-UNCERTAIN |
 | (5-30)~(5-40) | 131-132 | 扫描缺失（Rake/DFE 区） | — | — | — | — | 缺扫描页 |
 | (5-41) `x_i=Σh_l b_{i-l}` | 133-136 | 接收 | 线性卷积 | ch5_expected_block | — | — | BOOK-EXACT |
@@ -218,8 +218,8 @@
 | (5-62)~(5-69) | 139-140 | 扫描缺失（Turbo-CCK 检测区） | — | — | — | — | 缺扫描页 |
 | (5-70) RSSE 分支度量 λ(x̃_k\|S[k]) | 141-144 | 网格搜索 | — | ch5_candidate_scores | — | — | OCR-UNCERTAIN |
 | (5-71) 符号后验 P(x_k\|z_k) | 141-144 | 概率 | — | ch5_soft_book_detect_with_prior | — | — | BOOK-EXACT |
-| (5-72) 外信息高斯 pdf | 141-144 | EXIT 分析 | — | — | — | — | —（未实现，分析） |
-| (5-73)/(5-74) EXIT 互信息 | 141-144 | EXIT | — | — | — | — | —（未实现，分析） |
+| (5-72) 外信息高斯 pdf | 141-144 | EXIT 分析 | — | — | — | — | THEORY-ONLY |
+| (5-73)/(5-74) EXIT 互信息 | 141-144 | EXIT | — | — | — | — | THEORY-ONLY |
 | (5-75) `z_q=c_{s_q}e_q` | 145-148 | CCK-SM | — | — | — | — | —（未实现，可执行算法公式） |
 | (5-76) `y=hx+w` MIMO | 145-148 | 模型 | — | — | — | — | —（未实现，可执行算法公式） |
 | (5-78) `Y_k=H_k X_k+W_k` | 145-148 | 频域 | — | — | — | — | —（未实现，可执行算法公式） |
@@ -328,6 +328,8 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 ```
 
 注：本批新增 `+scfde/+book_formulas/` 公式 oracle 包，将"已扫描到但未实现"的
-可执行公式（第1/2/3/6章）全部实现为数值函数并接入公式测试；纯分析公式
-（第5章理论错误概率、EXIT、CCK-SM 部分）标 THEORY-ONLY，从算法验收分母中
-剔除（见 BOOK_CONVENTIONS.md scope 规则）。每章完成后按上方表格更新状态。
+可执行公式（第1/2/3/6章）实现为数值函数并接入公式测试；纯分析公式
+（第5章理论错误概率 5-25~5-28、EXIT 5-72~5-74）标 THEORY-ONLY，从算法验收
+分母中剔除（见 BOOK_CONVENTIONS.md scope 规则）。CCK-SM (5-75)~(5-82) 为
+收发算法公式，标未实现并计入分母，不得 THEORY-ONLY。每章完成后按上方表格
+更新状态。

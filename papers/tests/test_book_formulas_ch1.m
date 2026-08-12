@@ -63,17 +63,23 @@ verifyEqual(testCase, comps(4, :), -15 + 20 * log10([1, 10]), ...
 end
 
 function testEq19_110ChannelModel(testCase)
-% (1-9)/(1-10): two-path channel oracle; y = a1 x(n) + a2 x(n-tau2).
+% (1-9)/(1-10) static-discrete special-case oracle: y = a1 x(n) +
+% a2 x(n-tau2); CIR length = max(delays)+1, independent of x length.
 taps = [0.8, 0.6 * exp(1j * 0.3)];
 delays = [0, 3];
 x = [1, 2, 3, 4];
 [y, h] = scfde.book_formulas.ch1_channel_model(x, taps, delays, 0);
-verifyEqual(testCase, h, [0.8, 0, 0, 0.6 * exp(1j * 0.3), 0, 0, 0], ...
+verifyEqual(testCase, h, [0.8, 0, 0, 0.6 * exp(1j * 0.3)], ...
     "AbsTol", 1e-12);
+verifyEqual(testCase, numel(h), max(delays) + 1, "AbsTol", 0);
 verifyEqual(testCase, y, conv(h, x), "AbsTol", 1e-12);
 verifyEqual(testCase, y(1), 0.8, "AbsTol", 1e-12);
 verifyEqual(testCase, y(4), 0.8 * x(4) + 0.6 * exp(1j * 0.3) * x(1), ...
     "AbsTol", 1e-12);
+% CIR length must not grow with a longer input
+xLong = [1, 2, 3, 4, 5, 6, 7, 8];
+[~, hLong] = scfde.book_formulas.ch1_channel_model(xLong, taps, delays, 0);
+verifyEqual(testCase, numel(hLong), max(delays) + 1, "AbsTol", 0);
 end
 
 function testEq111CapacityIndex(testCase)
@@ -82,6 +88,10 @@ verifyEqual(testCase, I, 80, "AbsTol", 1e-12);   % book 40 kbit/s*km example
 end
 
 function testEq112BandwidthEfficiency(testCase)
+% Book prints "E = RbW" but the definition ("每赫兹每秒多少比特") and
+% the worked example (10 kbit/s over 5 kHz -> 2 bit/(s*Hz)) give the
+% ratio E = R_b / W; the printed form is a typographical error.
 E = scfde.book_formulas.ch1_bandwidth_efficiency(10e3, 5e3);
-verifyEqual(testCase, E, 5e7, "AbsTol", 1e-12);
+verifyEqual(testCase, E, 2, "AbsTol", 1e-12);   % 10k/5k = 2 bit/s/Hz
+verifyEqual(testCase, E, 10e3 / 5e3, "AbsTol", 1e-12);
 end
