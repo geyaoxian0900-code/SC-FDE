@@ -153,9 +153,15 @@ P(b=0) = 1/(1+e^{-L}),  P(b=1) = e^{-L}/(1+e^{-L})        (书式 4-21/4-22)
 
 1. **可执行公式**（可进入收发算法路径的公式）必须实现 executable oracle：
    `+scfde/+book_formulas/` 数值函数 + 对应公式测试，否则状态为"未实现"并计入分母。
-2. **纯分析公式**（理论错误概率、EXIT 互信息、容量推导等，无算法路径）标
-   `THEORY-ONLY`，保留登记，**从算法验收分母中剔除**；不允许"未实现却计入完成度"。
-3. 已扫描到的公式禁止以"未实现"停留在完成度分母之外：要么实现 oracle，
+2. **纯分析公式**（理论错误概率积分、EXIT 互信息、容量/分析性上界、纯推导中间
+   恒等式，不参与算法路径）标 `THEORY-ONLY`，保留登记，**从算法验收分母中剔除**；
+   不允许"未实现却计入完成度"。
+3. **不得标 THEORY-ONLY 的公式类别**（必须实现 oracle 或保留"未实现"于分母）：
+   channel/input-output model（含 (1-9)/(1-10) 信道模型）、detector、equalizer、
+   encoder/modulator、spread/despread、soft estimator、iterative update。
+   例如第5章 CCK-SM 的 (5-75)~(5-82)（z_q=c_{s_q}e_q、y=hx+w、频域检测、
+   软估计）是收发算法公式，不属于 THEORY-ONLY。
+4. 已扫描到的公式禁止以"未实现"停留在完成度分母之外：要么实现 oracle，
    要么明确标 THEORY-ONLY，两者必居其一。
-4. 原书未公开的参数（NaN 配置）属 PARAM-UNRECOVERABLE；书中**根本不存在**的
+5. 原书未公开的参数（NaN 配置）属 PARAM-UNRECOVERABLE；书中**根本不存在**的
    处理（如 ESE damping）是独立 ENGINEERING 算法，不属于 PARAM-UNRECOVERABLE。

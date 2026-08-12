@@ -31,6 +31,13 @@ verifyEqual(testCase, D, diag(exp(1j * theta)), "AbsTol", 1e-12);
 s = randn(N, 1) + 1j * randn(N, 1);
 r = D * s;
 verifyEqual(testCase, r, exp(1j * theta(:)) .* s, "AbsTol", 1e-12);
+% (3-38) frequency-domain model: R = Phi H S (noise-free), Phi circulant.
+F = exp(-1j * 2 * pi * ((0:N - 1).' * (0:N - 1)) / N);
+[Phi, ~] = scfde.book_formulas.ch3_phase_approx(N, theta);
+Hf = ones(N, 1);                             % identity channel
+R = scfde.book_formulas.ch3_freq_model(r, F, Phi, diag(Hf), F * s);
+verifyEqual(testCase, R, Phi * F * s, "AbsTol", 1e-10);
+verifyEqual(testCase, R, F * r, "AbsTol", 1e-10);
 end
 
 function testEq339_341PhaseApprox(testCase)

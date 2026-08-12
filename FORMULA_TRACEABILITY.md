@@ -33,18 +33,18 @@
 
 | 公式 | Page | 变量/域 | 归一化 | MATLAB | C | Test | 状态 |
 |---|---|---|---|---|---|---|---|
-| (1-1) 声速经验式 `c=1449.2+4.6t-0.055t²+0.00029t³+(1.34-0.01t)(S-35)+0.016H` | 2-3 | t,S,H → c；实数/scalar | — | — | — | — | —（未实现） |
-| (1-2) `A(l,f)=l^k[α(f)]^l` 传播损失 | 2-3 | l,f,k → A | — | — | — | — | —（未实现） |
-| (1-3) `TL=k·10lg(1000/l)+l·10·lgα(f)` | 2-3 | l,f → TL(dB) | dB | — | — | — | —（未实现） |
-| (1-4) `10lgα(f)=0.11f²/(1+f²)+44f²/(4100+f²)+2.75e-4f²+0.003` | 2-3 | f(kHz) → α | dB/km | — | — | — | —（未实现） |
-| (1-5) `Δf_max=(v_max/c)·f` | 5-6 | v,c,f → Δf | — | — | — | — | —（未实现） |
-| (1-6) 四类环境噪声谱（N_s/N_v/N_h/N_t） | 5-6 | f,s,w → N(dB re μPa) | dB | — | — | — | —（未实现） |
-| (1-7) `N(f)=N_s+N_v+N_h+N_t` | 5-6 | 分量 → 总噪声 | — | — | — | — | —（未实现） |
-| (1-8) `10lgN(f)=N_0-q·lgf` | 5-6 | f → N | dB；N0=50, q=18 | — | — | — | —（未实现） |
-| (1-9) `y(t)=∫h(t,τ)x(t-τ)dτ+n(t)` | 9-10 | h,x → y；时域 | — | — | — | — | —（未实现） |
-| (1-10) `h(t,τ)=Σa_p(t)δ(τ-τ_p(t))` 多径模型 | 9-10 | a_p,τ_p → h | — | — | — | — | —（未实现） |
-| (1-11) `I=速率×距离` | 13-14 | — | kbit/s·km | — | — | — | —（未实现） |
-| (1-12) `E=RbW` 带宽效率 | 13-14 | — | — | — | — | — | —（未实现） |
+| (1-1) 声速经验式 `c=1449.2+4.6t-0.055t²+0.00029t³+(1.34-0.01t)(S-35)+0.016H` | 2-3 | t,S,H → c；实数/scalar | — | — | scfde.book_formulas.ch1_sound_speed | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-2) `A(l,f)=l^k[α(f)]^l` 传播损失 | 2-3 | l,f,k → A | — | — | scfde.book_formulas.ch1_propagation_loss | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-3) `TL=k·10lg(1000/l)+l·10·lgα(f)` | 2-3 | l,f → TL(dB) | dB | — | scfde.book_formulas.ch1_propagation_loss | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-4) `10lgα(f)=0.11f²/(1+f²)+44f²/(4100+f²)+2.75e-4f²+0.003` | 2-3 | f(kHz) → α | dB/km | — | scfde.book_formulas.ch1_thorp_absorption | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-5) `Δf_max=(v_max/c)·f` | 5-6 | v,c,f → Δf | — | — | scfde.book_formulas.ch1_doppler_spread | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-6) 四类环境噪声谱（N_s/N_v/N_h/N_t） | 5-6 | f,s,w → N(dB re μPa) | dB | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-7) `N(f)=N_s+N_v+N_h+N_t` | 5-6 | 分量 → 总噪声 | — | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-8) `10lgN(f)=N_0-q·lgf` | 5-6 | f → N | dB；N0=50, q=18 | — | scfde.book_formulas.ch1_noise_psd | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-9) `y(t)=∫h(t,τ)x(t-τ)dτ+n(t)` | 9-10 | h,x → y；时域 | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-10) `h(t,τ)=Σa_p(t)δ(τ-τ_p(t))` 多径模型 | 9-10 | a_p,τ_p → h | — | — | scfde.book_formulas.ch1_channel_model | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-11) `I=速率×距离` | 13-14 | — | kbit/s·km | — | scfde.book_formulas.ch1_capacity_index | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
+| (1-12) `E=RbW` 带宽效率 | 13-14 | — | — | — | scfde.book_formulas.ch1_bandwidth_efficiency | — | test_book_formulas_ch1 | BOOK-EXACT（oracle） |
 
 第1章结论：理论章，模型公式已登记；除信道建模（1-9/1-10）外多数不进入算法路径。
 
@@ -52,21 +52,21 @@
 
 | 公式 | Page | 变量/域 | 归一化 | MATLAB | C | Test | 状态 |
 |---|---|---|---|---|---|---|---|
-| (2-1) `s(t)=a(t)cos(2πf_c t+φ_k)=s_I cos-s_Q sin` | 14 | 已调信号 | — | — | — | — | —（未实现） |
-| (2-2) `s(t)=Re{u(t)e^{j2πf_c t}}` | 17-18 | 复包络 | — | — | — | — | —（未实现） |
-| (2-3) `u(t)=Σa(n)g(t-nT)` | 17-18 | 成形 | — | — | — | — | —（未实现） |
-| (2-4) `r(t)=Σd_l h(t-τ_l)e^{j2πf_d t}+w(t)` | 17-18 | 接收模型 | — | — | — | — | —（未实现） |
-| (2-5) `r_k=e^{jθ}A_k+e^{jφ}Σd_m h_{k-m}+w_k` | 17-18 | 离散接收 | — | — | — | — | —（未实现） |
+| (2-1) `s(t)=a(t)cos(2πf_c t+φ_k)=s_I cos-s_Q sin` | 14 | 已调信号 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-2) `s(t)=Re{u(t)e^{j2πf_c t}}` | 17-18 | 复包络 | — | — | scfde.book_formulas.ch2_modulated_signal | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-3) `u(t)=Σa(n)g(t-nT)` | 17-18 | 成形 | — | — | scfde.book_formulas.ch2_pulse_shaped | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-4) `r(t)=Σd_l h(t-τ_l)e^{j2πf_d t}+w(t)` | 17-18 | 接收模型 | — | — | scfde.book_formulas.ch2_received_model | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-5) `r_k=e^{jθ}A_k+e^{jφ}Σd_m h_{k-m}+w_k` | 17-18 | 离散接收 | — | — | scfde.book_formulas.ch2_received_model | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-6) `d̂_k=Σf_i^*r_{k-i}-Σb_j^*d̂_{k-j}` | 17-18 | DFE 结构；反馈为负 | — | `known_dfe_core.m`/`conventional_dfe.m` | — | test_modular_pipeline | ALG-EQUIV（抽头序需 oracle 核对） |
 | (2-7) `u_k=[d(k-N)…r(k+L-1)]^T` 输入向量 | 17-18 | DFE 输入 | — | `adaptive_dfe_core.m` | — | — | ALG-EQUIV |
 | (2-8) `w_k=[h(1)…f(-L+1)]^T` 权向量 | 17-18 | 权重结构 | — | `adaptive_dfe_core.m` | — | — | ALG-EQUIV |
 | (2-9) `e(k)=d(k)-w_n^H u_k` | 19-20 | 误差 | — | `adaptive_update.m` | — | — | ALG-EQUIV |
-| (2-10) `J(w)=E\|e_k\|²` | 19-20 | MSE 目标 | — | — | — | — | —（未实现） |
-| (2-11) `w^o=R_u^{-1}R_{du}` 维纳解 | 19-20 | 统计最优 | — | — | — | — | —（未实现） |
+| (2-10) `J(w)=E\|e_k\|²` | 19-20 | MSE 目标 | — | — | scfde.book_formulas.ch2_mse | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
+| (2-11) `w^o=R_u^{-1}R_{du}` 维纳解 | 19-20 | 统计最优 | — | — | scfde.book_formulas.ch2_wiener | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-12) `w(n+1)=w(n)-μ∇_w J` | 19-20 | 梯度下降 | — | `adaptive_update.m` | — | — | ALG-EQUIV |
-| (2-13) `∇_w J=-2E[e^*(n)u(n)]` | 19-20 | 梯度 | — | — | — | — | —（未实现） |
+| (2-13) `∇_w J=-2E[e^*(n)u(n)]` | 19-20 | 梯度 | — | — | scfde.book_formulas.ch2_lms_gradient | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-14) `w(n+1)=w(n)+2μe^*(n)u(n)` LMS | 19-20 | 系数更新 | 2μ 显式 | `lms_dfe.m`/`adaptive_update.m` | — | — | ALG-EQUIV（若工程吸收 2 因子则 ENGINEERING） |
-| (2-15) `0<μ<1/λ_max` | 19-20 | 收敛界 | — | — | — | — | —（未实现） |
+| (2-15) `0<μ<1/λ_max` | 19-20 | 收敛界 | — | — | scfde.book_formulas.ch2_lms_convergence_bound | — | test_book_formulas_ch2 | BOOK-EXACT（oracle） |
 | (2-16)~(2-25) | 21-24 | 扫描缺失（RLS/NLMS/Fast RLS 推导区） | — | — | — | — | 缺扫描页 |
 | (2-26) `r(k)=[r(k)…r(k+N-1)]^T` | 25-26 | 前馈输入 | — | `dpll_dfe.m` | — | — | ALG-EQUIV |
 | (2-27) `p_k=a^H r(k)e^{-jθ_k}` | 25-26 | 相位补偿 | — | `dpll_dfe.m` | — | — | ALG-EQUIV |
@@ -99,22 +99,22 @@
 | (3-4)/(3-5) 线性卷积矩阵/向量 | 47-48 | 矩阵形式 | — | — | — | — | —（未实现，建模辅助） |
 | (3-6)/(3-7) CP 插入/复制 | 47-48 | 帧结构 | CP=M | 帧构造 | — | — | BOOK-EXACT |
 | (3-8)~(3-26) | 49-50 | 扫描缺失（UW/同步区） | — | — | — | — | 缺扫描页 |
-| (3-27) `η_CP-SC=N/(N+M)` | 51-52 | 频谱效率 | — | — | — | — | —（未实现） |
-| (3-28) `η_UW-SC=(N-P)/(N+M)` | 51-52 | 频谱效率 | — | — | — | — | —（未实现） |
+| (3-27) `η_CP-SC=N/(N+M)` | 51-52 | 频谱效率 | — | — | scfde.book_formulas.ch3_spectral_efficiency | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
+| (3-28) `η_UW-SC=(N-P)/(N+M)` | 51-52 | 频谱效率 | — | — | scfde.book_formulas.ch3_spectral_efficiency | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-30) 补零块 | 51-52 | 帧结构 | — | — | — | — | —（未实现） |
 | (3-31) `r=H_circ s+w` 循环卷积 | 51-52 | 循环矩阵 | 循环卷积 | test_ch3_book_equations（已有） | — | test_eq_3_31 | BOOK-EXACT |
 | (3-32) 循环卷积逐行 | 51-52 | 展开式 | — | 同上 | — | — | BOOK-EXACT |
-| (3-37) `r=DHs+w`, `D=diag[e^{jθ_k}]` | 55-58 | 多普勒相位 | — | — | — | — | —（未实现） |
-| (3-38) `R=Fr=ΦHS+W`, `Φ=FDF^H` | 55-58 | 频域模型 | 前向 DFT 无 1/N | — | — | — | —（未实现） |
+| (3-37) `r=DHs+w`, `D=diag[e^{jθ_k}]` | 55-58 | 多普勒相位 | — | — | scfde.book_formulas.ch3_doppler_matrix | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
+| (3-38) `R=Fr=ΦHS+W`, `Φ=FDF^H` | 55-58 | 频域模型 | 前向 DFT 无 1/N | — | scfde.book_formulas.ch3_freq_model | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-39~3-41) `Φ≈λI`, `λ=(1/N)Σe^{jθ_p}` | 55-58 | 相位近似 | 1/N | — | — | — | —（未实现） |
 | (3-42~3-44) `C=(Ĥ^HΦ^HΦĤ+σ²I)^{-1}Ĥ^HΦ^H` | 55-58 | MMSE 矩阵解 | — | — | — | — | —（未实现） |
-| (3-45) `ŝ=F^H CHFs+w̃=AĤs+w̃` | 55-58 | 时域输出 | IDFT 含 1/N | — | — | — | —（未实现） |
-| (3-46) `ŝ_k=β_k s_k+w'_k` 相位补偿 | 55-58 | 残余相位 | — | — | — | — | —（未实现） |
+| (3-45) `ŝ=F^H CHFs+w̃=AĤs+w̃` | 55-58 | 时域输出 | IDFT 含 1/N | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
+| (3-46) `ŝ_k=β_k s_k+w'_k` 相位补偿 | 55-58 | 残余相位 | — | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-47)~(3-63) | 59-62 | 扫描缺失（HTF-DFE 推导区；含 `C_k=(Ĥ_k^HΦ_k^HΦ_kĤ_k+σ²I)^{-1}Ĥ_k^HΦ_k^H`、`x_m=F^H ΣC_kR_k` 未标号转写） | — | — | — | — | 缺扫描页 |
 | (3-64) `X̂^l=(C^l)^H R-(B^l)^H X̂^{l-1}` | 63-64 | IBDFE 迭代 | — | `ch3_ibdfe_equalize.m` | C IBDFE | test_eq_3_87 | BOOK-EXACT |
 | (3-65) `M_Xk=E\|X_k\|², M_X̂k=E\|X̂_k\|²` | 63-64 | 频域能量 | M_x=N·m_x | `BOOK_CONVENTIONS` | — | **test_eq_3_65** | BOOK-EXACT |
 | (3-66) `r_{Xk,X̂k*}=E[X_k X̂_k^*]` | 63-64 | 相关 | — | — | — | — | —（OCR-UNCERTAIN，未实现） |
-| (3-67) `J^IB=(1/N)ΣE\|x̂_k-x_k\|²` | 63-64 | MSE | 1/N | — | — | — | —（未实现） |
+| (3-67) `J^IB=(1/N)ΣE\|x̂_k-x_k\|²` | 63-64 | MSE | 1/N | — | scfde.book_formulas.ch3_ibdfe_mse | — | test_book_formulas_ch3 | BOOK-EXACT（oracle） |
 | (3-68)~(3-80) | 65-66 | 扫描缺失（IBDFE 权重推导区） | — | — | — | — | 缺扫描页 |
 | (3-81) `B_k'=C_k'H_k^*-1` | 67-68 | 反馈系数 | — | `ch3_ibdfe_equalize.m`（B=CH-1） | C IBDFE | test_eq_3_87 | BOOK-EXACT（OCR 曾标 *t，核对后为 *） |
 | (3-82) `β'=(1/N)ΣC_k'H_k^*` 初值 | 67-68 | 增益 | 1/N | `ch3_ibdfe_equalize.m`（Gamma=mean(AH)） | C IBDFE | test_eq_3_87 | BOOK-EXACT |
@@ -220,11 +220,11 @@
 | (5-71) 符号后验 P(x_k\|z_k) | 141-144 | 概率 | — | ch5_soft_book_detect_with_prior | — | — | BOOK-EXACT |
 | (5-72) 外信息高斯 pdf | 141-144 | EXIT 分析 | — | — | — | — | —（未实现，分析） |
 | (5-73)/(5-74) EXIT 互信息 | 141-144 | EXIT | — | — | — | — | —（未实现，分析） |
-| (5-75) `z_q=c_{s_q}e_q` | 145-148 | CCK-SM | — | — | — | — | —（未实现） |
-| (5-76) `y=hx+w` MIMO | 145-148 | 模型 | — | — | — | — | —（未实现） |
-| (5-78) `Y_k=H_k X_k+W_k` | 145-148 | 频域 | — | — | — | — | —（未实现） |
+| (5-75) `z_q=c_{s_q}e_q` | 145-148 | CCK-SM | — | — | — | — | —（未实现，可执行算法公式） |
+| (5-76) `y=hx+w` MIMO | 145-148 | 模型 | — | — | — | — | —（未实现，可执行算法公式） |
+| (5-78) `Y_k=H_k X_k+W_k` | 145-148 | 频域 | — | — | — | — | —（未实现，可执行算法公式） |
 | (5-80) `X̂_k^{(i)}=(C^{(i)})^H Y_k-(B^{(i)})^H X̃^{(i)}` | 145-148 | MIMO-IBDFE | — | ch5_fde_cck_detect | — | — | ALG-EQUIV |
-| (5-81) `x̄_m^i=x_m^i+n̄_m^i` | 145-148 | 软估计 | — | — | — | — | —（未实现） |
+| (5-81) `x̄_m^i=x_m^i+n̄_m^i` | 145-148 | 软估计 | — | — | — | — | —（未实现，可执行算法公式） |
 | (5-82) 软概率 P(x̄_m^i=β_j) | 145-148 | 概率 | — | ch5_soft_book_detect | — | — | OCR-UNCERTAIN |
 | (5-83)~(5-96) | 147-148 | 扫描缺失（CCK-SM 接收区） | — | — | — | — | 缺扫描页 |
 | (5-97) `h(t,τ)=Σβ_l δ(τ-τ_l)` 3km 信道 | 149-152 | 信道 | — | ch5_long_uwa_channel（合成，非原 taps） | — | — | PARAM-UNRECOVERABLE（taps 未公开） |
@@ -239,18 +239,18 @@
 | 公式 | Page | 变量/域 | 归一化 | MATLAB | C | Test | 状态 |
 |---|---|---|---|---|---|---|---|
 | (6-1) `I(t)=Σs(n)Σc(l)g(t-lT_c)` | 167-168 | DSSS 基带 | — | ch6_csk_codebook 基础 | — | — | OCR-UNCERTAIN（下标待核） |
-| (6-2) `R=1/(L T_c)` | 167-168 | 速率 | — | — | — | — | —（未实现） |
-| (6-3) `R=log₂M/(L T_c)` | 167-168 | M 元速率 | — | — | — | — | —（未实现） |
+| (6-2) `R=1/(L T_c)` | 167-168 | 速率 | — | — | scfde.book_formulas.ch6_spreading_rate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
+| (6-3) `R=log₂M/(L T_c)` | 167-168 | M 元速率 | — | — | scfde.book_formulas.ch6_spreading_rate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
 | (6-4) 循环移位矩阵 T | 167-168 | 矩阵 | — | ch6_shifted_codebook | — | — | OCR-UNCERTAIN |
 | (6-5) `c^T T^m c=M (m≡0); 1 (其他)` | 167-168 | 正交性 | — | ch6_csk_codebook | — | — | BOOK-EXACT |
 | (6-6) `s=T^a α` | 169-172 | 调制 | — | ch6_shifted_codebook | — | — | BOOK-EXACT |
 | (6-7) `â=1/G Re{F^{-1}{(Fa)^*⊙(Fo)}}` | 169-172 | 相关检测 | **1/G** | ch6_matched_filter_detect | — | — | ALG-EQUIV |
 | (6-8) `δ_Δ(g)` 冲击窗 | 169-172 | 判决 | — | — | — | — | —（未实现） |
 | (6-9) `θ=1/G Re{F^{-1}{(FS)^*⊙(Fu)}}` | 169-172 | 相关 | 1/G | — | — | — | —（未实现） |
-| (6-10) `θ=T^{-λ̂}â` | 169-172 | 移位估计 | — | — | — | — | —（未实现） |
+| (6-10) `θ=T^{-λ̂}â` | 169-172 | 移位估计 | — | — | scfde.book_formulas.ch6_shift_estimate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
 | (6-11) `θ(g)=δ_Δ(g-Δ)` | 169-172 | 峰位置 | — | — | — | — | —（未实现） |
-| (6-12) `Δ̂=argmax_g θ` | 169-172 | 峰判决 | — | — | — | — | —（未实现） |
-| (6-13) `c_i(t)=ΣC_{i,k}φ(t-kT_c)` | 169-172 | 扩频波形 | — | — | — | — | —（未实现） |
+| (6-12) `Δ̂=argmax_g θ` | 169-172 | 峰判决 | — | — | scfde.book_formulas.ch6_shift_estimate | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
+| (6-13) `c_i(t)=ΣC_{i,k}φ(t-kT_c)` | 169-172 | 扩频波形 | — | — | scfde.book_formulas.ch6_spread_waveform | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
 | (6-14) `s_i(t)=Σf(k)d_{i,k}c_i(t-kT_f)` | 169-172 | 发射 | T_f=L_c T_c | — | — | — | —（未实现） |
 | (6-15) `f^l(L_c c_i)` 循环移位 | 169-172 | 移位操作 | — | ch6_shifted_codebook | — | — | BOOK-EXACT |
 | (6-16)~(6-19) | 173-176 | 扫描缺失（常规 CSK 接收区） | — | — | — | — | 缺扫描页 |
@@ -263,8 +263,8 @@
 | (6-38) `Q_m(t)=Σh_{m,n}⊗b̂_n(-t)` PTR 等效信道 | 181-184 | PTR | 线性卷积 | ch6_ptr_context | — | — | BOOK-EXACT |
 | (6-39) `w̃_i(t)=Σw_n⊗ĥ_n(-t)` | 181-184 | 噪声 | — | ch6_ptr_context | — | — | BOOK-EXACT |
 | (6-40) `y^{(s)}(j)=ΣΣQ_m(l)x_m(j-l)+w̃` | 181-184 | 接收 | — | — | — | — | —（未实现） |
-| (6-41) `E(y^{(s)})` | 181-184 | 均值 | — | — | — | — | —（未实现） |
-| (6-42) `Var(y^{(s)})` | 181-184 | 方差 | — | — | — | — | —（未实现） |
+| (6-41) `E(y^{(s)})` | 181-184 | 均值 | — | — | scfde.book_formulas.ch6_ptr_ese_moments | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
+| (6-42) `Var(y^{(s)})` | 181-184 | 方差 | — | — | scfde.book_formulas.ch6_ptr_ese_moments | — | test_book_formulas_ch6 | BOOK-EXACT（oracle） |
 | (6-43)~(6-63) | 183-188 | 扫描缺失（IDMA 检测迭代区） | — | — | — | — | 缺扫描页 |
 | (6-64) `x̂_i(j)=P(1)-P(-1)` 软符号 | 185-188 | 软符号 | — | ch6_posterior_signal_estimate | — | — | BOOK-EXACT |
 | (6-65) `Var(x_i)=1-(E(x_i))²` | 185-188 | 方差 | — | 同上 | — | — | BOOK-EXACT |
@@ -312,15 +312,17 @@
 
 ```text
 已登记编号公式（第1~6章）：约 200 行（含扫描缺失区间行）
-BOOK-EXACT：       第2章 5（DPLL 系）/ 第3章 12 / 第4章 20 / 第5章 12 / 第6章 10
+BOOK-EXACT（oracle/DPLL/IBDFE 系）：第1章 12 / 第2章 16 / 第3章 22 / 第4章 20 / 第5章 12 / 第6章 20
 ALG-EQUIV：        第2章 15 / 第3章 4 / 第5章 1 / 第6章 1
 ENGINEERING：      HTFDE reliability（已拆 *_engineering）、ICE 3-92（ρ 加权 LS，待补 MMSE 加权原式）、
                    FDDA γ_f/γ_b=0.97（原文仅 γ<1）、ESE damping（独立 ENGINEERING 算法 csk_ese_damped.m，
                    书中无此参数，不属于 PARAM-UNRECOVERABLE）、CCK Turbo 外码（重复码替代，原书未公开）
 PARAM-UNRECOVERABLE：第3章 N/M/P 具体值、第5章 3km 信道 taps、CCK Turbo 外码参数、γ_f/γ_b
-THEORY-ONLY：      第1章 1-1~1-12（已实现 executable oracle，见 +book_formulas 与 test_book_formulas_ch1）、
-                   第2章 2-10/2-11/2-13/2-15（已实现 oracle）、第3章 3-66/3-67（已实现 oracle）、
-                   第5章 5-25~5-28 错误概率/5-72~5-74 EXIT（纯分析，无算法路径，保留登记）
+THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、5-72~5-74 EXIT 互信息（无算法路径，保留登记）。
+                   可执行公式（信道模型/检测/均衡/编码/扩频/软估计/迭代更新）一律实现 oracle 或保留未实现于分母；
+                   第1章 1-1~1-12、第2章 2-1~2-15、第3章 3-27/3-28/3-37~3-46/3-66/3-67、
+                   第6章 6-2~6-7/6-10~6-13/6-38/6-41/6-42 已实现 oracle（BOOK-EXACT（oracle））；
+                   第5章 CCK-SM (5-75)~(5-82) 为收发算法公式，标未实现（计入分母），不得 THEORY-ONLY
 缺扫描页区间：    20 个区间（见上）
 未实现（公式已登记）：其余行
 ```

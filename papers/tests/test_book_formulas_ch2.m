@@ -70,3 +70,23 @@ verifyEqual(testCase, lmax, max(eig(R)), "AbsTol", 1e-12);
 verifyEqual(testCase, scfde.book_formulas.ch2_lms_convergence_bound(eye(3)), 1, ...
     "AbsTol", 1e-12);
 end
+
+function testEq24_25ReceivedModel(testCase)
+% (2-5) r_k = e^{j theta} (d * h)_k + w_k (identity h -> phase-rotated d).
+h = [1, 0.5];
+d = [1, -1, 1j];
+r = scfde.book_formulas.ch2_received_model(d, h, 0.4, 0, 1);
+expected = exp(1j * 0.4) * conv(d, h);
+verifyEqual(testCase, r, expected(1:numel(d)), "AbsTol", 1e-12);
+end
+
+function testEq212_214LmsUpdate(testCase)
+% (2-14) w(n+1) = w(n) + 2 mu e*(n) u(n); (2-13) gradient -2 e* u.
+w = [0.5, -0.2];
+u = [1, 0.5];
+e = 0.3;
+mu = 0.1;
+wNext = scfde.book_formulas.ch2_lms_update(w, u, e, mu);
+verifyEqual(testCase, wNext, w + 2 * mu * conj(e) * u, "AbsTol", 1e-12);
+verifyEqual(testCase, wNext - w, -mu * (-2 * conj(e) * u), "AbsTol", 1e-12);
+end

@@ -17,5 +17,10 @@ if ~isfield(cfg, "tdNlmsStep"), cfg.tdNlmsStep = 0.35; end
 if ~isfield(cfg, "blmsStep"), cfg.blmsStep = 0.06; end
 if ~isfield(cfg, "blmsLeakage"), cfg.blmsLeakage = 1e-3; end
 if ~isfield(cfg, "blmsRegularization"), cfg.blmsRegularization = 1e-3; end
-if ~isfield(cfg, "turboDamping"), cfg.turboDamping = 0.75; end
+if ~isfield(cfg, "turboDamping"), cfg.turboDamping = 1; end
+% BOOK parameter lock: the book defines NO soft-feedback damping
+% (feedback uses the decoder soft symbols directly, eq. 4-47/4-49),
+% so the default is alpha = 1 (undamped).  Engineering studies may
+% override cfg.turboDamping explicitly (e.g. run_chapter4_turbo_suite
+% defaults to 0.75); the unified book path stays undamped.
 end

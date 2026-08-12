@@ -62,7 +62,26 @@ verifyEqual(testCase, comps(4, :), -15 + 20 * log10([1, 10]), ...
     "AbsTol", 1e-10);
 end
 
+function testEq19_110ChannelModel(testCase)
+% (1-9)/(1-10): two-path channel oracle; y = a1 x(n) + a2 x(n-tau2).
+taps = [0.8, 0.6 * exp(1j * 0.3)];
+delays = [0, 3];
+x = [1, 2, 3, 4];
+[y, h] = scfde.book_formulas.ch1_channel_model(x, taps, delays, 0);
+verifyEqual(testCase, h, [0.8, 0, 0, 0.6 * exp(1j * 0.3), 0, 0, 0], ...
+    "AbsTol", 1e-12);
+verifyEqual(testCase, y, conv(h, x), "AbsTol", 1e-12);
+verifyEqual(testCase, y(1), 0.8, "AbsTol", 1e-12);
+verifyEqual(testCase, y(4), 0.8 * x(4) + 0.6 * exp(1j * 0.3) * x(1), ...
+    "AbsTol", 1e-12);
+end
+
 function testEq111CapacityIndex(testCase)
 I = scfde.book_formulas.ch1_capacity_index(40, 2);
 verifyEqual(testCase, I, 80, "AbsTol", 1e-12);   % book 40 kbit/s*km example
+end
+
+function testEq112BandwidthEfficiency(testCase)
+E = scfde.book_formulas.ch1_bandwidth_efficiency(10e3, 5e3);
+verifyEqual(testCase, E, 5e7, "AbsTol", 1e-12);
 end

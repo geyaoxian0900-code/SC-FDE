@@ -61,6 +61,13 @@ verifyEqual(testCase, Q(:), conv(h(:), conj(flipud(h(:)))), "AbsTol", 1e-12);
 verifyEqual(testCase, max(abs(Q)), sum(abs(h).^2), "AbsTol", 1e-12);
 end
 
+function testEq610_612ShiftEstimate(testCase)
+% (6-10)/(6-12): correlation peak -> shift index estimate.
+ahat = [0.1, 0.05, 0.9, 0.2];
+[~, deltaHat] = scfde.book_formulas.ch6_shift_estimate(ahat, [], 4);
+verifyEqual(testCase, deltaHat, 3, "AbsTol", 1e-12);
+end
+
 function testEq641_642Moments(testCase)
 % Two users, one tap each: Q = [1 0.5; 0.5 1], muX = [0.8; 0.6],
 % varX = [0.3; 0.4], hhat = [1 0.5], sigma2 = 0.1.
