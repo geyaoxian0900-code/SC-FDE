@@ -1,4 +1,4 @@
-function audit_turbo_ber(options)
+﻿function audit_turbo_ber(options)
 %AUDIT_TURBO_BER Independent BER audit of the ten turbo equalizers.
 %   AUDIT_TURBO_BER()
 %
@@ -19,6 +19,7 @@ function audit_turbo_ber(options)
 if nargin < 1
     options = struct();
 end
+scfde.book_check_conventions();  % frozen conventions gate (BOOK_CONVENTIONS.md)
 snrDb = field_default(options, "snrDb", 12);
 frames = field_default(options, "frames", 20);
 seed = field_default(options, "seed", 42);

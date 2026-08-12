@@ -1,4 +1,4 @@
-function audit_qpsk_ber(options)
+﻿function audit_qpsk_ber(options)
 %AUDIT_QPSK_BER Independent BER audit of the qpsk equalizers.
 %   AUDIT_QPSK_BER()          % full audit
 %   AUDIT_QPSK_BER(STRUCT("snrDb", 8, "equalizers", {"mmse-fde","htfde"}))
@@ -26,6 +26,7 @@ function audit_qpsk_ber(options)
 if nargin < 1
     options = struct();
 end
+scfde.book_check_conventions();  % frozen conventions gate (BOOK_CONVENTIONS.md)
 equalizers = field_default(options, "equalizers", ...
     ["dfe", "mmse-fde", "zf-fde", "htfde", "sd-ibdfe"]);
 snrDb = field_default(options, "snrDb", 12);

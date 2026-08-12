@@ -415,10 +415,12 @@ verifyGreaterThan(testCase, norm(ch - chPerturbed), 1e-3, ...
 end
 
 function testHtfdeReliabilityModes(testCase)
-% The HTFDE reliability weighting must be selectable via
-% cfg.htfdeReliabilityMode: posterior (default), none, or a user
-% function handle; the module must run in all modes and the posterior
-% and none modes must produce different weightings.
+% BOOK-EXACT rule (BOOK_CONVENTIONS.md rule 2): the book does not define
+% a reliability weighting, so the main htfde module must run identically
+% for every cfg.htfdeReliabilityMode value (full hard-decision
+% post-cursor cancellation).  The reliability-weighted behavior is
+% exercised only through htfde_engineering (posterior vs none modes must
+% then differ in the first iteration).
 dataSymbols = 192;
 N = 256;  % 192 data + 64 UW
 imp = [1, 0.4 * exp(1j * 0.3), 0.2 * exp(-1j * 0.6)];
@@ -448,9 +450,17 @@ r3 = scfde.equalizers.htfde(ch, src, cfgF);
 verifyTrue(testCase, all(isfinite(r1.outputs{1})) && ...
     all(isfinite(r2.outputs{1})) && all(isfinite(r3.outputs{1})), ...
     "all three reliability modes must produce finite outputs");
-verifyNotEqual(testCase, r1.traces{1}.symbolsByIteration(1, :), ...
+verifyEqual(testCase, r1.traces{1}.symbolsByIteration(1, :), ...
     r2.traces{1}.symbolsByIteration(1, :), ...
-    "posterior and none modes must differ in the first iteration");
+    "book path ignores reliability mode (full cancellation)");
+verifyEqual(testCase, r2.traces{1}.symbolsByIteration(1, :), ...
+    r3.traces{1}.symbolsByIteration(1, :), ...
+    "book path ignores reliability mode (full cancellation)");
+re1 = scfde.equalizers.htfde_engineering(ch, src, cfgP);
+re2 = scfde.equalizers.htfde_engineering(ch, src, cfgN);
+verifyNotEqual(testCase, re1.traces{1}.symbolsByIteration(1, :), ...
+    re2.traces{1}.symbolsByIteration(1, :), ...
+    "posterior and none modes must differ in the first iteration (engineering)");
 end
 
 function testFddaFeedbackAndOuterLoop(testCase)

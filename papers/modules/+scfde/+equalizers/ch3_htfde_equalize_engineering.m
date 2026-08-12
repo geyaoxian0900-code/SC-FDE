@@ -1,16 +1,12 @@
-function [symbols, trace] = ch3_htfde_equalize(received, H, ...
+function [symbols, trace] = ch3_htfde_equalize_engineering(received, H, ...
         noiseVariance, uw, cfg)
-%CH3_HTFDE_EQUALIZE Hybrid time-frequency equalization, book-exact path.
-%   Book formulas: per-branch frequency-domain MMSE equalizer
-%   C_k = (H_k^H Phi_k^H Phi_k H_k + sigma^2 I)^-1 H_k^H Phi_k^H,
-%   sub-array joint equalization x_m = F^H (sum_k C_k R_k),
-%   followed by time-domain feedback cancellation of the post-cursor.
-%
-%   NOTE (book-exact rule): the book does not define any reliability
-%   weighting for the feedback cancellation; the main path therefore
-%   cancels the full post-cursor with hard decisions (reliability = 1).
-%   The previous posterior-mean reliability version is kept in
-%   ch3_htfde_equalize_engineering.m (see BOOK_CONVENTIONS.md rule 2).
+%CH3_HTFDE_EQUALIZE_ENGINEERING HTFDE with posterior-mean reliability.
+%   ENGINEERING variant (BOOK_CONVENTIONS.md rule 2): the book does not
+%   define the reliability weighting, so this version is NOT the book
+%   path.  It retains the previous posterior-mean reliability scaling
+%   (cfg.htfdeReliabilityMode, default "posterior") for comparison
+%   studies.  The book-exact path is ch3_htfde_equalize.m (full
+%   hard-decision post-cursor cancellation, reliability = 1).
 N = cfg.fftSize;
 segmentLength = N / cfg.htfdeBranches;
 symbols = ifft(scfde.equalizers.ch3_mmse_frequency_equalize(fft(received), H, noiseVariance));
@@ -24,6 +20,8 @@ trace.symbolsByIteration = complex(zeros(cfg.htfdeIterations, N));
 for iteration = 1:cfg.htfdeIterations
     decision = scfde.equalizers.ch3_qpsk_map(scfde.equalizers.ch3_qpsk_demap(symbols));
     decision(cfg.dataSymbols + 1:end) = uw;
+    reliability = htfde_reliability(symbols(1:cfg.dataSymbols), ...
+        noiseVariance, cfg);
     predicted = ifft(H .* fft(decision));
     phaseCorrected = complex(zeros(1, N));
     for branch = 1:cfg.htfdeBranches
@@ -33,9 +31,9 @@ for iteration = 1:cfg.htfdeIterations
         phaseCorrected(indices) = received(indices) * exp(-1j * phase);
     end
     postcursor = scfde.equalizers.ch3_circular_postcursor(decision, h);
-    timeEqualized = phaseCorrected - postcursor;
+    timeEqualized = phaseCorrected - reliability * postcursor;
     effectiveImpulse = h;
-    effectiveImpulse(2:end) = 0;
+    effectiveImpulse(2:end) = (1 - reliability) * effectiveImpulse(2:end);
     effectiveChannel = fft(effectiveImpulse);
     branchSpectrum = complex(zeros(1, N));
     for branch = 1:cfg.htfdeBranches
@@ -50,4 +48,19 @@ for iteration = 1:cfg.htfdeIterations
     trace.errorCurve(iteration) = mean(abs(symbols - decision).^2);
 end
 trace.effectiveChannel = effectiveChannel;
+end
+
+function reliability = htfde_reliability(symbols, noiseVariance, cfg)
+mode = "posterior";
+if isfield(cfg, "htfdeReliabilityMode")
+    mode = cfg.htfdeReliabilityMode;
+end
+if isa(mode, "function_handle")
+    reliability = mode(symbols, noiseVariance);
+elseif strcmpi(mode, "none")
+    reliability = 1;
+else % "posterior" (default)
+    reliability = scfde.equalizers.ch3_symbol_reliability( ...
+        symbols, noiseVariance);
+end
 end

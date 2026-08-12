@@ -1,5 +1,10 @@
-function receiver = csk_ese(channel, source, cfg)
-%CSK_ESE CSK-IDMA ESE iterative receiver (book 6.3, 6-21~6-36).
+﻿function receiver = csk_ese_damped(channel, source, cfg)
+%CSK_ESE_DAMPED CSK-IDMA ESE with posterior damping (ENGINEERING).
+%   ENGINEERING variant (BOOK_CONVENTIONS.md rule 2): the book defines
+%   no posterior damping step, so the book path (csk_ese.m) uses
+%   alpha = 1.  This variant applies P_new = (1-alpha)*P_old +
+%   alpha*P_update with alpha = cfg.eseDamping (default 0.58, matching
+%   run_chapter6_spread_spectrum_suite).
 % ESE outputs information-symbol decisions (repetition-1/2 outer code);
 % the exported symbol estimates fall back to a matched-filter hard
 % decision so the unified BER comparison stays on codeword indices.
@@ -37,13 +42,12 @@ end
 received = reshape(channel.received(1:symbols * codeLength), codeLength, symbols).';
 noiseVariance = cfg.noiseVariance * ones(1, users);
 transmitted = zeros(users, symbols, codeLength);
-% The book defines NO posterior damping step (no P_new =
-% (1-alpha)*P_old + alpha*P_update in the scanned chapter-6 pages), so
-% the book path uses alpha = 1 (undamped).  The damped variant is
-% csk_ese_damped.m (BOOK_CONVENTIONS.md rule 2).
+% Damping alpha: P_new = (1-alpha)*P_old + alpha*P_update (engineering).
+damping = 0.58;
+if isfield(cfg, "eseDamping"), damping = cfg.eseDamping; end
 [innerDecision, outerDecision, ~, ~, ~, ~] = scfde.equalizers.ch6_csk_idma_detect( ...
     received, dicts, userChannels, noiseVariance, pair, ...
-    innerIterations, outerIterations, transmitted, false, 1);
+    innerIterations, outerIterations, transmitted, false, damping);
 % The ESE/IDMA decisions ARE the exported codeword indices (repetition
 % outer decoding, last outer iteration, user 1).  The previous version
 % exported a matched-filter hard decision instead, which made the
@@ -70,7 +74,8 @@ end
 % constellation shows the soft spreading-chip estimates.
 softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
     fft(channel.received));
-receiver = scfde.equalizers.pack_equalizer("CSK-IDMA-ESE", "csk-ese", ...
+receiver = scfde.equalizers.pack_equalizer("CSK-IDMA-ESE-DAMPED", "csk-ese-damped", ...
     decisions, zeros(size(decisions)), softChips, ...
     struct("indices", codeIndices, "infoIndices", infoIndices));
 end
+
