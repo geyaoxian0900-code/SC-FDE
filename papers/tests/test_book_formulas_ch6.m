@@ -35,21 +35,32 @@ verifyEqual(testCase, corr(1), M, "RelTol", 1e-12);
 verifyEqual(testCase, abs(corr(2:end)), ones(1, M - 1), "RelTol", 1e-12);
 end
 
-function testEq67CorrelationDetector(testCase)
-% a = ZC sequence; received o = a (no noise, no shift): the correlation
-% detector peaks at lag 0 with value ~M/G (real part).
+function testEq67Autocorrelation(testCase)
+% (6-7) theta_a = (1/G) Re{F^{-1}[(Fa)* .* (Fa)]}: autocorrelation of
+% the spreading sequence, peak at lag 0 with value ~1 (unit energy).
 M = 16;
 a = exp(1j * pi * (0:M - 1).' / M);
-o = a;
-ahat = scfde.book_formulas.ch6_csk_correlate(o, a, M);
-[peak, at] = max(ahat);
+thetaA = scfde.book_formulas.ch6_sequence_autocorrelation(a, M);
+[peak, at] = max(thetaA);
 verifyEqual(testCase, at, 1, "AbsTol", 1e-12);
-verifyEqual(testCase, peak, 1, "RelTol", 1e-10);   % 1/G * M = 1 (unit energy)
-% A shifted receive produces a peak at the shift lag.
-oShift = a(mod((0:M - 1).' - 3, M) + 1);
-ahatS = scfde.book_formulas.ch6_csk_correlate(oShift, a, M);
-[~, atS] = max(ahatS);
-verifyEqual(testCase, atS, 4, "AbsTol", 1e-12);
+verifyEqual(testCase, peak, 1, "RelTol", 1e-10);   % 1/G * |Fa|^2 = 1
+end
+
+function testEq69DemodCorrelation(testCase)
+% (6-9) theta = (1/G) Re{F^{-1}[(F shat)* .* (F a)]}: the conjugation is
+% on the RECEIVED side (F shat)*, so a cyclically shifted shat moves the
+% peak in the OPPOSITE direction compared with a reference-conjugating
+% correlator; this is exactly the book-vs-engineering direction split.
+M = 16;
+a = exp(1j * pi * (0:M - 1).' / M);
+shat = circshift(a, 3);              % transmitted shift +3
+theta = scfde.book_formulas.ch6_demod_correlation(shat, a, M);
+[~, at] = max(theta);
+verifyEqual(testCase, at, 14, "AbsTol", 1e-12);   % 16-3+1 = 14
+% swapping roles moves the peak the other way
+thetaSwap = scfde.book_formulas.ch6_demod_correlation(a, shat, M);
+[~, atSwap] = max(thetaSwap);
+verifyEqual(testCase, atSwap, 4, "AbsTol", 1e-12);
 end
 
 function testEq638PtrEquivalentChannel(testCase)

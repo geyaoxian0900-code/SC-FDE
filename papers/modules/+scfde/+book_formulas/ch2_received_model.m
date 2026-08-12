@@ -5,8 +5,7 @@ function r = ch2_received_model(d, h, theta, w)
 %   (current symbol + ISI + AWGN decomposition:
 %    r_k = e^{j theta} d_k h_0 + e^{j theta} sum_{l~=k} d_l h_{k-l} + w_k)
 %   Output length = numel(d) + numel(h) - 1; noise, when given, must
-%   span the full support.  The time-varying Doppler exponential belongs
-%   to the continuous model (2-4) only, not here.
+%   span the full support.
 d = d(:).';
 h = h(:).';
 signal = exp(1j * theta) .* conv(d, h);

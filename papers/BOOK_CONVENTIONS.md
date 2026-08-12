@@ -5,14 +5,24 @@
 本约定作为第一批工作冻结，后续章节（2/4/5/6）以此为准，不再允许
 各 chapter suite 自行解释 (M_x)、(1/N)、时域/频域归一化。
 
-状态体系（全项目唯一）：
+状态体系（全项目唯一，双枚举）：
 
 ```text
-BOOK-EXACT            原公式、变量定义、归一化、初值、边界、迭代规则、公开参数全部一致
-ALG-EQUIV             实现形式不同，但有代数证明 + golden vector 证明严格等价
-ENGINEERING           damping、近似概率、替代编码、经验缩放等（显式拆分，不混入主路径）
-PARAM-UNRECOVERABLE   公式一致，但原书未公布某实验参数（公式 ✅ / 原图 ❌）
-FAIL                  与原公式不一致
+FormulaStatus（公式状态，每行一个）:
+  BOOK-EXACT                原公式、变量定义、归一化、初值、边界、迭代规则、公开参数全部一致
+  ALG-EQUIV                 实现形式不同，但有代数证明 + golden vector 证明严格等价
+  SOURCE-INCONSISTENT       扫描件清楚，但书内不同公式互相矛盾（如 (4-22)、(6-10)）；
+                            须注明 Resolution（跟随哪一式）
+  SCAN-MISSING              原书页码不在 book/ 扫描件内，公式未转写
+  OCR-UNCERTAIN             转写存疑，须回原图核对
+  EXECUTABLE-UNIMPLEMENTED  公式已转写且可执行，但无实现（计入分母）
+  ENGINEERING               damping、近似概率、替代编码、经验缩放等（显式拆分）
+  THEORY-ONLY               纯分析公式（错误概率积分/EXIT/容量上界），剔除于算法分母
+
+ParameterStatus（参数状态，每行一个）:
+  OK                        原书参数可用
+  PARAM-UNRECOVERABLE       原书未公布某实验参数（公式 ✅ / 原图 ❌）
+  N/A                       该行无参数概念（如理论/缺扫行）
 ```
 
 规则：
@@ -21,6 +31,7 @@ FAIL                  与原公式不一致
 2. ENGINEERING 处理全部显式拆成 `*_engineering` / `*_approx` / `*_damped`，
    不得混在主路径里；主路径只允许书中公式。
 3. 参数缺失写 `NaN`，运行时抛 `SCFDE:BookParameterUnavailable`，不许猜。
+4. `PARAM-UNRECOVERABLE` 不是公式状态；公式正确性与参数缺失正交。
 
 ---
 

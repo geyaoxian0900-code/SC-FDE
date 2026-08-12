@@ -2,29 +2,10 @@
 %RUN_BOOK_ACCEPTANCE  Final acceptance system (evidence-driven, frozen).
 %   Single equation-ID parser (book_acceptance.parse_equation_ids) is
 %   shared by g1, the global coverage audit and the formulaClass
-%   derivation.  Gate states are five-valued:
-%     PASS          automatic evidence executed and passed
-%     CURATED-PASS  human-reviewed, no specific automatic test
-%     OPEN          evidence/tooling missing (scan, C harness, figures)
-%     PARAM         book parameter genuinely unpublished
-%     FAIL          evidence exists and explicitly fails
-%   Hard acceptance requires every required gate to be PASS; any
-%   CURATED-PASS yields OPEN-CURATED-EVIDENCE (never PASS).
-%
-%   Gate items (1..13):
-%     1 formula registered with admissible status (BOOK-EXACT/ALG-EQUIV)
-%     2 variable definitions (specific test cases or CURATED-PASS)
-%     3 normalization matches     (specific test cases or CURATED-PASS)
-%     4 initial conditions match  (specific test cases or CURATED-PASS)
-%     5 iteration rules match     (specific test cases or CURATED-PASS)
-%     6 public parameters match   (PARAM when book value missing)
-%     7 formula tests PASS
-%     8 MATLAB production PASS
-%     9 C comparison PASS         (OPEN: C harness not present)
-%     10 identity/AWGN/multipath PASS
-%     11 original figure (PASS or PARAM)
-%     12 no hidden engineering (dependency-closure scan; hits = FAIL)
-%     13 small-N oracle PASS
+%   derivation; every claimed equation spec is expanded through
+%   expand_claimed_equations (no per-function ".." handling).
+%   Gate states: PASS / CURATED-PASS / OPEN / PARAM / FAIL.
+%   Overall PASS requires MATLAB PASS and C PASS and (figure PASS|PARAM).
 
 papersDir = fileparts(mfilename("fullpath"));
 addpath(fullfile(papersDir, "modules"));
@@ -65,49 +46,48 @@ for k = 1:numel(matrix)
     end
     [g12, scanDetail] = scan_hidden_engineering(a, papersDir);
     g(12) = g12;
-    g(13) = run_oracle_tests(a);
+    g(13) = run_evidence(a.oracleTests, papersDir);
 
     eligible = any(a.formulaClass == ...
-        ["BOOK-EXACT", "ALG-EQUIV", "OPEN-OCR", "OPEN-SCAN", ...
-         "OPEN-UNIMPLEMENTED"]);
+        ["BOOK-EXACT", "ALG-EQUIV", "OPEN-OCR", "OPEN-SOURCE", ...
+         "OPEN-SCAN", "OPEN-UNIMPLEMENTED"]);
 
-    required = [1:8, 10, 12, 13];
-    hardPass = all(g(required) == "PASS") && ...
-        any(g(11) == ["PASS", "PARAM"]);
-    reviewPass = all(ismember(g(required), ["PASS", "CURATED-PASS"])) && ...
-        any(g(11) == ["PASS", "PARAM"]);
+    matlabRequired = [1:8, 10, 12, 13];
+    matlabHard = all(g(matlabRequired) == "PASS");
+    cHard = g(9) == "PASS";
+    figureHard = any(g(11) == ["PASS", "PARAM"]);
 
-    if ~eligible
-        overall = "NOT-BOOK-ELIGIBLE";
-    elseif any(g == "FAIL")
+    if any(g == "FAIL")
         overall = "FAIL";
-    elseif hardPass
-        overall = "PASS";
-    elseif any(g(required) == "CURATED-PASS")
-        overall = "OPEN-CURATED-EVIDENCE";
-    elseif g(9) == "OPEN"
+    elseif ~eligible
+        overall = "NOT-BOOK-ELIGIBLE";
+    elseif ~matlabHard
+        if any(g(matlabRequired) == "CURATED-PASS")
+            overall = "OPEN-CURATED-EVIDENCE";
+        else
+            overall = "OPEN-MATLAB";
+        end
+    elseif ~cHard
         overall = "OPEN-C";
-    elseif g(11) == "OPEN"
+    elseif ~figureHard
         overall = "OPEN-FIGURE";
     else
-        overall = "OPEN-MATLAB";
+        overall = "PASS";
     end
 
-    if all(g(required) == "PASS")
+    if all(g(matlabRequired) == "PASS")
         matlabStatus = "PASS";
-    elseif any(g(required) == "FAIL")
+    elseif any(g(matlabRequired) == "FAIL")
         matlabStatus = "FAIL";
-    elseif any(g(required) == "CURATED-PASS")
+    elseif any(g(matlabRequired) == "CURATED-PASS")
         matlabStatus = "OPEN-CURATED";
     else
         matlabStatus = "OPEN";
     end
-    cStatus = g(9);
-    figureStatus = g(11);
 
     rows(end + 1) = struct("id", a.id, "formulaClass", a.formulaClass, ...
-        "matlabStatus", matlabStatus, "cStatus", cStatus, ...
-        "figureStatus", figureStatus, "overallStatus", overall, ...
+        "matlabStatus", matlabStatus, "cStatus", g(9), ...
+        "figureStatus", g(11), "overallStatus", overall, ...
         "gates", g, "scannedFiles", {scanDetail.scannedFiles}, ...
         "forbiddenHits", {scanDetail.forbiddenHits}); %#ok<AGROW>
 end
@@ -117,8 +97,17 @@ print_matrix(rows);
 summary = summarize(rows, matrix, coverage);
 end
 
+function ids = expand_claimed_equations(specs)
+% Single expansion of every claimed equation spec (parser-native
+% formats, e.g. "(3-42~3-46)"), deduplicated.
+ids = strings(1, 0);
+for spec = specs
+    ids = [ids, book_acceptance.parse_equation_ids(spec)]; %#ok<AGROW>
+end
+ids = unique(ids, "stable");
+end
+
 function statusMap = build_status_map(papersDir)
-% eqID -> struct(FormulaStatus, ParameterStatus)
 statusMap = containers.Map("KeyType", "char", "ValueType", "any");
 try
     text = fileread(fullfile(fileparts(papersDir), "FORMULA_TRACEABILITY.md"));
@@ -149,19 +138,12 @@ for i = 1:numel(lines)
 end
 end
 
-function fs = formula_status(a, statusMap)
-fs = "";
-if isKey(statusMap, char(a))
-    fs = statusMap(char(a)).FormulaStatus;
-end
-end
-
 function class_ = derive_formula_class(equations, statusMap)
-% Lowest-class aggregation across the algorithm's equation set.
+% Lowest-class aggregation across the algorithm's claimed equation set.
 statuses = strings(0);
-for eq = equations
-    if isKey(statusMap, char(eq))
-        statuses(end + 1) = statusMap(char(eq)).FormulaStatus; %#ok<AGROW>
+for id = expand_claimed_equations(equations)
+    if isKey(statusMap, char(id))
+        statuses(end + 1) = statusMap(char(id)).FormulaStatus; %#ok<AGROW>
     else
         statuses(end + 1) = "SCAN-MISSING"; %#ok<AGROW>  % untraced ID
     end
@@ -178,6 +160,8 @@ elseif any(statuses == "SCAN-MISSING")
     class_ = "OPEN-SCAN";
 elseif any(statuses == "OCR-UNCERTAIN")
     class_ = "OPEN-OCR";
+elseif any(statuses == "SOURCE-INCONSISTENT")
+    class_ = "OPEN-SOURCE";
 elseif any(statuses == "ALG-EQUIV")
     class_ = "ALG-EQUIV";
 elseif all(statuses == "BOOK-EXACT")
@@ -190,102 +174,117 @@ end
 function a = build_matrix(papersDir, statusMap)
 testsDir = fullfile(papersDir, "tests");
 a = struct("id", {}, "equations", {}, "formulaFiles", {}, ...
-    "oracleNames", {}, "moduleId", {}, "scenario", {}, ...
+    "oracleTests", {}, "moduleId", {}, "scenario", {}, ...
     "paramsUnrecoverable", {}, "figureStatus", {}, ...
     "variableTests", {}, "normalizationTests", {}, ...
     "initialTests", {}, "iterationTests", {});
 t = @(f) fullfile(testsDir, f);
 
-a(end + 1) = def("ch3-ibdfe", ["3-64","3-65","3-82","3-84","3-85","3-87"], ...
+a(end + 1) = def("ch3-ibdfe", ...
+    ["(3-64)","(3-65)","(3-82)","(3-84)","(3-85)","(3-87)"], ...
     {t("test_eq_3_65.m"), t("test_eq_3_87.m")}, ...
-    ["test_eq_3_65", "test_eq_3_87"], "sd-ibdfe", "qpsk", [], "OPEN", ...
+    {"test_eq_3_65/testParsevalN4HandOracle", ...
+     "test_eq_3_87/testGammaHandOracleN4"}, ...
+    "sd-ibdfe", "qpsk", [], "OPEN", ...
     {"test_eq_3_87/testGammaHandOracleN4"}, ...
     {"test_eq_3_87/testUnitGainInvariantRandom", ...
      "test_eq_3_65/testParsevalN4HandOracle"}, ...
     {}, {"test_eq_3_87/testProductionIbdFeTrace"});
-a(end + 1) = def("ch3-mmse-fde", ["3-65","3-71"], ...
+a(end + 1) = def("ch3-mmse-fde", ["(3-65)","(3-71)"], ...
     {t("test_eq_3_65.m"), t("test_eq_3_71.m")}, ...
-    ["test_eq_3_65", "test_eq_3_71"], "mmse-fde", "qpsk", [], "OPEN", ...
+    {"test_eq_3_65/testParsevalN4HandOracle", ...
+     "test_eq_3_71/testLambdaBookEqualsProduction"}, ...
+    "mmse-fde", "qpsk", [], "OPEN", ...
     {"test_eq_3_65/testParsevalN4HandOracle"}, ...
     {"test_eq_3_71/testLambdaBookEqualsProduction"}, {}, {});
-a(end + 1) = def("ch3-htfde", ["3-42..3-46","3-64","3-47..3-63"], ...
-    {t("test_eq_3_71.m")}, "test_eq_3_71", "htfde", "qpsk", ...
-    ["3-47..3-63 scan missing"], "PARAM-UNRECOVERABLE", ...
-    {}, {}, {}, {});
-a(end + 1) = def("ch3-ice", ["3-88","3-89","3-90","3-91","3-92"], ...
-    {t("test_eq_3_87.m")}, "test_eq_3_87", "ice-sd-ibdfe", "qpsk", ...
-    ["3-92 MMSE weighting"], "OPEN", ...
+a(end + 1) = def("ch3-htfde", ["(3-42~3-46)","(3-64)","(3-47~3-63)"], ...
+    {t("test_eq_3_71.m")}, {"test_eq_3_71/testLambdaBookEqualsProduction"}, ...
+    "htfde", "qpsk", [], "PARAM-UNRECOVERABLE", {}, {}, {}, {});
+a(end + 1) = def("ch3-ice", ["(3-88)","(3-89)","(3-90)","(3-91)","(3-92)"], ...
+    {t("test_eq_3_87.m")}, {"test_eq_3_87/testGammaHandOracleN4"}, ...
+    "ice-sd-ibdfe", "qpsk", [], "OPEN", ...
     {"test_eq_3_87/testGammaHandOracleN4"}, ...
     {"test_eq_3_87/testUnitGainInvariantRandom"}, ...
     {}, {"test_eq_3_87/testProductionIbdFeTrace"});
-a(end + 1) = def("ch2-dfe", ["2-6","2-9","2-10","2-11"], ...
+a(end + 1) = def("ch2-dfe", ["(2-6)","(2-9)","(2-10)","(2-11)"], ...
     {t("test_book_formulas_ch2.m")}, ...
-    "test_book_formulas_ch2", "dfe", "qpsk", [], "OPEN", ...
+    {"test_book_formulas_ch2/testEq210_211WienerMse"}, ...
+    "dfe", "qpsk", [], "OPEN", ...
     {"test_book_formulas_ch2/testEq210_211WienerMse"}, {}, {}, {});
-a(end + 1) = def("ch2-lms-dfe", ["2-12","2-13","2-14","2-15"], ...
+a(end + 1) = def("ch2-lms-dfe", ["(2-12)","(2-13)","(2-14)","(2-15)"], ...
     {t("test_book_formulas_ch2.m")}, ...
-    "test_book_formulas_ch2", "lms-dfe", "qpsk", [], "OPEN", ...
+    {"test_book_formulas_ch2/testEq212_214LmsUpdate"}, ...
+    "lms-dfe", "qpsk", [], "OPEN", ...
     {"test_book_formulas_ch2/testEq213LmsGradient"}, {}, {}, ...
     {"test_book_formulas_ch2/testEq212_214LmsUpdate"});
-a(end + 1) = def("ch2-dpll-dfe", ["2-27","2-30","2-34","2-36","2-37"], ...
-    {t("test_eq_2_36.m")}, "test_eq_2_36", "dpll-dfe", "qpsk", [], "OPEN", ...
+a(end + 1) = def("ch2-dpll-dfe", ["(2-27)","(2-30)","(2-34)","(2-36)","(2-37)"], ...
+    {t("test_eq_2_36.m")}, {"test_eq_2_36/testPhaseDetectorHandOracle"}, ...
+    "dpll-dfe", "qpsk", [], "OPEN", ...
     {"test_eq_2_36/testPhaseDetectorHandOracle"}, {}, ...
     {"test_eq_2_36/testLoopConvergesToRotation"}, ...
     {"test_eq_2_36/testLoopConvergesToRotation"});
-a(end + 1) = def("ch2-ptr-dfe", ["2-47","2-48","2-49"], ...
-    {t("test_eq_2_47.m")}, "test_eq_2_47", "ptr-dfe", "qpsk", [], "OPEN", ...
+a(end + 1) = def("ch2-ptr-dfe", ["(2-47)","(2-48)","(2-49)"], ...
+    {t("test_eq_2_47.m")}, {"test_eq_2_47/testLinearPtrHandOracle"}, ...
+    "ptr-dfe", "qpsk", [], "OPEN", ...
     {"test_eq_2_47/testLinearPtrHandOracle"}, ...
     {"test_eq_2_47/testLinearPtrHandOracle"}, ...
     {"test_eq_2_47/testIdentityChannelAlignment"}, {});
-a(end + 1) = def("ch4-bcjr", ["4-16","4-18","4-19","4-20","4-21","4-22"], ...
+a(end + 1) = def("ch4-bcjr", ["(4-16)","(4-18)","(4-19)","(4-20)","(4-21)","(4-22)"], ...
     {t("test_book_conventions.m")}, ...
-    "test_book_conventions", "td-turbo", "turbo", [], "OPEN", ...
+    {"test_book_conventions/testLlrSignConvention"}, ...
+    "td-turbo", "turbo", [], "OPEN", ...
     {}, {"test_book_conventions/testLlrSignConvention"}, ...
     {}, {"test_eq_4_feedback/testAlphaOneFeedbackEqualsCandidate"});
-a(end + 1) = def("ch4-convcode", ["4-1","4-2"], ...
-    {t("test_eq_4_convcode.m")}, "test_eq_4_convcode", ...
+a(end + 1) = def("ch4-convcode", ["(4-1)","(4-2)"], ...
+    {t("test_eq_4_convcode.m")}, ...
+    {"test_eq_4_convcode/test171133EncoderMatchesTrellis"}, ...
     "td-turbo", "turbo", [], "OPEN", ...
     {"test_eq_4_convcode/test171133EncoderMatchesTrellis"}, ...
     {"test_eq_4_convcode/testBookCodeRates"}, ...
     {"test_eq_4_convcode/test75TrellisMatchesEncoder"}, ...
     {"test_eq_4_convcode/test75TrellisMatchesEncoder"});
-a(end + 1) = def("ch4-fblms", ["4-64","4-65","4-66","4-67","4-68","4-69"], ...
+a(end + 1) = def("ch4-fblms", ["(4-64)","(4-65)","(4-66)","(4-67)","(4-68)","(4-69)"], ...
     {t("test_fblms_and_curve_benchmark.m")}, ...
-    "test_fblms_and_curve_benchmark", "fblms", "turbo", [], "OPEN", ...
+    {"test_fblms_and_curve_benchmark/testFblmsMatchesLinearConvolutionNoiseless"}, ...
+    "fblms", "turbo", [], "OPEN", ...
     {"test_fblms_and_curve_benchmark/testFblmsMatchesLinearConvolutionNoiseless"}, ...
     {}, ...
     {"test_fblms_and_curve_benchmark/testFblmsPartialTrainingBlockUsesReference"}, ...
     {"test_fblms_and_curve_benchmark/testFblmsQpskDecisionDirected"});
-a(end + 1) = def("ch4-fdda-teq", ["4-74","4-75","4-76","4-77..4-82"], ...
+a(end + 1) = def("ch4-fdda-teq", ["(4-74)","(4-75)","(4-76)","(4-77~4-82)"], ...
     {t("test_fblms_and_curve_benchmark.m")}, ...
-    "test_fblms_and_curve_benchmark", "fdda-teq", "turbo", ...
-    ["gamma_f/gamma_b unrecovered; 4-77..4-82 scan missing"], "PARAM-UNRECOVERABLE", ...
+    {"test_fblms_and_curve_benchmark/testFddaFeedbackAndOuterLoop"}, ...
+    "fdda-teq", "turbo", ["gamma_f/gamma_b unrecovered"], ...
+    "PARAM-UNRECOVERABLE", ...
     {"test_fblms_and_curve_benchmark/testFddaFeedbackAndOuterLoop"}, ...
     {"test_fblms_and_curve_benchmark/testFddaWrapperDefaultDenominatorIsEquation"}, ...
     {"test_fblms_and_curve_benchmark/testFddaFeedbackAndOuterLoop"}, ...
     {"test_fblms_and_curve_benchmark/testFddaFeedbackAndOuterLoop"});
-a(end + 1) = def("ch5-cck-codebook", ["5-8","5-9","5-10"], ...
+a(end + 1) = def("ch5-cck-codebook", ["(5-8)","(5-9)","(5-10)"], ...
     {t("test_audit_round3_fixes.m")}, ...
-    "test_audit_round3_fixes", "cck-mfb", "cck", [], "OPEN", ...
-    {}, {}, {}, {});
-a(end + 1) = def("ch5-soft-cck", ["5-60","5-61","5-71"], ...
+    {"test_audit_round3_fixes/testCckBitLevelBerCounting"}, ...
+    "cck-mfb", "cck", [], "OPEN", {}, {}, {}, {});
+a(end + 1) = def("ch5-soft-cck", ["(5-60)","(5-61)","(5-71)"], ...
     {t("test_book_conventions.m")}, ...
-    "test_book_conventions", "cck-fde", "cck", [], "OPEN", ...
+    {"test_book_conventions/testLlrSignConvention"}, ...
+    "cck-fde", "cck", [], "OPEN", ...
     {}, {"test_book_conventions/testLlrSignConvention"}, {}, {});
-a(end + 1) = def("ch5-bidfe-tr", ["5-46","5-47","5-57"], ...
+a(end + 1) = def("ch5-bidfe-tr", ["(5-46)","(5-47)","(5-57)"], ...
     {t("test_audit_round3_fixes.m")}, ...
-    "test_audit_round3_fixes", "cck-bidfe", "cck", [], "OPEN", ...
-    {}, {}, {}, {});
-a(end + 1) = def("ch6-csk", ["6-5","6-6","6-15"], ...
+    {"test_audit_round3_fixes/testPtrEquivalentChannelHasNoCrossTerms"}, ...
+    "cck-bidfe", "cck", [], "OPEN", {}, {}, {}, {});
+a(end + 1) = def("ch6-csk", ["(6-5)","(6-6)","(6-15)"], ...
     {t("test_book_formulas_ch6.m")}, ...
-    "test_book_formulas_ch6", "csk-matched-filter", "csk", [], "OPEN", ...
     {"test_book_formulas_ch6/testEq64_65ShiftOrthogonality"}, ...
-    {"test_book_formulas_ch6/testEq67CorrelationDetector"}, ...
+    "csk-matched-filter", "csk", [], "OPEN", ...
+    {"test_book_formulas_ch6/testEq64_65ShiftOrthogonality"}, ...
+    {"test_book_formulas_ch6/testEq69DemodCorrelation"}, ...
     {}, {"test_book_formulas_ch6/testEq610_612ShiftEstimate"});
-a(end + 1) = def("ch6-ese-idma", ["6-21","6-22","6-23","6-64","6-65"], ...
+a(end + 1) = def("ch6-ese-idma", ...
+    ["(6-21)","(6-22)","(6-23)","(6-26~6-37)","(6-64)","(6-65)"], ...
     {t("test_book_formulas_ch6.m")}, ...
-    "test_book_formulas_ch6", "csk-ese", "csk", ...
-    ["6-26..6-37 scan missing"], "OPEN", ...
+    {"test_book_formulas_ch6/testEq641_642Moments"}, ...
+    "csk-ese", "csk", [], "OPEN", ...
     {"test_book_formulas_ch6/testEq641_642Moments"}, ...
     {"test_book_formulas_ch6/testEq641_642Moments"}, ...
     {}, {});
@@ -295,13 +294,13 @@ for k = 1:numel(a)
 end
 end
 
-function a = def(id, equations, formulaFiles, oracleNames, ...
+function a = def(id, equations, formulaFiles, oracleTests, ...
     moduleId, scenario, paramsUnrecoverable, figureStatus, ...
     variableTests, normalizationTests, initialTests, iterationTests)
 a.id = id;
 a.equations = equations;
 a.formulaFiles = formulaFiles;
-a.oracleNames = oracleNames;
+a.oracleTests = oracleTests;
 a.moduleId = moduleId;
 a.scenario = scenario;
 a.paramsUnrecoverable = paramsUnrecoverable;
@@ -314,34 +313,21 @@ end
 
 function g = trace_coverage(a, statusMap)
 % Gate 1: every claimed equation must be registered with an admissible
-% formula status (BOOK-EXACT or ALG-EQUIV).  OCR-UNCERTAIN, SCAN-MISSING,
-% EXECUTABLE-UNIMPLEMENTED and ENGINEERING rows all fail the gate.
+% formula status (BOOK-EXACT or ALG-EQUIV only).
 g = "OPEN";
-for eq = a.equations
-    if contains(eq, "..")
-        parts = split(eq, "..");
-        ids = book_acceptance.parse_equation_ids( ...
-            "(" + parts(1) + "~" + parts(2) + ")");
-    else
-        ids = book_acceptance.parse_equation_ids("(" + eq + ")");
+for id = expand_claimed_equations(a.equations)
+    if ~isKey(statusMap, char(id))
+        return;
     end
-    for id = ids
-        if ~isKey(statusMap, char(id))
-            return;
-        end
-        fs = statusMap(char(id)).FormulaStatus;
-        if ~(strcmp(fs, "BOOK-EXACT") || strcmp(fs, "ALG-EQUIV"))
-            return;
-        end
+    fs = statusMap(char(id)).FormulaStatus;
+    if ~(strcmp(fs, "BOOK-EXACT") || strcmp(fs, "ALG-EQUIV"))
+        return;
     end
 end
 g = "PASS";
 end
 
 function g = run_evidence(tests, papersDir)
-% Evidence-backed gates 2-5, bound to SPECIFIC test cases
-% ("file/testName").  Missing evidence stays CURATED-PASS; a failing
-% test case is FAIL.
 g = "CURATED-PASS";
 if isempty(tests)
     return;
@@ -397,8 +383,6 @@ end
 end
 
 function g = run_production_smoke(a)
-% A production correctness exception is FAIL (evidence exists and fails);
-% only the absent C harness is OPEN.
 try
     result = run_unified_equalizer(struct("equalizers", a.moduleId, ...
         "scenario", a.scenario, "frameCount", 1, "snrDb", 18, ...
@@ -447,8 +431,6 @@ end
 end
 
 function [g, detail] = scan_hidden_engineering(a, papersDir)
-% Gate 12: dependency-closure scan; forbidden hits are FAIL (evidence
-% exists and the violation is explicit).
 g = "OPEN";
 detail = struct();
 eqDir = fullfile(papersDir, "modules", "+scfde", "+equalizers");
@@ -508,40 +490,14 @@ else
 end
 end
 
-function g = run_oracle_tests(a)
-g = "OPEN";
-if isempty(a.oracleNames)
-    return;
-end
-try
-    files = cellstr(fullfile(fileparts(mfilename("fullpath")), "tests", ...
-        a.oracleNames + ".m"));
-    r = runtests(files);
-    if isempty(r)
-        g = "OPEN";
-    elseif any([r.Failed])
-        g = "FAIL";
-    elseif any([r.Incomplete])
-        g = "OPEN";
-    else
-        g = "PASS";
-    end
-catch
-    g = "OPEN";
-end
-end
-
 function coverage = audit_global_formula_coverage(papersDir)
-% Global executable-formula coverage: parse EVERY trace row with the
-% single parser; count expanded equation IDs per FormulaStatus and
-% ParameterStatus.  Hard gate: scan-missing, OCR-uncertain,
-% executable-unimplemented and ENGINEERING must all be zero for
-% "six-chapter complete".
 coverage = struct("total", 0, "bookExact", 0, "algEquiv", 0, ...
-    "scanMissing", 0, "ocrUncertain", 0, ...
+    "scanMissing", 0, "ocrUncertain", 0, "sourceInconsistent", 0, ...
     "engineering", 0, "theoryOnly", 0, "paramUnrecoverable", 0, ...
-    "unknown", 0);
+    "unknown", 0, "duplicateIds", 0, ...
+    "missingImplementationRefs", 0, "invalidImplementationRefs", 0);
 coverage.unimplemented = {};
+seen = containers.Map("KeyType", "char", "ValueType", "logical");
 try
     text = fileread(fullfile(fileparts(papersDir), "FORMULA_TRACEABILITY.md"));
 catch
@@ -555,7 +511,7 @@ for i = 1:numel(lines)
     end
     cells = strtrim(split(line, "|"));
     cells(cells == "") = [];
-    if numel(cells) < 4
+    if numel(cells) < 6
         continue;
     end
     ids = book_acceptance.parse_equation_ids(cells(1));
@@ -564,6 +520,12 @@ for i = 1:numel(lines)
     end
     fs = cells(end - 1);
     ps = cells(end);
+    prod = "—";
+    oracle = "—";
+    if numel(cells) >= 6
+        prod = cells(5);
+        oracle = cells(6);
+    end
     n = numel(ids);
     coverage.total = coverage.total + n;
     if fs == "SCAN-MISSING"
@@ -572,6 +534,8 @@ for i = 1:numel(lines)
         coverage.theoryOnly = coverage.theoryOnly + n;
     elseif fs == "OCR-UNCERTAIN"
         coverage.ocrUncertain = coverage.ocrUncertain + n;
+    elseif fs == "SOURCE-INCONSISTENT"
+        coverage.sourceInconsistent = coverage.sourceInconsistent + n;
     elseif fs == "ENGINEERING"
         coverage.engineering = coverage.engineering + n;
     elseif fs == "EXECUTABLE-UNIMPLEMENTED"
@@ -588,6 +552,115 @@ for i = 1:numel(lines)
     if ps == "PARAM-UNRECOVERABLE"
         coverage.paramUnrecoverable = coverage.paramUnrecoverable + n;
     end
+    % trace integrity: duplicate IDs, and implementation references for
+    % BOOK/ALG rows must exist
+    if any(fs == ["BOOK-EXACT", "ALG-EQUIV"])
+        if prod == "—" && oracle == "—"
+            coverage.missingImplementationRefs = ...
+                coverage.missingImplementationRefs + n;
+        end
+        for ref = [prod, oracle]
+            if ref == "—"
+                continue;
+            end
+            st = check_ref_exists(ref, papersDir);
+            if st == 0
+                fprintf("BAD %s ref=%s\\n", cells(1), ref);
+                coverage.invalidImplementationRefs = ...
+                    coverage.invalidImplementationRefs + n;
+            elseif st == -1
+                coverage.missingImplementationRefs = ...
+                    coverage.missingImplementationRefs + n;
+            end
+        end
+    end
+    for id = ids
+        if isKey(seen, char(id))
+            coverage.duplicateIds = coverage.duplicateIds + 1;
+        else
+            seen(char(id)) = true;
+        end
+    end
+end
+coverage.traceIntegrity = coverage.unknown == 0 && ...
+    coverage.duplicateIds == 0 && ...
+    coverage.missingImplementationRefs == 0 && ...
+    coverage.invalidImplementationRefs == 0;
+coverage.hardClosed = coverage.traceIntegrity && ...
+    coverage.scanMissing == 0 && coverage.ocrUncertain == 0 && ...
+    isempty(coverage.unimplemented) && coverage.engineering == 0 && ...
+    coverage.sourceInconsistent == 0;
+end
+
+function st = check_ref_exists(ref, papersDir)
+% 1 = valid implementation reference, 0 = invalid (name does not
+% resolve), -1 = descriptive text / parameter reference (no function
+% reference, counted as a missing implementation reference).
+st = -1;
+try
+    r = char(ref);
+    r = regexprep(r, '^`|`$', '');
+    r = regexprep(r, '[（(].*$', '');
+    r = strtrim(r);
+    if isempty(r)
+        return;
+    end
+    if strcmp(r, "BOOK_CONVENTIONS")
+        st = 1;
+        return;
+    end
+    if startsWith(r, "cfg.")
+        st = -1;                       % parameter reference
+        return;
+    end
+    if any(r < 128 == false) || any(r == '/')
+        % Chinese descriptive text or a slash-separated multi-function
+        % list: check each slash-separated token as a function name
+        parts = strsplit(r, {'/', '、'});
+        resolved = false;
+        for pt = parts
+            p = strtrim(pt{1});
+            if isempty(p)
+                continue;
+            end
+            if ~isempty(which(p)) || ...
+                    isfile(fullfile(papersDir, "modules", "+scfde", ...
+                    "+equalizers", p + ".m")) || ...
+                    isfile(fullfile(papersDir, "modules", "+scfde", ...
+                    "+book_formulas", p + ".m"))
+                resolved = true;
+                break;
+            end
+        end
+        if resolved
+            st = 1;
+        else
+            st = -1;                   % descriptive text
+        end
+        return;
+    end
+    if ~isempty(which(r))
+        st = 1;
+        return;
+    end
+    stem = r;
+    if endsWith(stem, ".m")
+        stem = extractBefore(stem, ".m");
+    end
+    cands = [fullfile(papersDir, "modules", "+scfde", "+equalizers", ...
+        stem + ".m"), fullfile(papersDir, "modules", "+scfde", ...
+        "+book_formulas", stem + ".m")];
+    if isfile(cands(1)) || isfile(cands(2))
+        st = 1;
+        return;
+    end
+    if endsWith(r, ".m") || contains(r, "\") || contains(r, "/")
+        st = 0;
+    else
+        st = -1;                       % field/descriptive reference
+    end
+catch
+    st = 0;
 end
 end
 
@@ -611,8 +684,6 @@ nFailGates = sum(allGates(:) == "FAIL");
 nFailAlgos = sum(arrayfun(@(r) any(r.gates == "FAIL"), rows));
 verified = coverage.bookExact + coverage.algEquiv;
 closureDenom = coverage.total - coverage.theoryOnly;
-hardClosed = coverage.scanMissing == 0 && coverage.ocrUncertain == 0 && ...
-    isempty(coverage.unimplemented) && coverage.engineering == 0;
 
 fprintf("\n=== FORMULA COVERAGE ===\n");
 fprintf("TOTAL EQUATION IDS:          %d\n", coverage.total);
@@ -621,6 +692,7 @@ fprintf("ALG-EQUIV:                   %d\n", coverage.algEquiv);
 fprintf("VERIFIED FORMULAS:           %d\n", verified);
 fprintf("SCAN-MISSING:                %d\n", coverage.scanMissing);
 fprintf("OCR-UNCERTAIN:               %d\n", coverage.ocrUncertain);
+fprintf("SOURCE-INCONSISTENT:         %d\n", coverage.sourceInconsistent);
 fprintf("EXECUTABLE-UNIMPLEMENTED:    %d\n", numel(coverage.unimplemented));
 fprintf("THEORY-ONLY:                 %d\n", coverage.theoryOnly);
 fprintf("ENGINEERING (book path):     %d\n", coverage.engineering);
@@ -631,9 +703,14 @@ if ~isempty(coverage.unimplemented)
         fprintf("    unimplemented %s\n", names(ui));
     end
 end
+fprintf("TRACE INTEGRITY (unknown=%d, dup=%d, missingRef=%d, badRef=%d): %d\n", ...
+    coverage.unknown, coverage.duplicateIds, ...
+    coverage.missingImplementationRefs, coverage.invalidImplementationRefs, ...
+    coverage.traceIntegrity);
 fprintf("EXECUTABLE FORMULA CLOSURE:  %d/%d (%.1f%%)\n", ...
     verified, closureDenom, 100 * verified / max(closureDenom, 1));
-fprintf("HARD CLOSURE (scan=0, ocr=0, unimpl=0, eng=0): %d\n", hardClosed);
+fprintf("HARD CLOSURE (integrity+scan+ocr+source+unimpl+eng=0): %d\n", ...
+    coverage.hardClosed);
 
 fprintf("\n=== ALGORITHM ACCEPTANCE SUMMARY ===\n");
 fprintf("MATLAB HARD PASS:            %d/%d\n", hard, numel(rows));
@@ -644,7 +721,8 @@ fprintf("FAILED ALGORITHMS:           %d\n", nFailAlgos);
 
 summary = struct("algorithms", numel(rows), "matlabHard", hard, ...
     "matlabReview", hard + curated, "totalIds", coverage.total, ...
-    "verifiedFormulas", verified, "hardClosed", hardClosed, ...
+    "verifiedFormulas", verified, "hardClosed", coverage.hardClosed, ...
+    "traceIntegrity", coverage.traceIntegrity, ...
     "failedGates", nFailGates, "failedAlgorithms", nFailAlgos, ...
     "executableUnimplemented", coverage.unimplemented);
 end
