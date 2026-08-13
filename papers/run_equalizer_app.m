@@ -134,6 +134,7 @@ function onRun(~, ~)
     try
         runSweep(ids, snrs, framesEdit.Value, chOpts, v);
     catch err
+        fprintf("=== APP 运行失败 ===\n%s\n", getReport(err, "extended"));
         uialert(fig, getReport(err, "basic"), "运行失败");
     end
     runBtn.Text = "运行仿真";
@@ -178,14 +179,16 @@ function runSweep(ids, snrs, frames, chOpts, labels)
             end
         end
         for k = 1:numel(scIds)
-            berTable(end + 1, :) = {scIds(k), sc, sprintf("%.2g | ", ber(k, :))}; %#ok<AGROW>
+            berTable(end + 1, :) = {scIds(k), sc, ...
+                strjoin(arrayfun(@(b) sprintf("%.2g", b), ber(k, :), ...
+                "UniformOutput", false), ", ")}; %#ok<AGROW>
         end
     end
     hold(ax, "off");
     legend(ax, "Location", "southwest", "Interpreter", "none", "FontSize", 9);
     title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s)", frames, chOpts.channelMode));
     tbl.Data = berTable;
-    tbl.ColumnName = [{"均衡器", "场景"}, cellstr(strcat(string(snrs), " dB"))];
+    tbl.ColumnName = {"均衡器", "场景", "BER（各 SNR 点）"};
     outDir = fullfile(rootDir, "results", "ber_snr_curves");
     if ~exist(outDir, "dir")
         mkdir(outDir);
