@@ -189,37 +189,42 @@ function stepOnce(~, ~)
     sc = st.scs(st.curS);
     scIds = registry.id(ismember(registry.id, st.ids) & ...
         registry.scenario == sc);
-    ber = nan(numel(scIds), numel(st.snrs));
-    for i = st.curI:numel(st.snrs)
-        selInfo.Text = sprintf("运行中… 已完成 %d/%d 个 SNR 点", st.done, st.total);
-        drawnow;
-        if strcmp(st.chOpts.channelMode, "bellhop")
-            r = run_unified_equalizer(struct("equalizers", scIds, ...
-                "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
-                "makePlot", false, "channelMode", "bellhop", ...
-                "bellhopOptions", rmfield(st.chOpts, "channelMode")));
-        else
-            r = run_unified_equalizer(struct("equalizers", scIds, ...
-                "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
-                "makePlot", false, "pathDelays", st.chOpts.pathDelays, ...
-                "pathGains", st.chOpts.pathGains, "channelMode", "synthetic"));
-        end
-        ber(:, i) = r.ber;
-        st.done = st.done + 1;
+    if st.curI == 1
+        st.ber = nan(numel(scIds), numel(st.snrs));
     end
-    for k = 1:numel(scIds)
-        semilogy(ax, st.snrs, max(ber(k, :), 1e-6), "o-", ...
-            "LineWidth", 1.5, "DisplayName", scIds(k));
-        st.berTable(end + 1, :) = {char(scIds(k)), char(sc), ...
-            char(strjoin(compose("%.2g", ber(k, :)), ", "))}; %#ok<AGROW>
-    end
+    i = st.curI;
+    selInfo.Text = sprintf("运行中… 已完成 %d/%d 个 SNR 点（当前 %s %d dB）", ...
+        st.done, st.total, sc, st.snrs(i));
     drawnow;
-    if st.curS == numel(st.scs)
-        finalizeSweep("完成");
-        return;
+    if strcmp(st.chOpts.channelMode, "bellhop")
+        r = run_unified_equalizer(struct("equalizers", scIds, ...
+            "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
+            "makePlot", false, "channelMode", "bellhop", ...
+            "bellhopOptions", rmfield(st.chOpts, "channelMode")));
+    else
+        r = run_unified_equalizer(struct("equalizers", scIds, ...
+            "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
+            "makePlot", false, "pathDelays", st.chOpts.pathDelays, ...
+            "pathGains", st.chOpts.pathGains, "channelMode", "synthetic"));
     end
-    st.curS = st.curS + 1;
-    st.curI = 1;
+    st.ber(:, i) = r.ber;
+    st.done = st.done + 1;
+    st.curI = st.curI + 1;
+    if st.curI > numel(st.snrs)
+        for k = 1:numel(scIds)
+            semilogy(ax, st.snrs, max(st.ber(k, :), 1e-6), "o-", ...
+                "LineWidth", 1.5, "DisplayName", scIds(k));
+            st.berTable(end + 1, :) = {char(scIds(k)), char(sc), ...
+                char(strjoin(compose("%.2g", st.ber(k, :)), ", "))}; %#ok<AGROW>
+        end
+        drawnow;
+        if st.curS == numel(st.scs)
+            finalizeSweep("完成");
+            return;
+        end
+        st.curS = st.curS + 1;
+        st.curI = 1;
+    end
     start(sweepTimer);
 end
 
