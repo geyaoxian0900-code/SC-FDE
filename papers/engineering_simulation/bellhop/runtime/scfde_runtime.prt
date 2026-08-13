@@ -20,7 +20,7 @@
 
                                  ( RMS roughness =   0.00     )
      ACOUSTO-ELASTIC half-space
-    100.00      1500.00      0.00     1.10       0.2000    0.0000
+    100.00      1700.00      0.00     1.80       0.8000    0.0000
 
  __________________________________________________________________________
 
@@ -40,7 +40,7 @@
 
     Number of Receiver r-coordinates, Rr =            1
     Receiver r-coordinates, Rr (km)
-                 15.0000    
+                 1.00000    
 
 
  Arrivals calculation, ASCII  file output
@@ -62,7 +62,7 @@
  Step length,       deltas =   0.000     m
 
  Maximum ray depth, Box%z  =   120.0     m
- Maximum ray range, Box%r  =   16.50    km
+ Maximum ray range, Box%r  =   1.100    km
  No beam shift in effect
 
 

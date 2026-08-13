@@ -81,6 +81,16 @@ runBtn = uibutton(midGrid, "push", "Text", "运行仿真", ...
     "FontColor", "w", "ButtonPushedFcn", @onRun);
 resetBtn = uibutton(midGrid, "push", "Text", "恢复默认参数", ...
     "ButtonPushedFcn", @onReset);
+cancelBtn = uibutton(midGrid, "push", "Text", "取消", ...
+    "Enable", "off", "ButtonPushedFcn", @onCancel);
+
+sweepTimer = timer("TimerFcn", @stepOnce, "ExecutionMode", "singleShot", ...
+    "StartDelay", 0.02);
+
+function onCancel(~, ~)
+    cancelRequested = true;
+    selInfo.Text = "正在取消…";
+end
 
 function onReset(~, ~)
     delaysEdit.Value = "0, 1, 3";
@@ -148,76 +158,94 @@ function onRun(~, ~)
         chOpts.bellhopRangeKm = rangeEdit.Value;
         chOpts.bellhopSediment = sedimentDrop.Value;
     end
-    runBtn.Text = "运行中…";
-    runBtn.Enable = "off";
-    selInfo.Text = "运行中…";
-    drawnow;
-    try
-        runSweep(ids, snrs, framesEdit.Value, chOpts, v);
-    catch err
-        fprintf("=== APP 运行失败 ===\n%s\n", getReport(err, "extended"));
-        uialert(fig, getReport(err, "basic"), "运行失败");
-    end
-    runBtn.Text = "运行仿真";
-    runBtn.Enable = "on";
-end
-
-function runSweep(ids, snrs, frames, chOpts, labels)
-    scs = unique(registry.scenario(ismember(registry.id, ids)), "stable");
+    st.ids = ids;
+    st.snrs = snrs;
+    st.frames = framesEdit.Value;
+    st.chOpts = chOpts;
+    st.scs = unique(registry.scenario(ismember(registry.id, ids)), "stable");
+    st.curS = 1;
+    st.curI = 1;
+    st.done = 0;
+    st.total = numel(st.scs) * numel(snrs);
+    st.berTable = {};
+    cancelRequested = false;
     cla(ax);
     legend(ax, "off");
     hold(ax, "on");
-    berTable = {};
-    totalPoints = numel(scs) * numel(snrs);
-    donePoints = 0;
-    for s = 1:numel(scs)
-        sc = scs(s);
-        scIds = registry.id(ismember(registry.id, ids) & registry.scenario == sc);
-        ber = nan(numel(scIds), numel(snrs));
-        for i = 1:numel(snrs)
-            selInfo.Text = sprintf("运行中… 已完成 %d/%d 个 SNR 点", donePoints, totalPoints);
-            drawnow;
-            if strcmp(chOpts.channelMode, "bellhop")
-                r = run_unified_equalizer(struct("equalizers", scIds, ...
-                    "scenario", sc, "snrDb", snrs(i), "frameCount", frames, ...
-                    "makePlot", false, "channelMode", "bellhop", ...
-                    "bellhopOptions", rmfield(chOpts, "channelMode")));
-            else
-                r = run_unified_equalizer(struct("equalizers", scIds, ...
-                    "scenario", sc, "snrDb", snrs(i), "frameCount", frames, ...
-                    "makePlot", false, "pathDelays", chOpts.pathDelays, ...
-                    "pathGains", chOpts.pathGains, "channelMode", "synthetic"));
-            end
-            ber(:, i) = r.ber;
-            donePoints = donePoints + 1;
-        end
-        for k = 1:numel(scIds)
-            ok = ber(k, :) > 0;
-            semilogy(ax, snrs, max(ber(k, :), 1e-6), "o-", ...
-                "LineWidth", 1.5, "DisplayName", scIds(k));
-            if any(ok)
-                semilogy(ax, snrs(ok), ber(k, ok), "o", "MarkerFaceColor", "auto");
-            end
-        end
-        for k = 1:numel(scIds)
-            berTable(end + 1, :) = {char(scIds(k)), char(sc), ...
-                char(strjoin(compose("%.2g", ber(k, :)), ", "))}; %#ok<AGROW>
-        end
+    title(ax, "BER vs SNR");
+    runBtn.Text = "运行中…";
+    runBtn.Enable = "off";
+    cancelBtn.Enable = "on";
+    selInfo.Text = "运行中…";
+    drawnow;
+    start(sweepTimer);
+end
+
+function stepOnce(~, ~)
+    if cancelRequested
+        finalizeSweep("已取消");
+        return;
     end
+    sc = st.scs(st.curS);
+    scIds = registry.id(ismember(registry.id, st.ids) & ...
+        registry.scenario == sc);
+    ber = nan(numel(scIds), numel(st.snrs));
+    for i = st.curI:numel(st.snrs)
+        selInfo.Text = sprintf("运行中… 已完成 %d/%d 个 SNR 点", st.done, st.total);
+        drawnow;
+        if strcmp(st.chOpts.channelMode, "bellhop")
+            r = run_unified_equalizer(struct("equalizers", scIds, ...
+                "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
+                "makePlot", false, "channelMode", "bellhop", ...
+                "bellhopOptions", rmfield(st.chOpts, "channelMode")));
+        else
+            r = run_unified_equalizer(struct("equalizers", scIds, ...
+                "scenario", sc, "snrDb", st.snrs(i), "frameCount", st.frames, ...
+                "makePlot", false, "pathDelays", st.chOpts.pathDelays, ...
+                "pathGains", st.chOpts.pathGains, "channelMode", "synthetic"));
+        end
+        ber(:, i) = r.ber;
+        st.done = st.done + 1;
+    end
+    for k = 1:numel(scIds)
+        semilogy(ax, st.snrs, max(ber(k, :), 1e-6), "o-", ...
+            "LineWidth", 1.5, "DisplayName", scIds(k));
+        st.berTable(end + 1, :) = {char(scIds(k)), char(sc), ...
+            char(strjoin(compose("%.2g", ber(k, :)), ", "))}; %#ok<AGROW>
+    end
+    drawnow;
+    if st.curS == numel(st.scs)
+        finalizeSweep("完成");
+        return;
+    end
+    st.curS = st.curS + 1;
+    st.curI = 1;
+    start(sweepTimer);
+end
+
+function finalizeSweep(msg)
+    stop(sweepTimer);
     hold(ax, "off");
     legend(ax, "Location", "southwest", "Interpreter", "none", "FontSize", 9);
-    title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s)", frames, chOpts.channelMode));
-    tbl.Data = berTable;
+    title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s) - %s", ...
+        st.frames, st.chOpts.channelMode, msg));
+    tbl.Data = st.berTable;
     tbl.ColumnName = {"均衡器", "场景", "BER（各 SNR 点）"};
-    outDir = fullfile(rootDir, "results", "ber_snr_curves");
-    if ~exist(outDir, "dir")
-        mkdir(outDir);
+    if ~strcmp(msg, "已取消")
+        outDir = fullfile(rootDir, "results", "ber_snr_curves");
+        if ~exist(outDir, "dir")
+            mkdir(outDir);
+        end
+        name = sprintf("app_ber_snr_%s.png", ...
+            strrep(strjoin(st.ids, "_"), "-", "_"));
+        exportgraphics(ax, fullfile(outDir, name), "Resolution", 200);
+        fprintf("saved: %s\n", fullfile(outDir, name));
     end
-    name = sprintf("app_ber_snr_%s.png", ...
-        strrep(strjoin(ids, "_"), "-", "_"));
-    exportgraphics(ax, fullfile(outDir, name), "Resolution", 200);
-    fprintf("saved: %s\n", fullfile(outDir, name));
-    selInfo.Text = sprintf("完成：%d 个均衡器 × %d 个 SNR 点", numel(ids), numel(snrs));
+    runBtn.Text = "运行仿真";
+    runBtn.Enable = "on";
+    cancelBtn.Enable = "off";
+    selInfo.Text = sprintf("%s：%d 个均衡器 × %d 个 SNR 点", msg, numel(st.ids), numel(st.snrs));
+    drawnow;
 end
 end
 
