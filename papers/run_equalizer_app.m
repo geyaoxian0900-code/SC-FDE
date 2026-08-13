@@ -129,6 +129,7 @@ function onRun(~, ~)
     end
     runBtn.Text = "运行中…";
     runBtn.Enable = "off";
+    selInfo.Text = "运行中…";
     drawnow;
     try
         runSweep(ids, snrs, framesEdit.Value, chOpts, v);
@@ -145,11 +146,15 @@ function runSweep(ids, snrs, frames, chOpts, labels)
     legend(ax, "off");
     hold(ax, "on");
     berTable = {};
+    totalPoints = numel(scs) * numel(snrs);
+    donePoints = 0;
     for s = 1:numel(scs)
         sc = scs(s);
         scIds = registry.id(ismember(registry.id, ids) & registry.scenario == sc);
         ber = nan(numel(scIds), numel(snrs));
         for i = 1:numel(snrs)
+            selInfo.Text = sprintf("运行中… 已完成 %d/%d 个 SNR 点", donePoints, totalPoints);
+            drawnow;
             if strcmp(chOpts.channelMode, "bellhop")
                 r = run_unified_equalizer(struct("equalizers", scIds, ...
                     "scenario", sc, "snrDb", snrs(i), "frameCount", frames, ...
@@ -162,6 +167,7 @@ function runSweep(ids, snrs, frames, chOpts, labels)
                     "pathGains", chOpts.pathGains, "channelMode", "synthetic"));
             end
             ber(:, i) = r.ber;
+            donePoints = donePoints + 1;
         end
         for k = 1:numel(scIds)
             ok = ber(k, :) > 0;
@@ -188,6 +194,7 @@ function runSweep(ids, snrs, frames, chOpts, labels)
         strrep(strjoin(ids, "_"), "-", "_"));
     exportgraphics(ax, fullfile(outDir, name), "Resolution", 200);
     fprintf("saved: %s\n", fullfile(outDir, name));
+    selInfo.Text = sprintf("完成：%d 个均衡器 × %d 个 SNR 点", numel(ids), numel(snrs));
 end
 end
 
