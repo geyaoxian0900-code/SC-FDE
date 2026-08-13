@@ -84,11 +84,12 @@ resetBtn = uibutton(midGrid, "push", "Text", "恢复默认参数", ...
 cancelBtn = uibutton(midGrid, "push", "Text", "取消", ...
     "Enable", "off", "ButtonPushedFcn", @onCancel);
 
-sweepTimer = timer("TimerFcn", @stepOnce, "ExecutionMode", "singleShot", ...
-    "StartDelay", 0.02);
+st = struct();   % shared sweep state across nested functions
+sweepTimer = timer("TimerFcn", @stepOnce, "ExecutionMode", "fixedRate", ...
+    "Period", 0.05, "BusyMode", "drop");
 
 function onCancel(~, ~)
-    cancelRequested = true;
+    st.cancelRequested = true;
     selInfo.Text = "正在取消…";
 end
 
@@ -141,7 +142,7 @@ function onRun(~, ~)
     if strcmp(chMode.Value, "synthetic")
         try
             chOpts.pathDelays = parseNum(delaysEdit.Value);
-            chOpts.pathGains = eval(["[" gainsEdit.Value "]"]);
+            chOpts.pathGains = eval(char(["[" gainsEdit.Value "]"]));
             if isempty(chOpts.pathDelays) || isempty(chOpts.pathGains)
                 error("empty parse result");
             end
@@ -168,7 +169,8 @@ function onRun(~, ~)
     st.done = 0;
     st.total = numel(st.scs) * numel(snrs);
     st.berTable = {};
-    cancelRequested = false;
+    st.cancelRequested = false;
+    st.idle = false;
     cla(ax);
     legend(ax, "off");
     hold(ax, "on");
@@ -192,8 +194,12 @@ function onRun(~, ~)
     end
 end
 
-function stepOnce(~, ~)
-    if cancelRequested
+function stepOnce(src, ~)
+    if ~isfield(st, "idle") || st.idle
+        return;
+    end
+    if st.cancelRequested
+        stop(src);
         finalizeSweep("已取消");
         return;
     end
@@ -230,13 +236,13 @@ function stepOnce(~, ~)
         end
         drawnow;
         if st.curS == numel(st.scs)
+            stop(sweepTimer);
             finalizeSweep("完成");
             return;
         end
         st.curS = st.curS + 1;
         st.curI = 1;
     end
-    start(sweepTimer);
 end
 
 function finalizeSweep(msg)
@@ -246,7 +252,8 @@ function finalizeSweep(msg)
         end
     catch
     end
-    cancelRequested = false;
+    st.cancelRequested = false;
+    st.idle = true;
     hold(ax, "off");
     legend(ax, "Location", "southwest", "Interpreter", "none", "FontSize", 9);
     title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s) - %s", ...
