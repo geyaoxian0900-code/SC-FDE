@@ -96,9 +96,12 @@ if doSweep
         fprintf("%-16s", ids(k));
         fprintf(" %.3g", berGrid(k, :));
         fprintf("\n");
-        % Monotonicity: allow small local jitter but the curve must
-        % strictly decrease over the span after the first point.
-        good = diff(berGrid(k, :)) <= max(berGrid(k, 1) * 0.2, 1e-3);
+        % Monotonicity: each step may rise by at most 5% of its own
+        % previous point (or an absolute 1e-3 floor); a rebound like the
+        % observed fdda-dfe-teq 8->10 dB bounce (0.000977 -> 0.0236)
+        % must fail.
+        good = diff(berGrid(k, :)) <= ...
+            max(berGrid(k, 1:end - 1) * 0.05, 1e-3);
         fprintf("    monotonic: %d/%d decreasing steps\n", sum(good), numel(snrGrid) - 1);
         assert(all(good), ...
             "%s violates BER monotonicity over the multipath sweep", ids(k));

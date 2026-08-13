@@ -301,7 +301,10 @@ switch upper(string(modulation))
         constellation = [-1, 1];
     case "QPSK"
         bitsPerSymbol = 2;
-        constellation = [-1-1j, 1-1j, -1+1j, 1+1j];
+        % Es = 1 (components +-1/sqrt(2)), matching the firmware mapper
+        % (scfde_modem.c SCFDE_INV_SQRT2) and the frozen convention
+        % m_x = 1 so the MATLAB/C golden vectors stay aligned.
+        constellation = [-1-1j, 1-1j, -1+1j, 1+1j] / sqrt(2);
     case "16QAM"
         bitsPerSymbol = 4;
         labels = 0:15;

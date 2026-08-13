@@ -725,12 +725,24 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
                 front_tail[i] = input_block[n_block + i];
             }
             scfde_fft(input_block, fft_len, 0u);
+            /* Block-LMS step normalization: mean per-bin frequency-domain
+               input energy.  The unnormalized forward FFT scales X by N,
+               so ||X||^2 over-damps the update by N and the time-domain
+               output energy (zero on the first blocks) over-drives it;
+               the mean bin energy keeps a step of the correct magnitude
+               on every block. */
+            float scalar_energy = 0.0f;
+            for (i = 0; i < fft_len; i++)
+            {
+                scalar_energy += input_block[i].re * input_block[i].re +
+                                input_block[i].im * input_block[i].im;
+            }
+            scalar_energy = scalar_energy / (float)fft_len + 0.1f;
             for (i = 0; i < fft_len; i++)
             {
                 filtered[i] = complex_multiply(weights[i], input_block[i]);
             }
             scfde_fft(filtered, fft_len, 1u);
-            float scalar_energy = 0.0f;
             for (i = 0; i < n_block; i++)
             {
                 scfde_complex_t xhat = filtered[n_f + i];
@@ -1350,7 +1362,7 @@ void scfde_equalizer_dfe(scfde_equalizer_mode_t mode,
                          uint16_t data_symbols,
                          scfde_complex_t *output)
 {
-    if ((frame == 0) || (output == 0))
+    if ((frame == 0) || (output == 0) || (frame_symbols > 192u))
     {
         return;
     }
@@ -1410,7 +1422,8 @@ void scfde_equalizer_apply_a(scfde_equalizer_mode_t mode,
     static scfde_complex_t channel_copy[SCFDE_EQUALIZER_MAX_FFT];
     uint16_t n;
 
-    if ((channel_response == 0) || (block == 0))
+    if ((channel_response == 0) || (block == 0) ||
+        (fft_size > SCFDE_EQUALIZER_MAX_FFT))
     {
         return;
     }

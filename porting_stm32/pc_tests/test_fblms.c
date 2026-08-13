@@ -8,10 +8,20 @@
  * array and never copied the retained taps back, so every block
  * restarted with zero weights and the loopback failed deterministically.
  *
- * Synthetic setup mirrors test_equalizer: a 2-tap channel with no deep
- * nulls and a known frame [64 training; 96 data; 32 UW].  With a
- * noiseless channel and enough trained symbols, FBLMS must converge and
- * decode the data segment with BER 0. */
+ * The test drives the REAL dispatch entry (scfde_equalizer_dfe with
+ * SCFDE_EQUALIZER_FBLMS) - scfde_equalizer_apply coerces unknown modes
+ * to MMSE and would silently bypass fblms_equalize().
+ *
+ * Red/green contract:
+ *   - reverting the writeback (zeroing weights after the IFFT) makes the
+ *     output identically zero and this test fail deterministically;
+ *   - the fixed code retains the constrained weights across blocks, so
+ *     the output is non-zero, finite and correlates with the
+ *     transmitted data (fixed correlation threshold).
+ * Full BER convergence depends on the firmware step-size normalization
+ * and the modem-chain signal levels, and is covered end-to-end by
+ * test_end_to_end.
+ */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,29 +44,23 @@
 
 static scfde_complex_t qpsk_map(uint16_t bits)
 {
-    /* Es = 2 constellation (components +-1), matching the current
-     * firmware modem mapper (scfde_modem.c).  The Es = 1 unification is
-     * tracked separately and this map follows the modem when it lands. */
+    /* Unit-energy QPSK (Es = 1): +/-1/sqrt(2) per component, matching
+     * the firmware mapper (scfde_modem.c) and the equalizer helpers. */
+    const float inv_sqrt2 = 0.7071067811865476f;
     scfde_complex_t s;
-    s.re = (bits & 1u) ? 1.0f : -1.0f;
-    s.im = (bits & 2u) ? 1.0f : -1.0f;
+    s.re = (bits & 1u) ? inv_sqrt2 : -inv_sqrt2;
+    s.im = (bits & 2u) ? inv_sqrt2 : -inv_sqrt2;
     return s;
-}
-
-static uint16_t qpsk_bits(scfde_complex_t v)
-{
-    uint16_t b = 0u;
-    if (v.re >= 0.0f) b |= 1u;
-    if (v.im >= 0.0f) b |= 2u;
-    return b;
 }
 
 int main(void)
 {
-    scfde_complex_t tx[N], channel[N], frame[N], output[DATA_LEN];
-    uint16_t k, n, errors = 0u;
+    scfde_complex_t tx[N], channel[N], frame[N];
+    scfde_complex_t output[DATA_LEN];
+    uint16_t k;
+    uint32_t nonzero = 0u;
 
-    /* Deterministic training/data symbols. */
+    /* Deterministic training/data symbols (Es = 1). */
     for (k = 0u; k < TRAIN_LEN; k++)
     {
         tx[k] = qpsk_map((uint16_t)(k * 7u + k / 3u));
@@ -72,46 +76,28 @@ int main(void)
         tx[TRAIN_LEN + DATA_LEN + k].im = -sinf(p);
     }
 
-    /* Frequency response of h = [0.9+0.2j, 0.4-0.3j] (2 taps). */
-    {
-        const float h0r = 0.9f, h0i = 0.2f, h1r = 0.4f, h1i = -0.3f;
-        for (k = 0u; k < N; k++)
-        {
-            float a1 = -2.0f * (float)M_PI * k / (float)N;
-            channel[k].re = h0r * cosf(0.0f) - h0i * sinf(0.0f) +
-                            h1r * cosf(a1) - h1i * sinf(a1);
-            channel[k].im = h0r * sinf(0.0f) + h0i * cosf(0.0f) +
-                            h1r * sinf(a1) + h1i * cosf(a1);
-        }
-    }
-
-    /* Noiseless circular-convolution channel (same model as the other
-     * equalizer unit tests). */
-    memcpy(frame, tx, sizeof(frame));
-    scfde_fft(frame, N, 0u);
+    /* Identity channel (h = [1]): removes frequency-selective dynamics;
+     * the regression target is the constrained-weight retention, not the
+     * step-size tuning. */
     for (k = 0u; k < N; k++)
     {
-        scfde_complex_t y;
-        y.re = frame[k].re * channel[k].re - frame[k].im * channel[k].im;
-        y.im = frame[k].re * channel[k].im + frame[k].im * channel[k].re;
-        frame[k] = y;
+        channel[k].re = (k == 0u) ? 1.0f : 0.0f;
+        channel[k].im = 0.0f;
     }
-    scfde_fft(frame, N, 1u);
+    memcpy(frame, tx, sizeof(frame));
 
-    scfde_equalizer_apply(SCFDE_EQUALIZER_FBLMS, channel, frame, 0.0f,
-                          N, DATA_LEN, tx, TRAIN_LEN);
+    memset(output, 0, sizeof(output));
 
-    /* Regression for the constrained-weight writeback: before the fix
-     * the code cleared the whole weights array after the IFFT and never
-     * copied the retained taps back, so EVERY block restarted with zero
-     * weights and the equalized output was identically zero.  After the
-     * fix the weights survive across blocks and the output is non-zero.
-     * (Exact convergence depends on the firmware step-size normalization
-     * and is covered end-to-end by test_end_to_end, which runs the same
-     * code through the full modem chain.) */
-    uint32_t nonzero = 0u;
+    /* Real FBLMS dispatch: scfde_equalizer_dfe with the FBLMS mode. */
+    scfde_equalizer_dfe(SCFDE_EQUALIZER_FBLMS, frame, N, tx, channel, 1u,
+                        0.0f, DATA_LEN, output);
+
     for (k = 0u; k < DATA_LEN; k++)
     {
+        if (!isfinite(output[k].re) || !isfinite(output[k].im))
+        {
+            CHECK(0, "FBLMS output must be finite");
+        }
         if (output[k].re != 0.0f || output[k].im != 0.0f)
         {
             nonzero++;
@@ -120,7 +106,26 @@ int main(void)
     CHECK(nonzero > 0u,
           "FBLMS constrained weights must be retained across blocks");
 
-    printf("FBLMS constrained-weight retention (nonzero output): PASS\n");
+    /* Signal-present correlation: the equalized output must carry the
+     * transmitted data (pre-fix output was identically zero, so the
+     * correlation was exactly 0). */
+    {
+        float corr = 0.0f;
+        float nout = 0.0f;
+        float nref = 0.0f;
+        for (k = 0u; k < DATA_LEN; k++)
+        {
+            scfde_complex_t e = tx[TRAIN_LEN + k];
+            corr += output[k].re * e.re + output[k].im * e.im;
+            nout += output[k].re * output[k].re + output[k].im * output[k].im;
+            nref += e.re * e.re + e.im * e.im;
+        }
+        corr = fabsf(corr) / (sqrtf(nout) * sqrtf(nref) + 1e-12f);
+        CHECK(corr > 0.1f,
+              "FBLMS output must correlate with the transmitted data");
+    }
+
+    printf("FBLMS constrained-weight retention (nonzero, correlated): PASS\n");
     printf("PASS\n");
     return 0;
 }

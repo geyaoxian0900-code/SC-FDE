@@ -59,7 +59,8 @@ fprintf("\n");
 for k = 1:numel(ids)
     fprintf("%-14s", ids(k));
     fprintf(" %.3g", berGrid(k, :));
-    good = diff(berGrid(k, :)) <= max(berGrid(k, 1) * 0.2, 1e-3);
+    good = diff(berGrid(k, :)) <= ...
+        max(berGrid(k, 1:end - 1) * 0.05, 1e-3);
     fprintf("  monotonic %d/%d\n", sum(good), numel(snrGrid) - 1);
     assert(all(good), ...
         "%s violates BER monotonicity over the AWGN sweep", ids(k));
