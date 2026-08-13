@@ -178,7 +178,18 @@ function onRun(~, ~)
     cancelBtn.Enable = "on";
     selInfo.Text = "运行中…";
     drawnow;
-    start(sweepTimer);
+    try
+        if strcmp(sweepTimer.Running, "on")
+            stop(sweepTimer);
+        end
+        start(sweepTimer);
+    catch err
+        fprintf("=== 启动失败 ===\n%s\n", getReport(err, "extended"));
+        runBtn.Text = "运行仿真";
+        runBtn.Enable = "on";
+        cancelBtn.Enable = "off";
+        uialert(fig, getReport(err, "basic"), "启动失败");
+    end
 end
 
 function stepOnce(~, ~)
@@ -229,7 +240,13 @@ function stepOnce(~, ~)
 end
 
 function finalizeSweep(msg)
-    stop(sweepTimer);
+    try
+        if strcmp(sweepTimer.Running, "on")
+            stop(sweepTimer);
+        end
+    catch
+    end
+    cancelRequested = false;
     hold(ax, "off");
     legend(ax, "Location", "southwest", "Interpreter", "none", "FontSize", 9);
     title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s) - %s", ...
