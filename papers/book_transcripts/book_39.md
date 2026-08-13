@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ override existing { override: true }
-以下是根据提供的《单载波水声通信技术》扫描图（四页拼图）的完整转写，按页码分组输出：
-
+﻿
 ### 第 167 页
 
 #### 页眉/页脚

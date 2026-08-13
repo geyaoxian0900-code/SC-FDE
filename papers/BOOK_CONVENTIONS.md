@@ -1,4 +1,4 @@
-# BOOK CONVENTIONS — 全项目数学约定（冻结）
+﻿# BOOK CONVENTIONS — 全项目数学约定（冻结）
 
 本文件锁定全项目统一数学定义。任何算法代码、测试、audit 都不得偏离。
 偏离即为 FAIL；只有本书未公开的参数可以标 PARAM-UNRECOVERABLE。
@@ -14,6 +14,8 @@ FormulaStatus（公式状态，每行一个）:
   SOURCE-INCONSISTENT       扫描件清楚，但书内不同公式互相矛盾（如 (4-22)、(6-10)）；
                             须注明 Resolution（跟随哪一式）
   TRANSCRIBED               图片存在且已完成人工转录（仍须逐式核对实现）
+  SOURCE-NORMALIZATION-REVIEW  原式已转写，但归一化约定（如 1/N 有无）与原图或
+                            实现存在标度差异，须完成推导与 golden test 后才能定案
   TRANSCRIPTION-PENDING     图片存在（book/*.png 四页拼图，覆盖 1-188），
                             但转录尚未覆盖该公式；不再存在 SCAN-MISSING
   OCR-UNCERTAIN             转写存疑，须回原图核对

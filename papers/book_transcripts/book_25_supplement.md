@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ enable debugging { debug: true }
-根据您提供的图片（第105-106页），以下是尚未覆盖的页面内容转写，包含公式 (4-70) 到 (4-73)：
+﻿根据您提供的图片（第105-106页），以下是尚未覆盖的页面内容转写，包含公式 (4-70) 到 (4-73)：
 
 ---
 

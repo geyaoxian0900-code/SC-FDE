@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ enable debugging { debug: true }
-根据提供的扫描图，以下是尚未覆盖的页面内容转写，包含 (6-16) 到 (6-19) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件。
+﻿根据提供的扫描图，以下是尚未覆盖的页面内容转写，包含 (6-16) 到 (6-19) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件。
 
 ### 6.2.2 接收处理方法
 

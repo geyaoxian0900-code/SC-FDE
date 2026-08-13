@@ -50,7 +50,7 @@ for k = 1:numel(matrix)
 
     eligible = any(a.formulaClass == ...
         ["BOOK-EXACT", "ALG-EQUIV", "OPEN-OCR", "OPEN-SOURCE", ...
-         "OPEN-SCAN", "OPEN-UNIMPLEMENTED"]);
+         "OPEN-TRANSCRIPTION", "OPEN-UNIMPLEMENTED"]);
 
     matlabRequired = [1:8, 10, 12, 13];
     matlabHard = all(g(matlabRequired) == "PASS");
@@ -93,6 +93,22 @@ for k = 1:numel(matrix)
 end
 
 coverage = audit_global_formula_coverage(papersDir);
+try
+    addpath(fullfile(papersDir, "book_transcripts"));
+    manifest = build_manifest();
+    coverage.transcriptCovered = manifest.covered;
+    coverage.transcriptPending = manifest.pending;
+    coverage.transcriptPendingCovered = 0;
+    pendingStr = string(coverage.transcriptionPendingIds);
+    for i = 1:numel(manifest.coveredIds)
+        if any(pendingStr == "(" + manifest.coveredIds(i) + ")")
+            coverage.transcriptPendingCovered = coverage.transcriptPendingCovered + 1;
+        end
+    end
+catch
+    coverage.transcriptCovered = -1;
+    coverage.transcriptPending = -1;
+end
 print_matrix(rows);
 summary = summarize(rows, matrix, coverage);
 end
@@ -491,13 +507,14 @@ end
 
 function coverage = audit_global_formula_coverage(papersDir)
 coverage = struct("total", 0, "bookExact", 0, "algEquiv", 0, ...
-    "scanMissing", 0, "transcriptionPending", 0, ...
+    "scanMissing", 0, "transcriptionPending", 0, "transcribed", 0, ...
     "ocrUncertain", 0, "sourceInconsistent", 0, ...
     "engineering", 0, "theoryOnly", 0, "paramUnrecoverable", 0, ...
     "unknown", 0, "duplicateIds", 0, "invalidColumnRows", 0, ...
     "missingImplementationRefs", 0, "invalidImplementationRefs", 0, ...
     "missingTestRefs", 0, "invalidTestRefs", 0, "evidenceClosed", 0);
 coverage.unimplemented = {};
+coverage.transcriptionPendingIds = {};
 seen = containers.Map("KeyType", "char", "ValueType", "logical");
 try
     text = fileread(fullfile(fileparts(papersDir), "FORMULA_TRACEABILITY.md"));
@@ -530,6 +547,9 @@ for i = 1:numel(lines)
     coverage.total = coverage.total + n;
     if fs == "TRANSCRIPTION-PENDING"
         coverage.transcriptionPending = coverage.transcriptionPending + n;
+        for id = ids
+            coverage.transcriptionPendingIds{end + 1} = "(" + id + ")"; %#ok<AGROW>
+        end
     elseif fs == "THEORY-ONLY"
         coverage.theoryOnly = coverage.theoryOnly + n;
     elseif fs == "OCR-UNCERTAIN"
@@ -538,6 +558,8 @@ for i = 1:numel(lines)
         coverage.sourceInconsistent = coverage.sourceInconsistent + n;
     elseif fs == "ENGINEERING"
         coverage.engineering = coverage.engineering + n;
+    elseif fs == "TRANSCRIBED"
+        coverage.transcribed = coverage.transcribed + n;
     elseif fs == "EXECUTABLE-UNIMPLEMENTED"
         for id = ids
             coverage.unimplemented{end + 1} = "(" + id + ")"; %#ok<AGROW>
@@ -741,6 +763,8 @@ fprintf("ALG-EQUIV:                   %d\n", coverage.algEquiv);
 fprintf("FORMULA STATUS VERIFIED:     %d\n", verified);
 fprintf("FORMULA EVIDENCE CLOSED:     %d\n", coverage.evidenceClosed);
 fprintf("TRANSCRIPTION-PENDING:      %d\n", coverage.transcriptionPending);
+fprintf("TRANSCRIPT COVERED (manifest): %d/%d\n", coverage.transcriptCovered, coverage.total);
+fprintf("  of which pending-in-trace, transcribed: %d\n", coverage.transcriptPendingCovered);
 fprintf("OCR-UNCERTAIN:               %d\n", coverage.ocrUncertain);
 fprintf("SOURCE-INCONSISTENT:         %d\n", coverage.sourceInconsistent);
 fprintf("EXECUTABLE-UNIMPLEMENTED:    %d\n", numel(coverage.unimplemented));

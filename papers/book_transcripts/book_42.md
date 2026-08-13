@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-根据提供的《单载波水声通信技术》扫描图，以下是每页的详细内容转写：
-
+﻿
 ### 第 177 页
 
 #### 章节标题

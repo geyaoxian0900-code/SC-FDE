@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
-好的，这是对您提供的《单载波水声通信技术》扫描图的完整转写。内容已按页码分组，并严格遵循您的要求。
-
+﻿
 ---
 
 ### 第 5 章 单载波互补码键控扩频 - 137 -

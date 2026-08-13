@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
-根据提供的《单载波水声通信技术》扫描图（四页拼图，第2章 25-28页区），以下是尚未覆盖的页面内容转写，包含 (2-38) 到 (2-46) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件：
+﻿根据提供的《单载波水声通信技术》扫描图（四页拼图，第2章 25-28页区），以下是尚未覆盖的页面内容转写，包含 (2-38) 到 (2-46) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件：
 
 ### 第26页
 

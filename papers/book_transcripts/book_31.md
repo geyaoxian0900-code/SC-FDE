@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
-好的，这是对您提供的《单载波水声通信技术》扫描图的完整转写。内容已按页码分组，并严格遵循您的要求。
-
+﻿
 ---
 
 ### 第 5 章 单载波互补均衡扩频 - 133 -

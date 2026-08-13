@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
-根据您提供的扫描图（第3章 59–62页），经核对，**公式编号 (3-47) 至 (3-63)** 中：
+﻿根据您提供的扫描图（第3章 59–62页），经核对，**公式编号 (3-47) 至 (3-63)** 中：
 
 - **(3-61)** 和 **(3-62)** 出现在第60页；
 - **(3-63)** 出现在第62页；

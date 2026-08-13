@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
-好的，这是对您提供的《单载波水声通信技术》扫描图四页内容的完整转写。
-
+﻿
 ---
 
 ### 第 5 章 单载波互补码键控扩频 - 141 -

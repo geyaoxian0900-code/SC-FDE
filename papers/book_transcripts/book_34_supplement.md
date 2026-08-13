@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ enable debugging { debug: true }
-根据您提供的扫描图（第 5 章，147-150 页），以下是尚未覆盖的页面内容转写。这些内容涵盖了从公式 (5-83) 到 (5-96) 的所有编号公式及其相关描述。
+﻿根据您提供的扫描图（第 5 章，147-150 页），以下是尚未覆盖的页面内容转写。这些内容涵盖了从公式 (5-83) 到 (5-96) 的所有编号公式及其相关描述。
 
 ### 第 147 页
 

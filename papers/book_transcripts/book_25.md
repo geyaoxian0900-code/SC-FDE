@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-以下是《单载波水声通信技术》扫描图中四个页面的完整转写内容，按页码分组输出，涵盖所有表格、公式、图题、关键句及符号定义。
-
+﻿
 ---
 
 ## **第 4 章 单载波迭代均衡 · 103**

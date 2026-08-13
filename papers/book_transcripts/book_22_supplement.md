@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-根据您提供的《单载波水声通信技术》扫描图（第4章，91-94页），经过仔细核对，**这四页内容中没有任何编号在 (4-50) 到 (4-63) 之间的公式**。
+﻿根据您提供的《单载波水声通信技术》扫描图（第4章，91-94页），经过仔细核对，**这四页内容中没有任何编号在 (4-50) 到 (4-63) 之间的公式**。
 
 具体说明如下：
 *   **第91页**：主要包含图4-9及其相关文字描述，无公式编号。

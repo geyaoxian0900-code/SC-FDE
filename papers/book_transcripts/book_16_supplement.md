@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-以下是根据您提供的《单载波水声通信技术》扫描图（第65页和第66页）的完整转录内容，严格覆盖公式 (3-66) 至 (3-80)，包含所有符号定义、归一化因子、约束条件及推导正文：
+﻿以下是根据您提供的《单载波水声通信技术》扫描图（第65页和第66页）的完整转录内容，严格覆盖公式 (3-66) 至 (3-80)，包含所有符号定义、归一化因子、约束条件及推导正文：
 
 ---
 

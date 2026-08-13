@@ -1,4 +1,4 @@
-function tests = test_eq_2_36
+﻿function tests = test_eq_2_36
 %TEST_EQ_2_36  Book eq.(2-36): DPLL phase detector.
 %   phi_k = Im{ p_k (d_k + q_k)^* }
 %   = Im{ p_k conj(d_k) } + Im{ p_k conj(q_k) }
@@ -40,7 +40,7 @@ function testLoopConvergesToRotation(testCase)
 % after phase compensation) and q_k = 0 (no ISI).  The loop must drive
 % theta toward phi_rot (constant rotation removal).
 rng(0);
-Kp = 0.05; Ki = 0.01;
+Kp = 0.05; Ki = 0.005;  % book eq.(2-37): Ki = 0.1 * Kp
 phiRot = 0.6;
 N = 400;
 d = exp(1j * pi / 4) * (2 * randi([0 1], 1, N) - 1 + ...

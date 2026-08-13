@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-以下是根据提供的《单载波水声通信技术》扫描图（四页拼图）的完整转写内容，按页码分组输出：
-
+﻿
 ### 第 3 章 单载波时域均衡 - 59 -
 
 #### 3.3 单载波时频域联合均衡

@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
-以下是根据您提供的扫描图（第5章，139–142页）中**尚未被覆盖的页面内容**进行的完整转写。我们严格遵循您的要求：
-
+﻿
 - 仅转写 **未被之前任务覆盖的部分**（即从公式 (5-62) 开始至 (5-69)，并包含其上下文）；
 - 所有公式均以完整 LaTeX 格式呈现；
 - 包含每个公式的符号定义、归一化因子、约束条件；

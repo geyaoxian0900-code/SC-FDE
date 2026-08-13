@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-以下是根据提供的《单载波水声通信技术》扫描图（四页拼图）的完整转写，按页码分组输出：
-
+﻿
 ### 第 4 章 单载波迭代均衡 - 87 -
 
 #### 利用 \(\hat{\mu}\) 和 \(\hat{\sigma}^2\) 可以求得条件概率 \(p(\tilde{x}_k | x_k = s_i)\) 为

@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ override existing { override: true }
-好的，这是对《单载波水声通信技术》扫描图四页内容的完整转写。
-
+﻿
 ---
 ### **第 1 页**
 

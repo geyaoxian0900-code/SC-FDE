@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ override existing { override: true }
-根据提供的扫描图，以下是尚未覆盖的页面内容转写：
-
+﻿
 ### 第 5 章 单载波互补码键控扩频
 
 #### 2. 信道估计误差的影响

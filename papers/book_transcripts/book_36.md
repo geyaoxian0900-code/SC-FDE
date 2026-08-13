@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-以下是根据您提供的《单载波水声通信技术》扫描图（四页拼图）的完整转写，按页码分组输出，严格覆盖所有要求：
-
+﻿
 ---
 
 ## **第 5 章 单载波互并码键控扩频 · 153**

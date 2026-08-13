@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-好的，这是对您提供的《单载波水声通信技术》扫描图四个页面的完整转写。内容已按页码分组，并严格遵循您的要求。
-
+﻿
 ---
 
 ### 第 13 页

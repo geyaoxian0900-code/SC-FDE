@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ override existing { override: true }
-以下是根据您提供的《单载波水声通信技术》扫描图（四页拼图）完整转写的全部内容，按页码分组输出，严格覆盖：
-
+﻿
 - 每页打印页码与章节标题
 - 所有带编号公式（含 LaTeX 形式、符号定义、归一化因子、约束条件）
 - 所有表格（本四页无表格）

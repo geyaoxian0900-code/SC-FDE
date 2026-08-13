@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-好的，这是对您提供的《单载波水声通信技术》扫描图（第183-184页）中尚未覆盖内容的完整转写。
+﻿好的，这是对您提供的《单载波水声通信技术》扫描图（第183-184页）中尚未覆盖内容的完整转写。
 
 ---
 

@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-好的，这是对《单载波水声通信技术》扫描图四个页面的完整转写。
-
+﻿
 ---
 
 ### 第 5 章 单载波正交码键控扩频 - 157 -

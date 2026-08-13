@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
-以下是根据提供的扫描图内容，按页码分组输出的Markdown格式文本：
-
+﻿
 ### 第2章 单载波时域均衡 - 43 -
 
 #### [5] Stojanovic M, Catipovic J A, Proakis J G. Reduced-complexity spatial and temporal processing of underwater acoustic communication signals[J]. The Journal of the Acoustical Society of America, 1995, 98 (2): 961-972.

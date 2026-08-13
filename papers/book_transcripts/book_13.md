@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-以下是根据提供的《单载波水声通信技术》扫描图（四页拼图）的完整转写内容，按页码分组输出：
-
+﻿
 ### 第 3 章 单载波频域均衡 - 51 -
 
 比较式 (3-27) 和式 (3-28)，通常情况下，\(\eta_{CP} > \eta_{UW}\)，即 CP-SC 的带宽效率略高于 UW-SC。然而实际系统中，UW-SC 的独特字是已知信号，可以用作信道估计，此外则无须额外的导频信号。而在 CP-SC 系统中，为进行信道估计，CP-SC 系统需要插入额外的导频信号，设导频信号的长度为 \(P\)，则此时 CP-SC 系统的带宽效率降为

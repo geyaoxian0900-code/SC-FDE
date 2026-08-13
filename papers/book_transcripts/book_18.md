@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-以下是根据您提供的《单载波水声通信技术》扫描图（四页拼图）完整转写的内容，按页码分组输出，严格覆盖所有要求：打印页码、章节标题、带编号公式（含 LaTeX 形式、符号定义、归一化因子、约束条件）、表格内容（本四页无表格）、图题、以及初始化/迭代停止/边界条件/参数取值相关的关键句。
-
+﻿
 ---
 
 ## **第 3 章 单载波频域均衡 ·75·**

@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
-根据提供的扫描图，以下是第 5 章 131-134 页区中尚未覆盖的页面内容转写，包含 (5-30) 到 (5-40) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件。
+﻿根据提供的扫描图，以下是第 5 章 131-134 页区中尚未覆盖的页面内容转写，包含 (5-30) 到 (5-40) 之间每一个编号公式的完整 LaTeX、符号定义、归一化因子、约束条件。
 
 ### 第 131 页
 

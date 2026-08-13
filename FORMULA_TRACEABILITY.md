@@ -124,7 +124,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (3-86) `A_k'=(H_k')^*ΓΣ^{-1}/(\ | H_k'\ | ²ΓΣ^{-1}+Nσ_w²)` | 67-68 | — | — | C IBDFE | test_eq_3_87 | OCR-UNCERTAIN | N/A |
 | (3-87) `Γ=(1/N)ΣA_k'H_k^*` | 67-68 | 归一化因子 | **1/N** | — | — | C IBDFE（2026-08-11 已补 /N） | — | BOOK-EXACT | OK |
 | (3-88) `H_LS'=R/X_D^0=H+W/X_D^0=H+e'` | 67-68 | LS 信道估计 | — | `ch3_estimate_channel_ls.m` | — | — | test_eq_3_88 | BOOK-EXACT | OK |
-| (3-89) `h_est,k^j=Σ_{n=0}^{N-1}H_LS,n^j e^{+j2πkn/N}=h_k+e_k^j`（正文明确"将 H_LS 进行 IDFT 变换"；无 1/N 系数，2026-08-13 回 book/17.png 复核） | 67-68 | 时域变换（IDFT 方向） | 无 1/N | `ch3_ibdfe_equalize.m` 内 ifft | — | — | — | BOOK-EXACT | OK |
+| (3-89) `h_est,k^j=Σ_{n=0}^{N-1}H_LS,n^j e^{+j2πkn/N}=h_k+e_k^j`（正文"将 H_LS 进行 IDFT 变换"；原式无 1/N，而 MATLAB ifft 固有 1/N，标度差待 (3-88)~(3-91) 全链 golden 定案） | 67-68 | 时域变换（IDFT 方向） | 1/N 待定 | `ch3_ibdfe_equalize.m` 内 ifft | — | — | — | SOURCE-NORMALIZATION-REVIEW | N/A |
 | (3-90) `h_est'` 前 L 抽头加窗 | 67-68 | 稀疏化 | — | `ch3_estimate_channel_ls.m`（L 截断） | — | — | test_eq_3_90 | BOOK-EXACT | OK |
 | (3-91) `H_est'=DFT(h_est')` | 67-68 | 回频域 | — | 同上 | — | — | — | BOOK-EXACT | OK |
 | (3-92) `H'=(H*σ_H²+H_est'σ_est…)/(…)` MMSE 加权 | 67-68 | 信道合并 | — | ICE 用 ρ 加权 LS（工程） | — | — | — | ENGINEERING | OK |

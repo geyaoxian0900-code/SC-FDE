@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-根据您提供的扫描图（第 127–128 页），以下是尚未被覆盖页面的完整转写内容，严格包含从 (5-1) 到 (5-23) 之间每一个编号公式或码本定义的完整 LaTeX、符号定义、归一化因子、约束条件：
+﻿根据您提供的扫描图（第 127–128 页），以下是尚未被覆盖页面的完整转写内容，严格包含从 (5-1) 到 (5-23) 之间每一个编号公式或码本定义的完整 LaTeX、符号定义、归一化因子、约束条件：
 
 ---
 

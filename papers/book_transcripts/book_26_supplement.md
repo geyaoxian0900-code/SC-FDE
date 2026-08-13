@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-根据您提供的图片（第4章 单载波迭代均衡，页码107-110），以下是该部分内容的完整转录。
+﻿根据您提供的图片（第4章 单载波迭代均衡，页码107-110），以下是该部分内容的完整转录。
 
 ---
 

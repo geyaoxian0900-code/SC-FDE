@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
-根据式 (6-21), 接收信号 \(r_{n}(j)\) 的均值与方差可表示为
+﻿根据式 (6-21), 接收信号 \(r_{n}(j)\) 的均值与方差可表示为
 
 $\begin{aligned}& E\left(r_{n}(j)\right)=\sum_{l=0}^{L} \sum_{m=1}^{M} h_{m, n}(l) E\left(x_{m}(j-l)\right) \\& \operatorname{Var}\left(r_{n}(j)\right)=\sum_{l=0}^{L} \sum_{m=1}^{M}\left|h_{m, n}(l)\right|^{2} \operatorname{Var}\left(x_{m}(j-l)\right)+\sigma_{w}^{2}\end{aligned}$
 

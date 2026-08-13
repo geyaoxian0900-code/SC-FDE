@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-好的，这是对您提供的《单载波水声通信技术》扫描图四页内容的完整转写。内容已按页码分组，并严格遵循您的要求，包含了所有指定的元素。
-
+﻿
 ---
 
 ### 第 4 章 单载波迭代均衡 - 79

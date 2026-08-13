@@ -1,6 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-根据您提供的扫描图，以下是第89页和第90页中尚未覆盖的页面内容（即第4章频域判决反馈权重推导区）的完整转写。我们将包含 (4-50) 到 (4-63) 之间的每一个编号公式及其相关描述。
+﻿根据您提供的扫描图，以下是第89页和第90页中尚未覆盖的页面内容（即第4章频域判决反馈权重推导区）的完整转写。我们将包含 (4-50) 到 (4-63) 之间的每一个编号公式及其相关描述。
 
 ### 第89页
 

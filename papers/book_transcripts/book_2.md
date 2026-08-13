@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
-以下是根据您提供的《单载波水声通信技术》扫描图（四页拼图）完整转写的内容，按页码分组输出，涵盖：
-
+﻿
 - 页眉/页脚页码与章节标题  
 - 所有带编号公式及其 LaTeX 形式、符号定义、归一化因子、约束条件  
 - 所有表格完整内容（参数名、数值、单位）  

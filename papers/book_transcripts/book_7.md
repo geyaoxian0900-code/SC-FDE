@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌁ auth for agents [www.vestauth.com]
-好的，这是对您提供的《单载波水声通信技术》四个扫描页面的完整转写。内容已按页码分组，并包含了您要求的所有元素。
-
+﻿
 ---
 
 ### 第 2 章 单载波时域均衡 - 25 -

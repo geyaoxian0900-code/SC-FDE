@@ -1,7 +1,4 @@
-﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
-根据提供的《单载波水声通信技术》扫描图，以下是每个页面的详细内容转写：
-
+﻿
 ### 第一页
 
 #### 打印页码与章节标题
