@@ -118,14 +118,15 @@ function onRun(~, ~)
         try
             chOpts.pathDelays = parseNum(delaysEdit.Value);
             chOpts.pathGains = eval(["[" gainsEdit.Value "]"]);
+            if isempty(chOpts.pathDelays) || isempty(chOpts.pathGains)
+                error("empty parse result");
+            end
         catch err
-            uialert(fig, sprintf("路径参数格式错误。\n原因：%s\n时延=[%s]\n增益=[%s]", ...
-                err.message, char(delaysEdit.Value), char(gainsEdit.Value)), "参数错误");
-            return;
-        end
-        if isempty(chOpts.pathDelays) || isempty(chOpts.pathGains)
-            uialert(fig, "时延或增益解析结果为空，请检查输入。", "参数错误");
-            return;
+            chOpts.pathDelays = [0 1 3];
+            chOpts.pathGains = [1, 0.7 * exp(1j * 0.5), 0.3 * exp(-1j * 0.8)];
+            fprintf("路径参数解析失败，已回退默认信道 [0 1 3]。\n原因：%s\n时延=[%s]\n增益=[%s]\n", ...
+                err.message, char(delaysEdit.Value), char(gainsEdit.Value));
+            uialert(fig, "路径参数无法解析，已回退默认信道 [0 1 3]。\n请检查增益框内容（应为 1, 0.7*exp(1j*0.5), 0.3*exp(-1j*0.8)）。", "提示");
         end
     else
         chOpts.bellhopWaterDepth = depthEdit.Value;
