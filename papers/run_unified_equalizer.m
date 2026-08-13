@@ -417,9 +417,15 @@ for frame = 1:cfg.frameCount
         txBits = reshape(bits(infoIdx, :).', 1, []);
         rxBits = reshape(bits(detInfo, :).', 1, []);
         valid = ~isnan(detInfo);
+        % Filter the info-symbol axis BEFORE expanding to bits: indexing
+        % the 8-long bit vector with the 4-long logical mask silently
+        % took only the first 4 bits, halving totalBits and doubling BER
+        % (random-detection floor became 0.5 instead of 0.25).
         totalErrors(eq) = totalErrors(eq) + ...
-            sum(rxBits(~isnan(detInfo)) ~= txBits(~isnan(detInfo)));
-        totalBits(eq) = totalBits(eq) + numel(txBits(valid));
+            sum(reshape(bits(detInfo(valid), :).', 1, []) ~= ...
+                reshape(bits(infoIdx(valid), :).', 1, []));
+        totalBits(eq) = totalBits(eq) + ...
+            numel(reshape(bits(infoIdx(valid), :).', 1, []));
     end
 end
 results.ber = totalErrors ./ totalBits;
