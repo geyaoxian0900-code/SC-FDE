@@ -140,7 +140,8 @@ function onRun(~, ~)
             chOpts.pathGains = [1, 0.7 * exp(1j * 0.5), 0.3 * exp(-1j * 0.8)];
             fprintf("路径参数解析失败，已回退默认信道 [0 1 3]。\n原因：%s\n时延=[%s]\n增益=[%s]\n", ...
                 err.message, char(delaysEdit.Value), char(gainsEdit.Value));
-            uialert(fig, "路径参数无法解析，已回退默认信道 [0 1 3]。" + newline + "请检查增益框内容（应为 1, 0.7*exp(1j*0.5), 0.3*exp(-1j*0.8)）。", "提示");
+            selInfo.Text = "路径参数无效，已回退默认信道";
+            drawnow;
         end
     else
         chOpts.bellhopWaterDepth = depthEdit.Value;
