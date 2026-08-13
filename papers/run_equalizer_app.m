@@ -118,8 +118,13 @@ function onRun(~, ~)
         try
             chOpts.pathDelays = parseNum(delaysEdit.Value);
             chOpts.pathGains = eval(["[" gainsEdit.Value "]"]);
-        catch
-            uialert(fig, "路径参数格式错误（用逗号分隔，增益支持 0.7*exp(1j*0.5)）。", "参数错误");
+        catch err
+            uialert(fig, sprintf("路径参数格式错误。\n原因：%s\n时延=[%s]\n增益=[%s]", ...
+                err.message, char(delaysEdit.Value), char(gainsEdit.Value)), "参数错误");
+            return;
+        end
+        if isempty(chOpts.pathDelays) || isempty(chOpts.pathGains)
+            uialert(fig, "时延或增益解析结果为空，请检查输入。", "参数错误");
             return;
         end
     else
