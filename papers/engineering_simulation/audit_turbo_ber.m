@@ -61,6 +61,8 @@ for k = 1:numel(ids)
     fprintf(" %.3g", berGrid(k, :));
     good = diff(berGrid(k, :)) <= max(berGrid(k, 1) * 0.2, 1e-3);
     fprintf("  monotonic %d/%d\n", sum(good), numel(snrGrid) - 1);
+    assert(all(good), ...
+        "%s violates BER monotonicity over the AWGN sweep", ids(k));
 end
 
 % --- 3) independent reconstruction == reported, with CI ----------------
@@ -77,6 +79,11 @@ for id = ids
     match = (ber == r.ber);
     fprintf("  %-14s indep err=%d bits=%d BER=%.4e [%.2e, %.2e]  reported=%.4e  %s\n", ...
         id, err, bits, ber, lo, hi, r.ber, ternary(match, "MATCH", "DIFF"));
+    if bits > 0 && ber > 0
+        assert(abs(ber - r.ber) / ber < 0.25, ...
+            "%s independent BER diverges from the reported BER (%.4e vs %.4e)", ...
+            id, ber, r.ber);
+    end
 end
 
 % --- 4) training exclusion ----------------------------------------------

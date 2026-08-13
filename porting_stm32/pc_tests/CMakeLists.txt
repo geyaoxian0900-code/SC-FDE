@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+﻿cmake_minimum_required(VERSION 3.10)
 project(scfde_pc_tests C)
 
 set(CMAKE_C_STANDARD 99)
@@ -39,6 +39,7 @@ endfunction()
 add_scfde_test(test_fft)          # FFT/IFFT round trip and known transforms
 add_scfde_test(test_ldpc)         # LDPC encode/decode and error correction
 add_scfde_test(test_equalizer)    # MMSE/ZF/MF/IB-DFE/NLMS on synthetic channel
+add_scfde_test(test_fblms)         # FBLMS constrained-weight convergence
 add_scfde_test(test_end_to_end)   # full digital loopback, all equalizer modes
 add_scfde_test(test_turbo)         # conv code + interleaver + BCJR + turbo loopback
 add_scfde_test(test_cck)          # CCK modem loopback, all 7 receivers

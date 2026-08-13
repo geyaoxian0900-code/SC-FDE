@@ -40,6 +40,11 @@
 #define SCFDE_FRAME_SYMBOLS           192u
 #define SCFDE_RX_CAPTURE_LENGTH       8192u
 
+/* Unit-energy QPSK components (Es = 1), consistent with the equalizer
+   helpers (qpsk_hard_decision / qpsk_posterior_mean) and the frozen
+   BOOK_CONVENTIONS m_x = 1 convention. */
+#define SCFDE_INV_SQRT2               0.7071067811865476f
+
 #define SCFDE_LDPC_ENABLED            0u
 #if SCFDE_LDPC_ENABLED
 #define SCFDE_MAX_PAYLOAD             10u

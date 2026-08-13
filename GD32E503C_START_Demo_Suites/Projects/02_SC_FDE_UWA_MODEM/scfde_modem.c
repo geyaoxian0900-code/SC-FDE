@@ -1,4 +1,4 @@
-#include "scfde_modem.h"
+﻿#include "scfde_modem.h"
 #include "scfde_fft.h"
 #include "scfde_ldpc.h"
 #include <math.h>
@@ -159,8 +159,11 @@ uint8_t scfde_modem_prepare_tx(const uint8_t *payload, uint8_t length, uint8_t s
             uint16_t bit_index = symbol * 2u;
             uint8_t first = g_tx_code_bits[bit_index];
             bit_index++;
-            g_tx_data[symbol].re = first != 0u ? 1.0f : -1.0f;
-            g_tx_data[symbol].im = g_tx_code_bits[bit_index] != 0u ? 1.0f : -1.0f;
+            /* Unit-energy QPSK (Es = 1): +-1/sqrt(2) per component,
+               matching the equalizer helpers (qpsk_hard_decision,
+               qpsk_posterior_mean) and BOOK_CONVENTIONS m_x = 1. */
+            g_tx_data[symbol].re = first != 0u ? SCFDE_INV_SQRT2 : -SCFDE_INV_SQRT2;
+            g_tx_data[symbol].im = g_tx_code_bits[bit_index] != 0u ? SCFDE_INV_SQRT2 : -SCFDE_INV_SQRT2;
         }
     }
 #else
@@ -172,8 +175,8 @@ uint8_t scfde_modem_prepare_tx(const uint8_t *payload, uint8_t length, uint8_t s
         uint8_t first = (uint8_t)((packet[bit_index >> 3u] >> (bit_index & 7u)) & 1u);
         bit_index++;
         uint8_t second = (uint8_t)((packet[bit_index >> 3u] >> (bit_index & 7u)) & 1u);
-        g_tx_data[symbol].re = first != 0u ? 1.0f : -1.0f;
-        g_tx_data[symbol].im = second != 0u ? 1.0f : -1.0f;
+        g_tx_data[symbol].re = first != 0u ? SCFDE_INV_SQRT2 : -SCFDE_INV_SQRT2;
+        g_tx_data[symbol].im = second != 0u ? SCFDE_INV_SQRT2 : -SCFDE_INV_SQRT2;
     }
 #endif
     return 1u;

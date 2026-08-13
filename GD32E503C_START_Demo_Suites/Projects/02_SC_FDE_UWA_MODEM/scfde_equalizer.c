@@ -1,4 +1,4 @@
-#include "scfde_equalizer.h"
+﻿#include "scfde_equalizer.h"
 #include <string.h>
 #include <math.h>
 
@@ -764,26 +764,32 @@ static void fblms_equalize(const scfde_complex_t *frame, uint16_t frame_symbols,
             for (i = 0; i < fft_len; i++)
             {
                 scfde_complex_t update;
+                /* Frequency-domain LMS gradient: conj(E[k]) * X[k] with
+                   E the error spectrum.  Im{conj(E) X} = Er*Xi - Ei*Xr;
+                   the previous sign made the imaginary part negative,
+                   driving the adaptive weights unstable. */
                 update.re = error_spectrum[i].re * input_block[i].re +
                             error_spectrum[i].im * input_block[i].im;
-                update.im = error_spectrum[i].im * input_block[i].re -
-                            error_spectrum[i].re * input_block[i].im;
+                update.im = error_spectrum[i].re * input_block[i].im -
+                            error_spectrum[i].im * input_block[i].re;
                 float den = scalar_energy + 0.1f;
                 weights[i].re += SCFDE_FBLMS_STEP * update.re / den;
                 weights[i].im += SCFDE_FBLMS_STEP * update.im / den;
             }
             memcpy(filtered, weights, fft_len * sizeof(scfde_complex_t));
             scfde_fft(filtered, fft_len, 1u);
-            memset(weights, 0, fft_len * sizeof(scfde_complex_t));
-            for (i = 0; i < n_f; i++)
+            /* Overlap-save time-domain constraint: keep the first n_f
+               filter taps, zero the rejected region, then transform the
+               constrained impulse back to the frequency domain.  (The
+               previous code cleared the whole weights array here and
+               never copied the retained taps back, so every block
+               restarted with zero weights.) */
+            for (i = n_f; i < fft_len; i++)
             {
-                /* The current block occupies input_block[n_f .. n_f+n_block-1];
-                   its last n_f samples (input_block[n_f+n_block-n_f+i] =
-                   input_block[n_block+i]) become the next block's history.
-                   (The previous indexing took the pre-block history
-                   region instead - an overlap-save state misalignment.) */
-                front_tail[i] = input_block[n_block + i];
+                filtered[i].re = 0.0f;
+                filtered[i].im = 0.0f;
             }
+            memcpy(weights, filtered, fft_len * sizeof(scfde_complex_t));
             scfde_fft(weights, fft_len, 0u);
         }
     }

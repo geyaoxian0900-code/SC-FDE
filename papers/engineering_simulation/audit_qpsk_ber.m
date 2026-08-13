@@ -100,6 +100,8 @@ if doSweep
         % strictly decrease over the span after the first point.
         good = diff(berGrid(k, :)) <= max(berGrid(k, 1) * 0.2, 1e-3);
         fprintf("    monotonic: %d/%d decreasing steps\n", sum(good), numel(snrGrid) - 1);
+        assert(all(good), ...
+            "%s violates BER monotonicity over the multipath sweep", ids(k));
     end
     save(fullfile(fileparts(fileparts(mfilename("fullpath"))), ...
         "results", "qpsk_ber_audit.mat"), "ids", "snrGrid", "berGrid");
