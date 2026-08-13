@@ -44,8 +44,21 @@ cfg = struct("equalizers", "all", "scenario", "qpsk", ...
     "snrDb", 18, "symbols", 8, "frameCount", 50, ...
     "makePlot", true, "randomSeed", 42);
 names = fieldnames(options);
-for index = 1:numel(names)
-    cfg.(names{index}) = options.(names{index});
+if numel(options) > 1
+    % struct('equalizers', {a, b}, ...) expands into a 1xN struct array
+    % (one struct per cell element); collect the equalizers back and use
+    % the first struct for the scalar fields.
+    cfg.equalizers = {options.equalizers};
+    for index = 1:numel(names)
+        if strcmp(names{index}, "equalizers")
+            continue;
+        end
+        cfg.(names{index}) = options(1).(names{index});
+    end
+else
+    for index = 1:numel(names)
+        cfg.(names{index}) = options.(names{index});
+    end
 end
 rng(cfg.randomSeed, "twister");
 
