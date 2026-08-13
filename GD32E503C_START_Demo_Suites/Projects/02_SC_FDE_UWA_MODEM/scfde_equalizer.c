@@ -475,6 +475,13 @@ static void htfde_equalize(const scfde_complex_t *channel,
                            uint16_t tail_length,
                            const scfde_complex_t *impulse)
 {
+    /* Local, verifiable size contract: every block copy below writes at
+       most size samples into the SCFDE_EQUALIZER_MAX_FFT workspaces. */
+    if ((channel == 0) || (block == 0) || (size == 0u) ||
+        (size > SCFDE_EQUALIZER_MAX_FFT))
+    {
+        return;
+    }
     uint16_t segment = size / SCFDE_HTFDE_BRANCHES;
     uint16_t iter, n, branch;
     scfde_complex_t *symbols = g_block_work;
@@ -1156,8 +1163,12 @@ static void ptr_dfe_equalize(const scfde_complex_t *frame, uint16_t frame_symbol
     static scfde_complex_t eq[SCFDE_PTR_MAX_TAPS * 2u - 1u];
     uint16_t out_index = 0u;
 
-    if ((frame == 0) || (output == 0) || (impulse_taps > SCFDE_PTR_MAX_TAPS))
+    if ((frame == 0) || (output == 0) || (impulse == 0) ||
+        (impulse_taps == 0u) || (impulse_taps > SCFDE_PTR_MAX_TAPS))
     {
+        /* eq_taps = 2*impulse_taps-1 would underflow for zero taps and
+           memset(eq, ...) would then use a huge length; reject zero and
+           oversized tap counts as well as null pointers. */
         return;
     }
     (void)ff;

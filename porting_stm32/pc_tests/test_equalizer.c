@@ -124,6 +124,35 @@ int main(void)
         printf("NLMS-TDE zero-length guard: PASS\n");
     }
 
+    /* PTR boundary guards: the entry must reject null impulse, zero taps
+     * and taps beyond SCFDE_PTR_MAX_TAPS without underflowing the
+     * equivalent-channel length (2*taps-1).  28 taps (the boundary) must
+     * still run. */
+    {
+        scfde_complex_t received[N], out[D];
+        scfde_complex_t tr_imp[N];
+        uint16_t guard_taps[] = {0u, 28u, 29u};
+        uint16_t g, t;
+        for (g = 0u; g < sizeof(guard_taps) / sizeof(guard_taps[0]); g++)
+        {
+            t = guard_taps[g];
+            memcpy(received, block, sizeof(received));
+            memset(out, 0, sizeof(out));
+            for (k = 0u; k < (t < 29u ? t : 29u); k++)
+            {
+                tr_imp[k].re = 0.3f;
+                tr_imp[k].im = 0.0f;
+            }
+            scfde_equalizer_dfe(SCFDE_EQUALIZER_PTR_DFE, received, N,
+                                reference, tr_imp, t, 0.0f, D, out);
+        }
+        /* Null impulse must not crash. */
+        memcpy(received, block, sizeof(received));
+        scfde_equalizer_dfe(SCFDE_EQUALIZER_PTR_DFE, received, N,
+                            reference, NULL, 2u, 0.0f, D, out);
+        printf("PTR boundary guards: PASS\n");
+    }
+
     printf("PASS\n");
     return 0;
 }

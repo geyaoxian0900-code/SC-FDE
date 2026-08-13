@@ -67,6 +67,9 @@ target_link_libraries(test_export_golden m)
 add_test(NAME test_export_golden
          COMMAND test_export_golden
          ${CMAKE_CURRENT_SOURCE_DIR}/../golden_vectors/c_export)
+# The comparison must run AFTER the exporter has refreshed the C vectors;
+# CTest fixtures enforce the ordering even under ctest -j.
+set_tests_properties(test_export_golden PROPERTIES FIXTURES_SETUP golden)
 
 # Cross-language golden comparison: the C exporter must match the
 # MATLAB reference vectors (compare_golden.py exits non-zero on any
@@ -78,4 +81,5 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME golden_compare
              COMMAND ${Python3_EXECUTABLE}
              ${CMAKE_CURRENT_SOURCE_DIR}/../compare/compare_golden.py)
+    set_tests_properties(golden_compare PROPERTIES FIXTURES_REQUIRED golden)
 endif()
