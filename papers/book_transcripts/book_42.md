@@ -1,0 +1,67 @@
+﻿◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+根据提供的《单载波水声通信技术》扫描图，以下是每页的详细内容转写：
+
+### 第 177 页
+
+#### 章节标题
+- **6.3 基于交织多址的循环移位扩频多用户通信**
+- **6.3.1 传统交织多址系统**
+
+#### 公式
+1. **公式 (6-20)**
+   \[
+   h_{n,a} = [h_{n,0}(t) \quad h_{n,1}(t-l) \quad \cdots \quad h_{n,L-1}(t-(L-1))]^T
+   \]
+
+2. **公式 (6-21)**
+   \[
+   r_n(j) = \sum_{l=0}^{L-1} h_{n,a}(l) x_m(j-l) + w_n(j)
+   \]
+   - \( w_n(j) \) 是一个方差为 \( \sigma_w^2 = N_0 / 2 \) 的 AWGN。
+
+#### 图题
+- **图 6-10 具有 \( M \) 个用户的传统 IDMA 系统的发射机和接收机结构**
+
+#### 关键句
+- 考虑一个 \( M \) 个用户和 \( N \) 个接收阵元的同步下行多址系统。图 6-10 为传统 IDMA 系统的发射机和接收机结构。
+- 第 \( m \) 位用户的信息为 \( b_m \)，以速率 \( R \) 的信道编码器进行编码，得到编码后比特 \( c_m \)。\( c_m \) 经过长度 \( G \) 的扩频序列 \( a = [a_1, a_2, \cdots, a_G] \) 进行扩频，产生序列 \( u_m \)。然后，通过码片交织器 \( \Pi_m \) 对 \( u_m \) 进行交织，得到所传输的符号 \( x_m \)。
+- 考虑长度为 \( L \) 的准静态频率选择水声信道，第 \( m \) 个用户与第 \( n \) 个接收机之间的离散时间信道为
+  \[
+  h_{n,a} = [h_{n,0}(t) \quad h_{n,1}(t-l) \quad \cdots \quad h_{n,L-1}(t-(L-1))]^T
+  \]
+- 那么，第 \( n \) 个接收机的离散时间基带接收信号可以表示为
+  \[
+  r_n(j) = \sum_{l=0}^{L-1} h_{n,a}(l) x_m(j-l) + w_n(j)
+  \]
+- 式中，\( w_n(j) \) 是一个方差为 \( \sigma_w^2 = N_0 / 2 \) 的 AWGN。
+
+### 第 178 页
+
+#### 章节标题
+- **单载波水声通信技术**
+
+#### 公式
+1. **公式 (6-22)**
+   \[
+   E(r_n(j)) = \sum_{m=1}^M \sum_{l=0}^{L-1} h_{n,m}(l) E(x_m(j-l))
+   \]
+
+2. **公式 (6-23)**
+   \[
+   \text{Var}(r_n(j)) = \sum_{m=1}^M \sum_{l=0}^{L-1} |h_{n,m}(l)|^2 \text{Var}(x_m(j-l)) + \sigma_w^2
+   \]
+
+3. **公式 (6-24)**
+   \[
+   r_n(j+l) = h_{n,a}(l) x_m(j-l) + \zeta_{n,m}^{(i)}(j)
+   \]
+
+4. **公式 (6-25)**
+   \[
+   \zeta_{n,m}^{(i)}(j) = r_n(j+l) - h_{n,a}(l) x_m(j)
+   \]
+
+5. **公式 (6-26)**
+   \[
+   P(r_n(j+l) | x_m(j) = \pm 1) = \frac{1}{\sqrt{2 \pi \text{Var}(\zeta_{n,m}^{(i)}(j))}} \cdot \exp \left( \frac{(r_n(j+l) - (\pm h_{n,a}(l) + E(\zeta_{n,m}^{(i

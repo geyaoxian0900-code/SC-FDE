@@ -1,0 +1,23 @@
+﻿◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ encrypted .env [www.dotenvx.com]
+好的，这是对您提供的《单载波水声通信技术》扫描图的完整转写。内容已按页码分组，并包含了您要求的所有元素。
+
+---
+
+### 第 5 章 单载波互补码键控扩频 - 145 -
+
+在空间调制中，信息通过两种方式传输：阵元选择和传输符号。在本节中，考虑一个简单的场景，即每次只有一个发射阵元被激活。这样，每个 CCK 符号的码片可以被分为两组，一组 $G^1$ 用来进行阵元选择，另外一组 $G^2$ 是在选择的阵元上发射数据。
+
+这里以一个特殊情形作为举例，发射阵元的个数为 $N_t=4$，那么每个阵元可以用来表示 CCK 码片中的一个相位。此时，可以设置 $G^1 = [c_{k,1} \cdots c_{k,4}]$, $G^2 = [c_{k,5} \cdots c_{k,8}]$。其中 $i_1, \dots, i_4$ 是通过随机交织器 $\Pi$ 对 $1, \dots, 8$ 进行随机扰乱的结果。如果 $c_{k,i_q} = a_q$，那么就在第 $q$ 个天线上传输码片 $c_{k,i_{q+4}}$。因此传输一个 CCK 符号需要的时间为 $N_t=4$ 个码片传输时间。这样，阵元选择和传输符号就通过 CCK 调制结合到了一起。让 $s \in \mathcal{C}_{N_t,K}$ 来表示第 $m$ 组比特信息映射成的符号，那么 $s$ 中的第 $q$ 列为
+$$ s_q = c_{k,i_q}a_q, \quad q=1,\dots,N_t \tag{5-75} $$
+式中，$a_q \in \mathcal{C}_{N_t,K}$ 是阵元选择的结果，在 $\mathcal{E}=\{e_1,e_2,\dots,e_{N_t}\}$ 中选择，$e_m$ 表示单位矩阵中的第 $m$ 列。让 $x_{n,q}$ 表示 $s$ 中第 $m$ 个元素。很明显，在空间调制中，发射信号的星座集合 $x_{n,q} \in \mathcal{B}$ 扩展为 $\mathcal{B}=\{\beta_1, \beta_2, \beta_3, \beta_4\} = \{0, a_1, a_2, a_3, a_4\}$。
+
+为了降低发射符号间的相关性，符号经过一个随机交织器 $\Pi_0$ 生成了发射符号 $y_s$。本系统采用共传输方式来对抗水声多径信道。为了消除块间干扰，把符号 $y_s$ 按长度 $K$ 进行分组，并将比信道最大时延扩展的长度更长的循环前缀插入组间。
+
+在接收端，将接收信号中的循环前缀去掉。因为循环前缀的存在，所以可以认为块与块间没有相互干扰。在接下来分析中，为了便于描述，只对其中一个传输块进行分析。
+
+接收信号可以表示为
+$$ y = hx + w \tag{5-76} $$
+式中，$x=[x_1^T \ x_2^T \ \dots \ x_M^T]^T$, $x_m \in \mathcal{C}_{N_t,K}$ 是第 $m$ 个发射阵元的发射符号；$y=[y_1^T \ y_2^T \ \dots \ y_N^T]^T$, $y_n \in \mathcal{C}_{N_r,K}$ 是第 $n$ 个接收阵元的接收信号；$w=[w_1^T \ w_2^T \ \dots \ w_N^T]^T$, $w_n \in \mathcal{C}_{N_r,K}$ 是零均值方差为 $\sigma_w^2$ 的高斯白噪声；$h$ 是 MIMO 信道矩阵，其可以写成
+$$ h_{N_rK \times N_tK} = \begin{bmatrix} A_{11} & \cdots & A_{1N_t} \\ \vdots & \ddots & \vdots \\ A_{N_r1} & \cdots & A_{N_rN_t} \end{bmatrix} \tag{5-77} $$
+其中，$A_{nm} \in \mathcal{C}_{K,K}$ 是一个循环矩阵，由第 $m$ 个发射

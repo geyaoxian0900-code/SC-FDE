@@ -67,7 +67,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (2-13) `∇_w J=-2E[e^*(n)u(n)]` | 19-20 | 梯度 | — | — | scfde.book_formulas.ch2_lms_gradient | — | test_book_formulas_ch2 | BOOK-EXACT | OK |
 | (2-14) `w(n+1)=w(n)+2μe^*(n)u(n)` LMS | 19-20 | 系数更新 | 2μ 显式 | `lms_dfe.m`/`adaptive_update.m` | — | — | — | ALG-EQUIV | OK |
 | (2-15) `0<μ<1/λ_max` | 19-20 | 收敛界 | — | — | scfde.book_formulas.ch2_lms_convergence_bound | — | test_book_formulas_ch2 | BOOK-EXACT | OK |
-| (2-16)~(2-25) | 21-24 | 扫描缺失（RLS/NLMS/Fast RLS 推导区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (2-16)~(2-25) | 21-24 | 扫描缺失（RLS/NLMS/Fast RLS 推导区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (2-26) `r(k)=[r(k)…r(k+N-1)]^T` | 25-26 | 前馈输入 | — | `dpll_dfe.m` | — | — | — | ALG-EQUIV | OK |
 | (2-27) `p_k=a^H r(k)e^{-jθ_k}` | 25-26 | 相位补偿 | — | `dpll_dfe.m` | — | — | — | ALG-EQUIV | OK |
 | (2-28) `d⃗(k)` 反馈输入 | 25-26 | 判决序列 | — | `dpll_dfe.m` | — | — | — | ALG-EQUIV | OK |
@@ -77,10 +77,10 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (2-32) `∂MSE/∂a=-2E{r e_k^* e^{-jθ_k}}` | 25-26 | 前馈梯度 | — | `dpll_dfe.m` | — | — | — | ALG-EQUIV | OK |
 | (2-33) `∂MSE/∂b=-2E{d⃗ e_k^*}` | 25-26 | 反馈梯度 | — | `dpll_dfe.m` | — | — | — | ALG-EQUIV | OK |
 | (2-34) `∂MSE/∂θ=-2Im{E{p_k(d_k+q_k)^*}}` | 25-26 | 相位梯度 | — | `dpll_dfe.m` | — | — | — | BOOK-EXACT | OK |
-| (2-35) `θ̂_k=θ̂_{k-1}+K_P2 e_k+K_I2 Σφ_l` | 25-26 | DPLL 递推 | — | `dpll_dfe.m` | — | — | — | OCR-UNCERTAIN | N/A |
+| (2-35) `θ̂_{k+1}=θ̂_k+K_1 φ_k+K_2 Σ_{i=1}^k φ_i`（φ 为相位误差，非均衡误差 e；K_2=0.1K_1 见 (2-37)） | 25-26 | DPLL 递推 | — | `dpll_dfe.m`（phaseError 路径） | — | — | test_eq_2_36/testLoopConvergesToRotation | BOOK-EXACT | OK |
 | (2-36) `φ_l=Im{p_l(d_l+q_l)^*}` | 25-26 | 相位检测 | — | `dpll_dfe.m` | — | — | test_eq_2_36 | BOOK-EXACT | OK |
 | (2-37) `K_I2=0.1·K_P2` | 25-26 | 环参数 | — | cfg.KI2rel | — | — | — | BOOK-EXACT | OK |
-| (2-38)~(2-46) | 29-32 | 扫描缺失（PTR-DFE 推导区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (2-38)~(2-46) | 29-32 | 扫描缺失（PTR-DFE 推导区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (2-47) `r̂(t)=Σh_i'(-t)⊗r_i(t)=Q(t)⊗s(t)+ς(t)` | ~29-30 | PTR 等效信道 | 线性卷积 | `ptr_dfe.m`（线性主路径） | — | — | test_eq_2_47 | BOOK-EXACT | OK |
 | (2-48) `y_p(n)=Σh̃_p^*(-k)⊗r_k(n)` | ~29-30 | 子阵 PTR | 线性卷积 | `subband_ptr.m`（线性主路径） | — | — | test_eq_2_47 | BOOK-EXACT | OK |
 | (2-49) `d̂=Σa_n^H y_p-b^H d` | ~29-30 | Sub-PTR-DFE | — | `subband_ptr_dfe.m` | — | — | — | ALG-EQUIV | OK |
@@ -98,7 +98,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (3-3) `r_k=Σh_i s_{k-i}+w_k` | 47-48 | 线性卷积 | — | apply_multipath | — | — | — | BOOK-EXACT | OK |
 | (3-4)/(3-5) 线性卷积矩阵/向量 | 47-48 | 矩阵形式 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (3-6)/(3-7) CP 插入/复制 | 47-48 | 帧结构 | CP=M | 帧构造 | — | — | — | BOOK-EXACT | OK |
-| (3-8)~(3-26) | 49-50 | 扫描缺失（UW/同步区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (3-8)~(3-26) | 49-50 | 扫描缺失（UW/同步区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (3-27) `η_CP-SC=N/(N+M)` | 51-52 | 频谱效率 | — | — | scfde.book_formulas.ch3_spectral_efficiency | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-28) `η_UW-SC=(N-P)/(N+M)` | 51-52 | 频谱效率 | — | — | scfde.book_formulas.ch3_spectral_efficiency | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-30) 补零块 | 51-52 | 帧结构 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
@@ -110,12 +110,12 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (3-42~3-44) `C=(Ĥ^HΦ^HΦĤ+σ²I)^{-1}Ĥ^HΦ^H` | 55-58 | MMSE 矩阵解 | — | — | scfde.book_formulas.ch3_mmse_matrix | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-45) `ŝ=F^H CHFs+w̃=AĤs+w̃` | 55-58 | 时域输出 | IDFT 含 1/N | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-46) `ŝ_k=β_k s_k+w'_k` 相位补偿 | 55-58 | 残余相位 | — | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
-| (3-47)~(3-63) | 59-62 | 扫描缺失（HTF-DFE 推导区；含 `C_k=(Ĥ_k^HΦ_k^HΦ_kĤ_k+σ²I)^{-1}Ĥ_k^HΦ_k^H`、`x_m=F^H ΣC_kR_k` 未标号转写） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (3-47)~(3-63) | 59-62 | 扫描缺失（HTF-DFE 推导区；含 `C_k=(Ĥ_k^HΦ_k^HΦ_kĤ_k+σ²I)^{-1}Ĥ_k^HΦ_k^H`、`x_m=F^H ΣC_kR_k` 未标号转写） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (3-64) `X̂^l=(C^l)^H R-(B^l)^H X̂^{l-1}` | 63-64 | IBDFE 迭代 | — | — | — | C IBDFE | test_eq_3_87 | BOOK-EXACT | OK |
 | (3-65) `M_Xk=E\ | X_k\ | ², M_X̂k=E\ | X̂_k\ | `BOOK_CONVENTIONS` | — | — | — | BOOK-EXACT | OK |
 | (3-66) `r_{Xk,X̂k*}=E[X_k X̂_k^*]` | 63-64 | 相关 | — | — | scfde.book_formulas.ch3_ibdfe_corr | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-67) `J^IB=(1/N)ΣE\ | x̂_k-x_k\ | ²` | 63-64 | MSE | scfde.book_formulas.ch3_ibdfe_mse | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
-| (3-68)~(3-80) | 65-66 | 扫描缺失（IBDFE 权重推导区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (3-68)~(3-80) | 65-66 | 扫描缺失（IBDFE 权重推导区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (3-81) `B_k'=C_k'H_k^*-1` | 67-68 | 反馈系数 | — | — | — | C IBDFE | test_eq_3_87 | BOOK-EXACT | OK |
 | (3-82) `β'=(1/N)ΣC_k'H_k^*` 初值 | 67-68 | 增益 | 1/N | — | — | C IBDFE | test_eq_3_87 | BOOK-EXACT | OK |
 | (3-83) `β'` 后续迭代=1 | 67-68 | 迭代规则 | — | 同上 | — | — | — | BOOK-EXACT | OK |
@@ -124,7 +124,7 @@ LLR 符号 | `L(b)=ln[P(b=0)/P(b=1)]`（0 为正，书式 4-2）；`ĉ=0 当 L�
 | (3-86) `A_k'=(H_k')^*ΓΣ^{-1}/(\ | H_k'\ | ²ΓΣ^{-1}+Nσ_w²)` | 67-68 | — | — | C IBDFE | test_eq_3_87 | OCR-UNCERTAIN | N/A |
 | (3-87) `Γ=(1/N)ΣA_k'H_k^*` | 67-68 | 归一化因子 | **1/N** | — | — | C IBDFE（2026-08-11 已补 /N） | — | BOOK-EXACT | OK |
 | (3-88) `H_LS'=R/X_D^0=H+W/X_D^0=H+e'` | 67-68 | LS 信道估计 | — | `ch3_estimate_channel_ls.m` | — | — | test_eq_3_88 | BOOK-EXACT | OK |
-| (3-89) `h_est'=IDFT(H_LS')` | 67-68 | 时域变换 | 转写指数待核 | `ch3_ibdfe_equalize.m` 内 ifft | — | — | — | OCR-UNCERTAIN | N/A |
+| (3-89) `h_est,k^j=Σ_{n=0}^{N-1}H_LS,n^j e^{+j2πkn/N}=h_k+e_k^j`（正文明确"将 H_LS 进行 IDFT 变换"；无 1/N 系数，2026-08-13 回 book/17.png 复核） | 67-68 | 时域变换（IDFT 方向） | 无 1/N | `ch3_ibdfe_equalize.m` 内 ifft | — | — | — | BOOK-EXACT | OK |
 | (3-90) `h_est'` 前 L 抽头加窗 | 67-68 | 稀疏化 | — | `ch3_estimate_channel_ls.m`（L 截断） | — | — | test_eq_3_90 | BOOK-EXACT | OK |
 | (3-91) `H_est'=DFT(h_est')` | 67-68 | 回频域 | — | 同上 | — | — | — | BOOK-EXACT | OK |
 | (3-92) `H'=(H*σ_H²+H_est'σ_est…)/(…)` MMSE 加权 | 67-68 | 信道合并 | — | ICE 用 ρ 加权 LS（工程） | — | — | — | ENGINEERING | OK |
@@ -152,7 +152,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (4-7) `L^e=L后验-L先验` | 79-80 | 减法 | — | ch4_log_combine | — | — | — | BOOK-EXACT | OK |
 | (4-8) `L^e(c_i)≜…` | 79-80 | 定义 | — | — | — | — | — | OCR-UNCERTAIN | N/A |
 | (4-9) `ĉ_i=0 当 L≥0` | 79-80 | 硬判决 | — | ch4_hard_bpsk | — | — | — | BOOK-EXACT | OK |
-| (4-10)~(4-15) | 81-82 | 扫描缺失 | — | — | — | — | — | SCAN-MISSING | N/A |
+| (4-10)~(4-15) | 81-82 | 扫描缺失 | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (4-16) `L(c_k)=ln[Σ_{c=0}P(s,s')/Σ_{c=1}…]` | 83-84 | BCJR 后验 | — | ch4_bcjr_siso_decode | — | — | — | BOOK-EXACT | OK |
 | (4-17) `P(s_k,s_{k+1},y)` 联合概率分解 | 83-84 | BCJR | — | ch4_branch_metrics | — | — | — | BOOK-EXACT | OK |
 | (4-18) `α_k=Σα_{k-1}γ_k` 前向 | 83-84 | BCJR | 归一化可选 | ch4_bcjr_probability | — | — | — | BOOK-EXACT | OK |
@@ -161,7 +161,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (4-21) `P(0)=1/(1+e^{-L})` | 83-84 | 概率-LLR | — | ch4_logadd | — | — | — | BOOK-EXACT | OK |
 | (4-22) `P(1)=e^{-L}/(1+e^{-L})=1/(1+e^{L})` | 83-84 | 概率-LLR | — | ch4_logadd | — | — | — | SOURCE-INCONSISTENT | N/A |
 | (4-23) `{P_k}_{i,j}=γ_k…` | 83-84 | 矩阵形式 | — | — | — | — | — | OCR-UNCERTAIN | N/A |
-| (4-24)~(4-41) | 85-86 | 扫描缺失（时域 LMMSE Turbo 区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (4-24)~(4-41) | 85-86 | 扫描缺失（时域 LMMSE Turbo 区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (4-42) `p(x̂_k | x_k=s_i)=1/(πσ̂²)e^{- | x̂-μ̂s_i | ²/σ̂²}` | ch4_normalized_mmse | — | — | — | BOOK-EXACT | OK |
 | (4-43) `L^E(c_{k,j})` 均衡器外信息 | 87-88 | 外信息 | — | ch4_iterate_*_turbo | — | — | — | BOOK-EXACT | OK |
 | (4-44) `P(c=0)=1/(1+e^{L^D})` | 87-88 | 译码先验 | — | ch4_log_combine | — | — | — | BOOK-EXACT | OK |
@@ -170,20 +170,20 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (4-47) `x̄_k=E(x_k)=Σs_i P(x_k=s_i)` 软符号 | 87-88 | 软符号 | — | ch4_initial_soft_feedback | — | — | — | BOOK-EXACT | OK |
 | (4-48) `P(x_k=s_i)=ΠP(c_{k,j}=s_{i,j})` | 87-88 | 比特独立 | — | ch4_probability_posteriors | — | — | — | BOOK-EXACT | OK |
 | (4-49) `x̄_n=Σ(f_l^H)^*y_{n+l}^H-(g_l)^T x̄_n` | 87-88 | 时域软反馈 | — | ch4_iterate_time_turbo | — | — | — | OCR-UNCERTAIN | N/A |
-| (4-50)~(4-63) | 89-90 | 扫描缺失（**含 4-55 ρ=mean\ | m\ | ch4_fd_ibdfe_weights | — | — | — | SCAN-MISSING | N/A |
+| (4-50)~(4-63) | 89-90 | 扫描缺失（**含 4-55 ρ=mean\ | m\ | ch4_fd_ibdfe_weights | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (4-64) `y'_u,y_u,y'_d,r_u` 块定义 | 103-106 | BLMS 块 | N、N_v | — | — | C FBLMS | test_fblms_and_curve_benchmark | BOOK-EXACT | OK |
 | (4-65) `R_u(k)=F r_u(k)` | 103-106 | 频域变换 | 无 1/N | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-66) `X̂(k)=ΣW_n⊙R_n` | 103-106 | 频域滤波 | ⊙ | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-67) `x̂(k)=F^H X̂(k)` | 103-106 | 回时域 | 1/N | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-68) `T=[0 I 0]` 块提取 | 103-106 | 投影 | — | fblms.m | — | — | — | OCR-UNCERTAIN | N/A |
 | (4-69) `x̃(k)=T x̂(k)` | 103-106 | 有效块 | — | fblms.m | — | — | — | BOOK-EXACT | OK |
-| (4-70)~(4-73) | 107-108 | 扫描缺失（BLMS 自适应更新区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (4-70)~(4-73) | 107-108 | 扫描缺失（BLMS 自适应更新区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (4-74) `y_in,y_re,y_out,r_m` | 107-110 | FDDA 块 | N_c、N_f | ch4_fdda_teq_core | — | — | — | BOOK-EXACT | OK |
 | (4-75) `x̃(k)=[x̄;x̂;x̃]` 反馈窗口 | 107-110 | 反馈构造 | 中间块置零 | ch4_fdda_feedback_block | — | — | — | BOOK-EXACT | OK |
 | (4-76) `R_m=Fr_m; X̃=F x̃` | 107-110 | 频域 | 无 1/N | ch4_fdda_teq_core | — | — | — | BOOK-EXACT | OK |
-| (4-77)~(4-80) | 111-112 | 扫描缺失（FDDA 更新式区） | — | — | — | — | — | SCAN-MISSING | N/A |
-| (4-81) 外迭代继承 W/B | ~111-112 | 迭代规则 | — | ch4_fdda_teq_core | — | — | — | SCAN-MISSING | N/A |
-| (4-82) 块内更新 W/B | ~111-112 | 自适应 | — | ch4_fdda_teq_core | — | — | — | SCAN-MISSING | N/A |
+| (4-77)~(4-80) | 111-112 | 扫描缺失（FDDA 更新式区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
+| (4-81) 外迭代继承 W/B | ~111-112 | 迭代规则 | — | ch4_fdda_teq_core | — | — | — | TRANSCRIPTION-PENDING | N/A |
+| (4-82) 块内更新 W/B | ~111-112 | 自适应 | — | ch4_fdda_teq_core | — | — | — | TRANSCRIPTION-PENDING | N/A |
 
 第4章编码参数：**(171,133)₈**（书页 91-94、表4-4）为 4.3 节 BOOK；FDDA 实验原文用 **(7,5)₈**（书页 111-112）。`ch4_convolutional_trellis/encode` 已参数化（八进制解释，poly2trellis 惯例），默认 (7,5)₈ 不变，`cfg.convCodeG=[171 133]` 可选（test_eq_4_convcode）。
 
@@ -191,31 +191,31 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 
 | Formula | Page | Domain | Normalization | MATLAB Production | MATLAB Oracle | C | Test | FormulaStatus | ParameterStatus |
 |---|---|---|---|---|---|---|---|---|---|
-| (5-1)~(5-7) | 123-124 | 扫描缺失（CCK 码本生成区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (5-1)~(5-7) | 123-124 | 扫描缺失（CCK 码本生成区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (5-8) Golay 递推 `[A_k;B_k]=[A_{k-1} B_{k-1};B_{k-1} -A_{k-1}]` | 125-128 | 互补对 | — | ch5_golay_complementary_pair | — | — | — | BOOK-EXACT | OK |
 | (5-9) A_1/B_1/A_2/B_2 序列 | 125-128 | 码本 | — | ch5_cck_codebook | — | — | — | OCR-UNCERTAIN | N/A |
 | (5-10) G^T 生成矩阵 | 125-128 | 生成矩阵 | — | ch5_cck_codebook | — | — | — | OCR-UNCERTAIN | N/A |
 | (5-11) `r(i)=Σa(k)h(i-k)+w(i)` | 125-128 | 接收模型 | 线性卷积 | ch5_static_cck_frame | — | — | — | BOOK-EXACT | OK |
 | (5-12) 码片相关展开 | 125-128 | — | — | — | — | — | — | OCR-UNCERTAIN | N/A |
-| (5-13)~(5-23) | 129-130 | 扫描缺失（MF 界分析区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (5-13)~(5-23) | 129-130 | 扫描缺失（MF 界分析区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (5-24) `argmin_i‖r-a_i‖²` ML 判决 | 129-132 | 检测 | — | ch5_nearest_book | — | — | — | BOOK-EXACT | OK |
 | (5-25) 判决区域 Z_i | 129-132 | 检测 | — | — | — | — | — | THEORY-ONLY | N/A |
 | (5-26)~(5-28) 错误概率 P_e | 129-132 | 理论 | 1/KM | — | — | — | — | THEORY-ONLY | N/A |
 | (5-29) 条件错误概率 | 129-132 | 理论 | — | — | — | — | — | OCR-UNCERTAIN | N/A |
-| (5-30)~(5-40) | 131-132 | 扫描缺失（Rake/DFE 区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (5-30)~(5-40) | 131-132 | 扫描缺失（Rake/DFE 区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (5-41) `x_i=Σh_l b_{i-l}` | 133-136 | 接收 | 线性卷积 | ch5_expected_block | — | — | — | BOOK-EXACT | OK |
 | (5-42) `x'_k=x_n` CMF+CIR | 133-136 | 处理链 | — | ch5_matched_filter_detect | — | — | — | BOOK-EXACT | OK |
 | (5-43) `μ_k=Σh_l^* n_{k+l}` 噪声项 | 133-136 | 噪声 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (5-44)/(5-45) `y_k` 含前后 ISI | 133-136 | 检测输出 | — | ch5_candidate_scores | — | — | — | BOOK-EXACT | OK |
 | (5-46) `â_k=y_k-Σx'ã-Σx'â` 双向消除 | 133-136 | DFE 判决 | — | ch5_dfe_detect/ch5_backward_dfe_detect | — | — | — | BOOK-EXACT | OK |
 | (5-47) `ã_k=y_k-Σx'â` 后置 ISI | 133-136 | 临时判决 | — | ch5_dfe_detect | — | — | — | BOOK-EXACT | OK |
-| (5-48)~(5-56) | 135-136 | 扫描缺失（TR-Diversity 区） | — | — | — | — | — | SCAN-MISSING | N/A |
-| (5-57) `y(k)=(s̃+s̃_e)/2` | 137-140 | 分集合并 | 1/2 | ch5_tr_diversity_detect | — | — | — | OCR-UNCERTAIN | N/A |
+| (5-48)~(5-56) | 135-136 | 扫描缺失（TR-Diversity 区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
+| (5-57) `y(k)=(ỹ(k)+ỹ_e(k))/2=a(k)(â(k)+μ_e(k))/2`（两个 BiDFE 输出等权合并，2026-08-13 回 book/32.png 复核） | 137-140 | 分集合并 | 1/2 | —（待建 BiDFE-1/BiDFE-2 合并函数；原挂 ch5_tr_diversity_detect 为多分支匹配滤波+码本判决，非本式，已移除） | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (5-58) `â(k)=dec[y(k)]` | 137-140 | 判决 | — | — | — | — | — | BOOK-EXACT | OK |
 | (5-59) 扩展判决递推 | 137-140 | 迭代 | — | ch5_extend_cck_word | — | — | — | BOOK-EXACT | OK |
 | (5-60) `L^o(b_1)=L_e^o+L_a^o` | 137-140 | LLR | — | ch5_soft_book_detect_with_prior | — | — | — | BOOK-EXACT | OK |
 | (5-61) `L^o(c_n)=L_e^o+L_a^o` | 137-140 | LLR | — | 同上 | — | — | — | BOOK-EXACT | OK |
-| (5-62)~(5-69) | 139-140 | 扫描缺失（Turbo-CCK 检测区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (5-62)~(5-69) | 139-140 | 扫描缺失（Turbo-CCK 检测区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (5-70) RSSE 分支度量 λ(x̃_k\ | S[k]) | 141-144 | 网格搜索 | ch5_candidate_scores | — | — | — | OCR-UNCERTAIN | N/A |
 | (5-71) 符号后验 P(x_k\ | z_k) | 141-144 | 概率 | ch5_soft_book_detect_with_prior | — | — | — | BOOK-EXACT | OK |
 | (5-72) 外信息高斯 pdf | 141-144 | EXIT 分析 | — | — | — | — | — | THEORY-ONLY | N/A |
@@ -226,7 +226,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (5-80) `X̂_k^{(i)}=(C^{(i)})^H Y_k-(B^{(i)})^H X̃^{(i)}` | 145-148 | MIMO-IBDFE | — | ch5_fde_cck_detect | — | — | — | ALG-EQUIV | OK |
 | (5-81) `x̄_m^i=x_m^i+n̄_m^i` | 145-148 | 软估计 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (5-82) 软概率 P(x̄_m^i=β_j) | 145-148 | 概率 | — | ch5_soft_book_detect | — | — | — | OCR-UNCERTAIN | N/A |
-| (5-83)~(5-96) | 147-148 | 扫描缺失（CCK-SM 接收区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (5-83)~(5-96) | 147-148 | 扫描缺失（CCK-SM 接收区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (5-97) `h(t,τ)=Σβ_l δ(τ-τ_l)` 3km 信道 | 149-152 | 信道 | — | ch5_long_uwa_channel（合成，非原 taps） | — | — | — | BOOK-EXACT | PARAM-UNRECOVERABLE |
 
 第5章已知工程偏差：
@@ -253,19 +253,19 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (6-13) `c_i(t)=ΣC_{i,k}φ(t-kT_c)` | 169-172 | 扩频波形 | — | — | scfde.book_formulas.ch6_spread_waveform | — | test_book_formulas_ch6 | BOOK-EXACT | OK |
 | (6-14) `s_i(t)=Σf(k)d_{i,k}c_i(t-kT_f)` | 169-172 | 发射 | T_f=L_c T_c | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (6-15) `f^l(L_c c_i)` 循环移位 | 169-172 | 移位操作 | — | ch6_shifted_codebook | — | — | — | BOOK-EXACT | OK |
-| (6-16)~(6-19) | 173-176 | 扫描缺失（常规 CSK 接收区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (6-16)~(6-19) | 173-176 | 扫描缺失（常规 CSK 接收区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (6-20) `h_{n,a}=[… ]^T` | 177-180 | 用户-信道 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (6-21) `r_n(j)=Σh_{n,a}(l)x_m(j-l)+w_n(j)` | 177-180 | 接收模型 | — | ch6_csk_idma_detect | — | — | — | BOOK-EXACT | OK |
 | (6-22) `E(r_n(j))=ΣΣh E(x)` | 177-180 | 均值 | — | ch6_posterior_signal_estimate | — | — | — | BOOK-EXACT | OK |
 | (6-23) `Var(r_n(j))=ΣΣ\ | h\ | ²Var+σ_w²` | 177-180 | ch6_posterior_signal_estimate | — | — | — | BOOK-EXACT | OK |
 | (6-24)/(6-25) 干扰分解 ζ | 177-180 | 干扰项 | — | ch6_ese_residual | — | — | — | OCR-UNCERTAIN | N/A |
-| (6-26)~(6-37) | 179-182 | 扫描缺失（ESE/IDMA 更新区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (6-26)~(6-37) | 179-182 | 扫描缺失（ESE/IDMA 更新区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (6-38) `Q_m(t)=Σh_{m,n}⊗b̂_n(-t)` PTR 等效信道 | 181-184 | PTR | 线性卷积 | ch6_ptr_context | — | — | — | BOOK-EXACT | OK |
 | (6-39) `w̃_i(t)=Σw_n⊗ĥ_n(-t)` | 181-184 | 噪声 | — | ch6_ptr_context | — | — | — | BOOK-EXACT | OK |
 | (6-40) `y^{(s)}(j)=ΣΣQ_m(l)x_m(j-l)+w̃` | 181-184 | 接收 | — | — | — | — | — | EXECUTABLE-UNIMPLEMENTED | OK |
 | (6-41) `E(y^{(s)})` | 181-184 | 均值 | — | — | scfde.book_formulas.ch6_ptr_ese_moments | — | test_book_formulas_ch6 | BOOK-EXACT | OK |
 | (6-42) `Var(y^{(s)})` | 181-184 | 方差 | — | — | scfde.book_formulas.ch6_ptr_ese_moments | — | test_book_formulas_ch6 | BOOK-EXACT | OK |
-| (6-43)~(6-63) | 183-188 | 扫描缺失（IDMA 检测迭代区） | — | — | — | — | — | SCAN-MISSING | N/A |
+| (6-43)~(6-63) | 183-188 | 扫描缺失（IDMA 检测迭代区） | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
 | (6-64) `x̂_i(j)=P(1)-P(-1)` 软符号 | 185-188 | 软符号 | — | ch6_posterior_signal_estimate | — | — | — | BOOK-EXACT | OK |
 | (6-65) `Var(x_i)=1-(E(x_i))²` | 185-188 | 方差 | — | 同上 | — | — | — | BOOK-EXACT | OK |
 

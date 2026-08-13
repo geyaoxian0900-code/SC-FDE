@@ -13,7 +13,9 @@ FormulaStatus（公式状态，每行一个）:
   ALG-EQUIV                 实现形式不同，但有代数证明 + golden vector 证明严格等价
   SOURCE-INCONSISTENT       扫描件清楚，但书内不同公式互相矛盾（如 (4-22)、(6-10)）；
                             须注明 Resolution（跟随哪一式）
-  SCAN-MISSING              原书页码不在 book/ 扫描件内，公式未转写
+  TRANSCRIBED               图片存在且已完成人工转录（仍须逐式核对实现）
+  TRANSCRIPTION-PENDING     图片存在（book/*.png 四页拼图，覆盖 1-188），
+                            但转录尚未覆盖该公式；不再存在 SCAN-MISSING
   OCR-UNCERTAIN             转写存疑，须回原图核对
   EXECUTABLE-UNIMPLEMENTED  公式已转写且可执行，但无实现（计入分母）
   ENGINEERING               damping、近似概率、替代编码、经验缩放等（显式拆分）

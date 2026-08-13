@@ -1,0 +1,75 @@
+﻿◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ◈ secrets for agents [www.dotenvx.com]
+好的，这是对您提供的《单载波水声通信技术》扫描图的完整转写。内容已按页码分组，并严格遵循您的要求。
+
+---
+
+### 第 5 章 单载波互补码键控扩频 - 137 -
+
+**图题:**
+- 图 5-7 时反分集接收机
+
+**公式:**
+- (5-57)
+$$
+\begin{aligned}
+y(k) &= \frac{\tilde{x}(k) + \tilde{\tilde{x}}_0(k)}{2} \\
+&= a(k) + \frac{\tilde{\mu}_1(k) + \mu_0(k)}{2}
+\end{aligned}
+$$
+
+- (5-58)
+$$
+\hat{a}(k) = \text{dec}[y(k)]
+$$
+
+- (5-59)
+$$
+\begin{cases}
+\tilde{a}_{i+1}(k) = \hat{a}_i(k) \\
+\tilde{\tilde{a}}_{i+1}(k) = \tilde{\hat{a}}_{i+1}(k)
+\end{cases}
+$$
+
+**关键句:**
+- “图 5-7 在 CMF 之后的等效复合信道 $s_k$ 具有对称的脉冲响应，因此分集联合的输出为”
+- “最后”
+- “可以联合迭代信号处理和反分集，进一步提高接收机的误码率性能。将时反分集估计的 GCCK 码字看作临时判决以用于前向 BiDFE 和反向 BiDFE。有”
+- “式中，$\hat{a}$ 是时反分集接收机输出的第$i$次迭代判决；$\tilde{a}_{i+1}$ 是第$i+1$次临时判决（图 5-7 中的时反分集接收机的前向 BiDFE）；$\tilde{\tilde{a}}_{i+1}$ 是序列 $\hat{a}$ 的反；$\tilde{\hat{a}}_{i+1}$ 是第$i+1$次假设判决（图 5-7 中的时反分集接收机的反向 BiDFE）。”
+
+---
+
+### 第 5 章 单载波水声通信技术 - 138 -
+
+**章节标题:**
+- 5.3 基于最大似然的 CCK Turbo 方法
+
+**图题:**
+- 图 5-8 Turbo 均衡器结构
+
+**公式:**
+- (5-60)
+$$
+L^e(b_i) = \lg \frac{P(b_i=0|r)}{P(b_i=1|r)} = L_i^e(c_i) + L_i^e(c_0)
+$$
+
+- (5-61)
+$$
+L^e(c_i) = L_e^o(c_i) + L_e^o(c_0)
+$$
+
+- (5-62)
+$$
+L_i^o(b_i) = L_e^o(b_i) + \Pi(L_e^o(c_i))
+$$
+
+- (5-63)
+$$
+L_e^o(c_i) = L_i^o(c_i) = \Pi^{-1}(L_e^o(b_i))
+$$
+
+**关键句:**
+- “CCK 调制虽然可以提供相对于 DSSS 调制更高的数据通信速率，但是 CCK 调制抵抗多径效应影响的能力是有限的。然而在关于 CCK 调制均衡器的研究中，还未出现将 Turbo 均衡引入 CCK 调制的研究。因此本节介绍基于最大似然的 CCK Turbo 均衡。”
+- “有关 Turbo 均衡，在本书前述章节已经提及。Turbo 均衡利用了对数外似然比在接收端迭代流动来实现同步的均衡和译码，这种方法最早应用于 Turbo 译码。出现在文献[9]中的 Turbo 均衡器具有如图 5-8 所示的结构，其中 $r$ 表示接收信号，$\hat{b}$ 代表信息序列的估计值。在 Turbo 均衡中，软信息 $L$ （通常为对数似然比）在接收端各部分之间循环流动。软信息 $L$ 中的字母 $c$ 代表均衡器，$D$ 代表译码器，$e$ 代表外信息，$a$ 代表先验信息。”
+- “常用的软信息为对数似然比（LLR），软输入软输出（soft-in-soft-out, SISO）均衡器中的 LLR 可以定义为”
+- “同样地，译码

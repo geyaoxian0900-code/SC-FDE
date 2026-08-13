@@ -1,0 +1,39 @@
+﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ enable debugging { debug: true }
+好的，这是对您提供的《单载波水声通信技术》四页扫描图的完整转写。内容已按页码分组，并严格遵循您的要求。
+
+---
+
+### 第 111 页
+
+**页眉/页脚信息:**
+- 章节标题: 第4章 单载波迭代均衡
+- 页码: · 111 ·
+
+**正文内容:**
+
+仿真采用 QPSK 调制, 每次发射数据帧为 $1280 \times 9$ 个 QPSK 符号。选用传统的卷积码作为信道编码, 编码的速率为 $1/2$, 生成的多项式为 $(G_1, G_2) = (7,5)_8$, 每一帧发射数据包括 9 个数据块, 每个数据块包括头部的 256 个训练序列和 1024 个信息符号。
+
+在 FDDA-TEQ 中, 设置内层迭代次数 $I_{\text{inner}} = 2$, 外层迭代次数 $I_{\text{outer}} = 3$, 前向滤波器和反向滤波器自适应步长分别为 $\mu_f = 0.2$, $\mu_b = 0.01$。数据子块长度 $N=32$, 因果干扰和反因果干扰的长度分别设置为 $N_c = 32$, $N_b = 10$。
+
+图 4-29 给出了当 $N_c$ 变化时 BER 的变化趋势。当外层迭代次数一致时, 比较不同的 $N_c$ 对误码性能的影响。在第 1 次迭代时, 随着 $N_c$ 逐渐增加, BER 逐渐增大。这是因为较小的 $N_c$ 使滤波器更难得定为频响, 可以较好地跟踪信道变化, 从而获得较好的性能。当 $\text{BER} = 10^{-4}$, 外层迭代次数 $I_{\text{outer}} = 1$ 时, $N_c = 8$ 相比于 $N_c = 32$ 大约有 $5.5\text{dB}$ 的信噪比增益。当 $\text{BER} = 10^{-4}$、外层迭代次数 $I_{\text{outer}} = 1$ 时, $N_c = 8$ 相比于 $N_c = 16$ 大约有 $1\text{dB}$ 的信噪比增益。
+
+**图题:**
+- 图 4-29 不同的 $N_c$ 对该码性能的影响
+
+**关键句 (参数取值):**
+- “仿真采用 QPSK 调制...”
+- “在 FDDA-TEQ 中, 设置内层迭代次数 $I_{\text{inner}} = 2$, 外层迭代次数 $I_{\text{outer}} = 3$...”
+- “数据子块长度 $N=32$, 因果干扰和反因果干扰的长度分别设置为 $N_c = 32$, $N_b = 10$。”
+
+---
+
+### 第 112 页
+
+**页眉/页脚信息:**
+- 章节标题: 单载波水声通信技术
+- 页码: · 112 ·
+
+**正文内容:**
+
+将基于 NLMS 算法的时域 Turbo 均衡器（time domain direct adaptive turbo equalizer, TDDA-TEQ）和基于信道估计的频域 Turbo 均衡器（frequency domain channel estimation turbo equalizer, FDCE-TEQ）与频域直接自适应 Turbo 均衡（FDDA-TEQ）进行性能对比。为了保持导频开销一致，在 TDDA-TEQ 和 FDCE-TEQ 中，训练序列和导频长度也为 256 个 QPSK 符号，导频开销 $\kappa = 0.25$。数据子块大小 $N=32$，滑动窗口步长 $N_s = 8$，内层迭代次数 $I_{\text{inner}} = 1$，外层迭代次数 $I_{\text{outer}} = 3$。未编码 BER 结果和编码 BER 结果如图 4-31 和图 4-32 所示。从图 4-31 中可以看出，在第一次外层迭代时，FDDA-TEQ 和 TDDA-TEQ 的性能非常接近，FDCE-TEQ 性能最差。随着迭代次数的增加，FDDA-TEQ 的性能要优于其他两种方法。这个结论从图 4-32 同样可以得到。从图 4-32 中可以看出

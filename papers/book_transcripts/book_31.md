@@ -1,0 +1,47 @@
+﻿◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ suppress logs { quiet: true }
+好的，这是对您提供的《单载波水声通信技术》扫描图的完整转写。内容已按页码分组，并严格遵循您的要求。
+
+---
+
+### 第 5 章 单载波互补均衡扩频 - 133 -
+
+**图题:**
+- 图 5-4 CMF 前后信道冲激响应比较
+
+**公式:**
+
+由式 (5-41) 可得
+$$x'_k = x_{n_k} \tag{5-42}$$
+
+该关系由 CMF 和 CIR 的关系确定, 如图 5-4 (b) 所示, 复合信道冲激响应按幅度最大的路径对称。需要注意的是, CMF 输出噪声 $\mu_k$ 是有色高斯噪声, 后续的检测算法将忽略该噪声的相关性, 该噪声为
+$$\mu_k = \sum_{l=0}^{L-1} h_l^* n_{k+l} \tag{5-43}$$
+
+根据式 (5-42) 的对称性, 可以将式 (5-40) 变为
+$$
+\begin{aligned}
+y_k &= x_n a_0 + \sum_{i=-L}^{-1} x_i a_{k-i} + \sum_{i=1}^{L-1} x_i a_{k+i} + \mu_k \\
+&= x_n a_0 + \sum_{i=1}^{L-1} x_{n-i} a_{k+i} + \sum_{i=1}^{L-1} x_{n+i} a_{k-i} + \mu_k \\
+&= x_n a_0 + \sum_{i=1}^{L-1} x'_{n-i} a_{k+i} + \sum_{i=1}^{L-1} x'_{n+i} a_{k-i} + \mu_k
+\end{aligned} \tag{5-44}
+$$
+
+对信道相关函数进行归一化, 有 $x_0 = 1$, 则
+$$y_k = a_k + \sum_{i=1}^{L-1} x'_{n-i} a_{k+i} + \sum_{i=1}^{L-1} x'_{n+i} a_{k-i} + \mu_k \tag{5-45}$$
+
+---
+
+### 第 5 章 单载波互补均衡扩频 - 134 -
+
+**文本:**
+式 (5-45) 右边第二项是未来的 GCCK 符号对当前 GCCK 符号的多径干扰, 即前置 ISI; 第三项是过去的 GCCK 符号对当前 GCCK 符号的多径干扰, 即后置 ISI; 第四项是噪声。
+
+**3. 双向判决反馈均衡器**
+
+由式 (5-45) 可知, 为了正确判断发送的 GCCK 符号, 首先需要对前置和后置 ISI 进行估计以消除它们对当前 GCCK 检测的影响, 可以获得
+$$\hat{a}_k = y_k - \sum_{i=1}^{L-1} \hat{x}'_{n-i} \hat{a}_{k+i} - \sum_{i=1}^{L-1} \hat{x}'_{n+i} \hat{a}_{k-i} \tag{5-46}$$
+
+式中, $\hat{a}_{k+i}$ 和 $\hat{a}_{k-i}$ 是过去 GCCK 符号和未来 GCCK 符号的估计。由式 (5-46) 可知, 为了消除前置和后置 ISI, 必须先获得当前 GCCK 符号的前面和后面的 GCCK 符号的估计。采用常规的 DFE 可消除后置 ISI, 而为了消除前置 ISI, 需引入临时判决 (tentative decision) 的概念, 并同时采用 DFE 消除前置 ISI, 其中 DFE 的输出为
+$$\tilde{a}_k = y_k - \sum_{i=1}^{L-1} \hat{x}'_{n+i} \hat{a}_{k-i} \tag{5-47}$$
+
+式中, $\tilde{a}_k$ 是过去 GCCK 符号的临时判决, 假设 $\hat{a}$ 估计正确, 则 $\tilde{a}_k$ 中仅包含如图 5-4 (b) 所示的后置 ISI 的干扰。为了消除由未来 GCCK 符号造成的前置 ISI, 采用分组时间反转 (block time reversal, BTR)。所谓 BTR, 就是通过倒组一组接收

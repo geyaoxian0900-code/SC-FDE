@@ -1,0 +1,84 @@
+﻿◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (3) from C:\Users\geyaoxian\.config\opencode\skills\image-vision\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+以下是《单载波水声通信技术》扫描图中四个页面的完整转写内容，按页码分组输出，涵盖所有公式、表格、图题、关键句及参数定义。
+
+---
+
+## **第 3 章 单载波频域均衡 · 67**
+
+### 公式 (3-81)
+\[
+B_k^i = C_k^i H_k^{H*} - 1
+\]
+式中，\(\sigma_e^2\) 为噪声方差。根据文献[8]，对于期望信号增益 \(\beta^i\) 的初值设置为：
+
+### 公式 (3-82)
+\[
+\beta^i = \frac{1}{N} \sum_{k=0}^{N-1} C_k^i H_k^{i*}
+\]
+
+并基于 \(\hat{x}_n^i = x_n\) 的假设，剩下的迭代过程中设置为 \(\beta^i = 1\)，本章中则为：
+
+### 公式 (3-83)
+\[
+\beta^i = \frac{1}{N} \sum_{k=0}^{N-1} C_k^i H_k^{i*}
+\]
+
+为了保证迭代稳定，对前向滤波器系数进行归一化，新的滤波器系数为：
+
+### 公式 (3-84)
+\[
+C_k^i = \frac{A_k^i}{\Gamma}
+\]
+
+### 公式 (3-85)
+\[
+B_k^i = C_k^i H_k^{i*} - 1
+\]
+
+式中
+
+### 公式 (3-86)
+\[
+A_k^i = \frac{(H_k^{i*})^2 \Sigma^{-1}}{|H_k^{i*}|^2 \Sigma^{-1} + N \sigma_e^2}
+\]
+
+### 公式 (3-87)
+\[
+\Gamma = \frac{1}{N} \sum_{k=0}^{N-1} A_k^i H_k^{i*}
+\]
+
+---
+
+## **· 68 · 单载波水声通信技术**
+
+LS 信道估计方法计算简便，缺点是其信道估计对噪声比较敏感。从式 (3-88) 可以看出，当 \(e^j\) 较大时，\(H_{LS}^j\) 会有较大的误差。为了降低噪声影响，采用文献[26] 基于 DFT 的信道估计方法。由于水声信道具有稀疏性，信道的大部分能量集中在少数的几条路径，利用这种特性可以在时域进行降噪处理。对估计的信道 \(H_{LS}^j\) 进行 IDFT 处理为：
+
+### 公式 (3-89)
+\[
+h_{est,k}^j = \sum_{n=0}^{N-1} H_{LS,n}^j e^{j \frac{2\pi kn}{N}} = h_k + e_k^j, \quad k = 0,1,\cdots,N-1
+\]
+
+式中，\(e_k^j\) 为估计时域采样表示，通过对插入的 PN 进行相关处理，可以粗略估计信道最大时延扩展为 \(\hat{L}\)。时域降噪处理为：
+
+### 公式 (3-90)
+\[
+h_{DFT,k}^j = 
+\begin{cases}
+h_{est,k}^j, & k = 0,1,\cdots,\hat{L}-1 \\
+0, & n = \hat{L},\hat{L}+1,\cdots,N-1
+\end{cases}
+\]
+
+在对 \(h_{DFT,k}^j\) 进行 DFT 即可得到降噪后的频域信道：
+
+### 公式 (3-91)
+\[
+H_{DFT,k}^j = \sum_{n=0}^{\hat{L}-1} h_{DFT,n}^j e^{-j \frac{2\pi kn}{N}} = h_k + e_k^j, \quad k = 0,1,\cdots,N-1
+\]
+
+利用文献[27]所提方法将 \(H_{DFT}^j\) 与 \(H^j\) 加权合并，得到新的信道估计结果，即：
+
+### 公式 (3-92)
+\[
+H^j = \frac{H^j \sigma_{e1}^2 + H_{DFT}^j \sigma_{DFT}^2}{\sigma_{e1}^2 + \sigma_{

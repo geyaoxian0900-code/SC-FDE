@@ -145,7 +145,7 @@ for id = expand_claimed_equations(equations)
     if isKey(statusMap, char(id))
         statuses(end + 1) = statusMap(char(id)).FormulaStatus; %#ok<AGROW>
     else
-        statuses(end + 1) = "SCAN-MISSING"; %#ok<AGROW>  % untraced ID
+        statuses(end + 1) = "TRANSCRIPTION-PENDING"; %#ok<AGROW>
     end
 end
 if isempty(statuses)
@@ -156,8 +156,8 @@ if any(statuses == "ENGINEERING")
     class_ = "ENGINEERING";
 elseif any(statuses == "EXECUTABLE-UNIMPLEMENTED")
     class_ = "OPEN-UNIMPLEMENTED";
-elseif any(statuses == "SCAN-MISSING")
-    class_ = "OPEN-SCAN";
+elseif any(statuses == "TRANSCRIPTION-PENDING")
+    class_ = "OPEN-TRANSCRIPTION";
 elseif any(statuses == "OCR-UNCERTAIN")
     class_ = "OPEN-OCR";
 elseif any(statuses == "SOURCE-INCONSISTENT")
@@ -491,7 +491,8 @@ end
 
 function coverage = audit_global_formula_coverage(papersDir)
 coverage = struct("total", 0, "bookExact", 0, "algEquiv", 0, ...
-    "scanMissing", 0, "ocrUncertain", 0, "sourceInconsistent", 0, ...
+    "scanMissing", 0, "transcriptionPending", 0, ...
+    "ocrUncertain", 0, "sourceInconsistent", 0, ...
     "engineering", 0, "theoryOnly", 0, "paramUnrecoverable", 0, ...
     "unknown", 0, "duplicateIds", 0, "invalidColumnRows", 0, ...
     "missingImplementationRefs", 0, "invalidImplementationRefs", 0, ...
@@ -527,8 +528,8 @@ for i = 1:numel(lines)
     oracle = cells(6);
     testRef = cells(8);
     coverage.total = coverage.total + n;
-    if fs == "SCAN-MISSING"
-        coverage.scanMissing = coverage.scanMissing + n;
+    if fs == "TRANSCRIPTION-PENDING"
+        coverage.transcriptionPending = coverage.transcriptionPending + n;
     elseif fs == "THEORY-ONLY"
         coverage.theoryOnly = coverage.theoryOnly + n;
     elseif fs == "OCR-UNCERTAIN"
@@ -601,8 +602,8 @@ coverage.traceStructureIntegrity = coverage.unknown == 0 && ...
 coverage.sourceIntegrity = coverage.sourceInconsistent == 0;
 coverage.hardClosed = coverage.traceStructureIntegrity && ...
     coverage.sourceIntegrity && coverage.scanMissing == 0 && ...
-    coverage.ocrUncertain == 0 && isempty(coverage.unimplemented) && ...
-    coverage.engineering == 0;
+    coverage.transcriptionPending == 0 && coverage.ocrUncertain == 0 && ...
+    isempty(coverage.unimplemented) && coverage.engineering == 0;
 end
 function ok = check_test_ref_exists(ref, papersDir)
 % Test reference: "file" or "file/testCase"; the file must exist in
@@ -739,7 +740,7 @@ fprintf("BOOK-EXACT:                  %d\n", coverage.bookExact);
 fprintf("ALG-EQUIV:                   %d\n", coverage.algEquiv);
 fprintf("FORMULA STATUS VERIFIED:     %d\n", verified);
 fprintf("FORMULA EVIDENCE CLOSED:     %d\n", coverage.evidenceClosed);
-fprintf("SCAN-MISSING:                %d\n", coverage.scanMissing);
+fprintf("TRANSCRIPTION-PENDING:      %d\n", coverage.transcriptionPending);
 fprintf("OCR-UNCERTAIN:               %d\n", coverage.ocrUncertain);
 fprintf("SOURCE-INCONSISTENT:         %d\n", coverage.sourceInconsistent);
 fprintf("EXECUTABLE-UNIMPLEMENTED:    %d\n", numel(coverage.unimplemented));
