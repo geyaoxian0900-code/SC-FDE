@@ -200,8 +200,8 @@ function runSweep(ids, snrs, frames, chOpts, labels)
             end
         end
         for k = 1:numel(scIds)
-            berTable(end + 1, :) = {scIds(k), sc, ...
-                strjoin(compose("%.2g", ber(k, :)), ", ")}; %#ok<AGROW>
+            berTable(end + 1, :) = {char(scIds(k)), char(sc), ...
+                char(strjoin(compose("%.2g", ber(k, :)), ", "))}; %#ok<AGROW>
         end
     end
     hold(ax, "off");
