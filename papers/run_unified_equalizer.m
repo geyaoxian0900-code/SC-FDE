@@ -299,8 +299,8 @@ for frame = 1:cfg.frameCount
         results.ids = recv.ids;
         results.names = recv.names;
     end
-    lastFrame = struct("tx", block, "received", received, ...
-        "impulse", impulse, "data", data);
+    lastFrame = struct("tx", chips, "received", received, ...
+        "impulse", imp, "data", reshape(book(idx, :).', 1, []));
     for eq = 1:numel(recv.ids)
         trace = recv.traces{eq};
         if isfield(trace, "indices")
@@ -391,8 +391,8 @@ for frame = 1:cfg.frameCount
         results.ids = recv.ids;
         results.names = recv.names;
     end
-    lastFrame = struct("tx", block, "received", received, ...
-        "impulse", impulse, "data", data);
+    lastFrame = struct("tx", reshape(dicts{1}(idx6, :).', 1, []), ...
+        "received", flat, "impulse", imp, "data", infoIdx);
     for eq = 1:numel(recv.ids)
         trace = recv.traces{eq};
         if isfield(trace, "indices")
@@ -587,8 +587,8 @@ for frame = 1:cfg.frameCount
         results.names = recv.names;
     end
     ref = 1 - 2 * info;
-    lastFrame = struct("tx", block, "received", received, ...
-        "impulse", impulse, "data", data);
+    lastFrame = struct("tx", tx, "received", received, ...
+        "impulse", imp, "data", 1 - 2 * info);
     for eq = 1:numel(recv.ids)
         out = recv.outputs{eq}(:).';
         totalErrors(eq) = totalErrors(eq) + ...
