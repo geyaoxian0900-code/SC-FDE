@@ -342,12 +342,12 @@ codeLength = 63;
 root = scfde.equalizers.ch6_select_csk_root(codeLength);
 [book, bits] = scfde.equalizers.ch6_csk_codebook(root, 4);
 imp = [1, 0.4 * exp(1j * 0.3), 0.15 * exp(-1j * 0.6)];
-% Chip-level noise: the unit-energy codewords spread over codeLength
-% chips, so the noise variance per chip must divide by codeLength or the
-% actual codeword SNR sits at snrDb - 10*log10(codeLength) (MF and SIC
-% showed a flat random line below threshold while ESE, which integrates
-% the chips, appeared ~18 dB stronger).
-nv = 1 / (codeLength * size(bits, 2) * 10^(cfg.snrDb / 10));
+% Chip-level noise: snrDb is the post-despread decision SNR.  The
+% matched-filter correlation integrates codeLength chips (signal energy
+% 1, noise variance nv per chip -> decision SNR = 1/nv), so nv =
+% 10^(-snrDb/10) puts the waterfall at -5..3 dB for 4-ary CSK with the
+% 63-chip processing gain visible as a shift vs the other scenarios.
+nv = 10^(-cfg.snrDb / 10);
 link = struct("noiseVariance", nv, "codeLength", codeLength, ...
     "cskOrder", 4, "conventionalUsers", 1, "idmaUsers", 1, ...
     "innerIterations", 3, "outerIterations", 2, "snrDb", cfg.snrDb, ...
