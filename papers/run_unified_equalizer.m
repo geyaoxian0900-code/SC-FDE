@@ -1,4 +1,4 @@
-﻿function results = run_unified_equalizer(options)
+function results = run_unified_equalizer(options)
 %RUN_UNIFIED_EQUALIZER Unified entry: run any equalizer(s) from all 6 book
 % chapters on a shared link, with plug-and-play selection.
 %
@@ -212,7 +212,72 @@ else
     end
     impulse = impulse / norm(impulse);
 end
-H = fft(impulse);
+% --- multi-element array (scenario contract) -------------------------
+% Each element owns an impulse row and an independent noise draw; element
+% identities are recorded in branchIds.  Row 1 is the reference element:
+% channel.received / channel.impulse stay aliases of it, so every
+% single-channel method keeps its existing contract unchanged.
+useHtfde = ismember("htfde", string(link.equalizers)) || ...
+    ismember("all", string(link.equalizers));
+htfdeP = field_default(cfg, "htfdeSubarrayCount", []);
+htfdeK = field_default(cfg, "htfdeElementsPerSubarray", []);
+if useHtfde
+    if ~isempty(htfdeP) && ~isempty(htfdeK)
+        % BOOK structure: the caller supplies P and K explicitly
+        % (the book experiment values are PARAM-UNRECOVERABLE).
+        link.htfdeSubarrayCount = htfdeP;
+        link.htfdeElementsPerSubarray = htfdeK;
+        link.htfdeMode = "book";
+        elementCount = htfdeP * htfdeK;
+    else
+        % Engineering smoke mode (explicit and documented): degenerate
+        % structure P=1, K=1; marked in the method trace metadata.
+        link.htfdeSubarrayCount = 1;
+        link.htfdeElementsPerSubarray = 1;
+        link.htfdeMode = "engineering";
+        elementCount = 1;
+    end
+else
+    elementCount = field_default(cfg, "elementCount", 1);
+    htfdeMode = field_default(cfg, "htfdeMode", "");
+    if ~isempty(htfdeMode)
+        link.htfdeMode = htfdeMode;
+    end
+end
+elementDelays = field_default(cfg, "elementPathDelays", {});
+elementGains = field_default(cfg, "elementPathGains", {});
+branchImpulses = zeros(elementCount, N);
+branchImpulseLengths = zeros(1, elementCount);
+for elementIndex = 1:elementCount
+    if iscell(elementDelays) && numel(elementDelays) >= elementIndex && ...
+            iscell(elementGains) && numel(elementGains) >= elementIndex
+        impEl = zeros(1, N);
+        dEl = elementDelays{elementIndex};
+        gEl = elementGains{elementIndex};
+        for path = 1:numel(gEl)
+            impEl(dEl(path) + 1) = gEl(path);
+        end
+        normEl = norm(impEl);
+        if normEl > 0
+            impEl = impEl / normEl;
+        end
+        branchImpulses(elementIndex, :) = impEl;
+    else
+        % Shared deterministic profile (synthetic table or the single
+        % Bellhop realization); observations remain independent through
+        % per-element noise draws.
+        branchImpulses(elementIndex, :) = impulse;
+    end
+    % Record the true active span as the last nonzero tap index: the row
+    % is stored zero-padded to N columns, so numel() of the padded row
+    % would return N for every element and carry no length information.
+    activeSpan = find(branchImpulses(elementIndex, :) ~= 0, 1, "last");
+    if isempty(activeSpan)
+        activeSpan = 0;
+    end
+    branchImpulseLengths(elementIndex) = activeSpan;
+end
+branchIds = "elem" + (1:elementCount);
 totalErrors = zeros(1, 0);
 totalBits = zeros(1, 0);
 for frame = 1:cfg.frameCount
@@ -220,13 +285,20 @@ for frame = 1:cfg.frameCount
     data = ((2 * bits(1:2:end) - 1) + 1j * (2 * bits(2:2:end) - 1)) / sqrt(2);
     uw = scfde.equalizers.ch3_zadoff_chu(uwLength, 1);
     block = [data, uw];
-    received = ifft(H .* fft(block));
-    received = received + sqrt(link.noiseVariance / 2) * ...
-        (randn(size(received)) + 1j * randn(size(received)));
+    receivedMatrix = zeros(elementCount, N);
+    for elementIndex = 1:elementCount
+        rEl = ifft(fft(branchImpulses(elementIndex, :)) .* fft(block));
+        rEl = rEl + sqrt(link.noiseVariance / 2) * ...
+            (randn(1, N) + 1j * randn(1, N));
+        receivedMatrix(elementIndex, :) = rEl;
+    end
+    received = receivedMatrix(1, :);
     src = struct("data", data, "tx", block, ...
         "training", block(1:link.trainingSymbols));
     ch = struct("received", received, "impulse", impulse, ...
-        "branches", [received; received]);
+        "branches", receivedMatrix, "branchImpulses", branchImpulses, ...
+        "branchImpulseLengths", branchImpulseLengths, ...
+        "branchIds", branchIds, "referenceElement", 1);
     recv = scfde.receiver_bank_pluggable(ch, src, link);
     if isempty(totalErrors)
         results.ids = recv.ids;
@@ -235,7 +307,10 @@ for frame = 1:cfg.frameCount
         totalBits = zeros(1, numel(recv.ids));
     end
     lastFrame = struct("tx", block, "received", received, ...
-        "impulse", impulse, "data", data);
+        "impulse", impulse, "data", data, ...
+        "branches", receivedMatrix, "branchImpulses", branchImpulses, ...
+        "branchImpulseLengths", branchImpulseLengths, ...
+        "branchIds", branchIds);
     for eq = 1:numel(recv.ids)
         out = recv.outputs{eq}(:).';
         if numel(out) == N

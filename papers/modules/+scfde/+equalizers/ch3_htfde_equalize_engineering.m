@@ -1,12 +1,16 @@
 function [symbols, trace] = ch3_htfde_equalize_engineering(received, H, ...
         noiseVariance, uw, cfg)
-%CH3_HTFDE_EQUALIZE_ENGINEERING HTFDE with posterior-mean reliability.
-%   ENGINEERING variant (BOOK_CONVENTIONS.md rule 2): the book does not
-%   define the reliability weighting, so this version is NOT the book
-%   path.  It retains the previous posterior-mean reliability scaling
-%   (cfg.htfdeReliabilityMode, default "posterior") for comparison
-%   studies.  The book-exact path is ch3_htfde_equalize.m (full
-%   hard-decision post-cursor cancellation, reliability = 1).
+%CH3_HTFDE_EQUALIZE_ENGINEERING Legacy segmented HTFDE with optional
+% posterior-mean reliability (retained comparison variant).
+%   ENGINEERING variant (BOOK_CONVENTIONS.md rule 2): this file retains
+%   the pre-batch-1 implementation — a single channel H with time-domain
+%   branch segments and per-segment phase correction — which does NOT
+%   match the book structure of (3-61)/(3-62) (per-element frequency
+%   domain joint equalization, x_m = IFFT{sum_k C_{m,k} R_{m,k}}, followed
+%   by a multichannel DPLL-DFE).  It is kept only for comparison studies
+%   and is never used by the book path (htfde.m -> ch3_htfde_equalize.m).
+%   The optional reliability weighting (cfg.htfdeReliabilityMode) is not
+%   defined in the book either.
 N = cfg.fftSize;
 segmentLength = N / cfg.htfdeBranches;
 symbols = ifft(scfde.equalizers.ch3_mmse_frequency_equalize(fft(received), H, noiseVariance));

@@ -24,6 +24,11 @@ end
 if ~isfield(cfg, "noiseVariance") || cfg.noiseVariance <= 0
     cfg.noiseVariance = 10^(-cfg.snrDb / 10);
 end
-assert(mod(cfg.fftSize, cfg.htfdeBranches) == 0, ...
-    "SCFDE:BlockSize", "Block length must be divisible by htfdeBranches.");
+% The legacy segmented (engineering) HTFDE variant splits the block into
+% htfdeBranches segments, so its block length must be divisible; the BOOK
+% (3-61)/(3-62) path does not segment and skips this precondition.
+if ~(isfield(cfg, "htfdeMode") && strcmpi(cfg.htfdeMode, "book"))
+    assert(mod(cfg.fftSize, cfg.htfdeBranches) == 0, ...
+        "SCFDE:BlockSize", "Block length must be divisible by htfdeBranches.");
+end
 end
