@@ -50,7 +50,7 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 |---|---|---|---|
 | 第2章 | lms-dfe、nlms-dfe、rls-dfe、dpll-dfe、ptr-dfe | dfe、mc-lms-dfe、mc-nlms-dfe、mc-rls-dfe、subband-ptr-dfe | — |
 | 第3章 | mmse-fde、zf-fde、sd-ibdfe、hd-ibdfe | ice-sd-ibdfe、ice-hd-ibdfe | —（htfde 已于批次1 重写为逐阵元 (3-61)/(3-62)，IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED） |
-| 第4章 | fd-turbo、fblms | td-turbo、tf-turbo、bitf-turbo、fdda-teq | fd-dfe、blms-tf-turbo、tdda-teq、fdda-dfe-teq |
+| 第4章 | fd-turbo、fblms、fdda-teq（公式结构已验证） | td-turbo、tf-turbo、bitf-turbo、fdda-dfe-teq（ALG-EQUIV） | fd-dfe、blms-tf-turbo、tdda-teq |
 | 第5章 | cck-rake、cck-mfb | cck-dfe、cck-tr-diversity、cck-fde | cck-bidfe、cck-bidfe2 |
 | 第6章 | csk-matched-filter | csk-ese | csk-soft-sic |
 
@@ -60,7 +60,7 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 - QPSK/CCK 场景把同一 `received` 复制为两行 `branches`，不构成独立阵元观测；
 - 第4章统一入口使用 BPSK，而原书相应 FDDA 实验使用 QPSK 和多阵元数据；
 - HTFDE 已于批次1 重写为式 (3-61)/(3-62) 的逐阵元 `C_{m,k} R_{m,k}` 合并 + 多通道 DPLL-DFE 后级（IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED）；
-- FDDA 式 (4-77) 的 `W_m^H`、反馈项符号、多阵元求和及内层迭代仍需独立原式验证；
+- FDDA 式 (4-77) 的 `W_m^H`、反馈加号、多阵元求和及内层迭代已按 book/26.png 人工复核并通过独立 oracle（批次2，test_fdda_eq_4_74_82 15/15）；
 - BiDFE 式 (5-57) 的两个滤波器输出等权合并未接入生产路径；
 - 第6章 App 默认单用户，Soft-SIC 另含书中未定义的 0.55 阻尼。
 
@@ -217,12 +217,12 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 | (4-68) `T=[0 I 0]` 块提取 | 103-106 | 投影 | — | fblms.m | — | — | — | OCR-UNCERTAIN | N/A |
 | (4-69) `x̃(k)=T x̂(k)` | 103-106 | 有效块 | — | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-70)~(4-73) | 105-106 | 扫描已存在；BLMS 标量能量分母、时域约束与误差块公式可直接核对 | — | `fblms_equalizer.m` | — | — | `test_fblms_and_curve_benchmark` | BOOK-EXACT | OK |
-| (4-74) `y_in,y_re,y_out,r_m` | 107-110 | FDDA 块 | N_c、N_f | ch4_fdda_teq_core | — | — | — | BOOK-EXACT | OK |
-| (4-75) `x̃(k)=[x̄;x̂;x̃]` 反馈窗口 | 107-110 | 反馈构造 | 中间块置零 | ch4_fdda_feedback_block | — | — | — | BOOK-EXACT | OK |
-| (4-76) `R_m=Fr_m; X̃=F x̃` | 107-110 | 频域 | 无 1/N | ch4_fdda_teq_core | — | — | — | BOOK-EXACT | OK |
-| (4-77)~(4-80) | 108-109 | 扫描已存在；原式含 `W_m^H`、多阵元求和及反馈项，当前单路实现的共轭/符号约定尚无独立等价证明 | — | `ch4_fdda_teq_core.m` | — | — | 现有测试复用生产符号约定 | SOURCE-NORMALIZATION-REVIEW | N/A |
-| (4-81) 外迭代继承 W/B | 110 | 迭代规则 | — | `ch4_fdda_teq_core.m` | — | — | — | BOOK-EXACT | OK |
-| (4-82) 块内更新 W/B | 110 | 自适应 | 标量分母与 γ 指数已实现；反馈符号/共轭/内层迭代仍待独立核对 | `ch4_fdda_teq_core.m` | — | — | 生产同构测试，不足以单独认证原式 | SOURCE-NORMALIZATION-REVIEW | N/A |
+| (4-74) `y_in,y_re,y_out,r_m` | 107-110 | FDDA 块（非对称 `[Nf; N; Nb]`，`L=Nf+N+Nb`，滑动步长 `N_s<N`） | N、N_f、N_b | ch4_fdda_teq_core.m（批次2 重写） | — | — | test_fdda_eq_4_74_82 | BOOK-EXACT | OK |
+| (4-75) `x̃(k)=[x̃_pre;0_N;x̃_post]` 反馈窗口 | 107-110 | 反馈构造 | 中间块置零 | ch4_fdda_teq_core.m（批次2 内联，`[Nf;N;Nb]`） | — | — | test_fdda_eq_4_74_82/test_fblms_and_curve_benchmark | BOOK-EXACT | OK |
+| (4-76) `R_m=Fr_m; X̃=F x̃` | 107-110 | 频域 | 无 1/N | ch4_fdda_teq_core.m | — | — | test_fdda_eq_4_74_82 | BOOK-EXACT | OK |
+| (4-77)~(4-80) `X̂=Σ_m W_m^H⊙R_m+B⊙X̃`、公共误差 E、逐阵元更新 | 108-109 | 输出/误差/更新 | 共轭、反馈加号、多阵元求和（批次2 独立 golden 1e-12） | `ch4_fdda_teq_core.m`（批次2 重写） | — | — | test_fdda_eq_4_74_82 | BOOK-EXACT | OK |
+| (4-81) 内层轮继承 W/B（`W_m^i(1)=W_m^{i-1}(K)`；i 为内层编号） | 110 | 迭代规则 | — | `ch4_fdda_teq_core.m`（weightHistory 记录更新前权值） | — | — | test_fdda_eq_4_74_82 | BOOK-EXACT | OK |
+| (4-82) 块内更新 W/B（γ^i 按内层 i=1 起、逐阵元标量分母 δ+R_m^H R_m、FGF⁻¹） | 110 | 自适应 | — | `ch4_fdda_teq_core.m` | — | — | test_fdda_eq_4_74_82 | BOOK-EXACT | OK |
 
 第4章编码参数：**(171,133)₈**（书页 91-94、表4-4）为 4.3 节 BOOK；FDDA 实验原文用 **(7,5)₈**（书页 111-112）。`ch4_convolutional_trellis/encode` 已参数化（八进制解释，poly2trellis 惯例），默认 (7,5)₈ 不变，`cfg.convCodeG=[171 133]` 可选（test_eq_4_convcode）。
 
@@ -343,7 +343,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 3. **第3章 (3-92)**：书中 MMSE 加权合并未实现，ICE 现用 ρ 加权 LS（ENGINEERING）。
 4. **CCK Turbo 外码**（第5章）：原书未公开 → PARAM-UNRECOVERABLE，重复码标 ENGINEERING。
 5. **ESE damping**（第6章）：主路径需 α=1；α=0.58 拆 `csk_ese_damped.m`。
-6. **第4章 (4-56)~(4-58)/(4-77)~(4-82)**：扫描已存在；需对 FD-DFE 的实际生产调用，以及 FDDA 的共轭、反馈符号、多阵元求和、内层迭代建立独立原式测试。
+6. **第4章 (4-56)~(4-58)**：FD-DFE 生产调用仍未接入 (4-50)~(4-59) 设计（(4-57)/(4-58) 分子分母仍待 book/21.png 人工复核）；FDDA (4-77)~(4-82) 部分已由批次2 完成独立原式验证。
 7. **待逐式转录/核对区间**：2-16~2-25、2-38~2-46、3-8~3-26、3-68~3-80、
    4-10~4-15、4-24~4-41、4-50~4-63、5-1~5-7、5-13~5-23、5-30~5-40、
    5-48~5-56、5-62~5-69、5-83~5-96、6-16~6-19、6-26~6-37、6-43~6-63。
@@ -356,7 +356,7 @@ ZF-FDE | ALG-EQUIV | 书式未扫描到独立编号（3-42~3-44 区域） | OK |
 旧版分章 BOOK-EXACT/ALG-EQUIV 数量：暂不沿用；其中混入了 oracle、未接入生产路径和
                    尚未完成扫描件逐式核对的条目，须在本轮复核结束后重新统计
 FAIL：             另见 App 分组中的不能认证方法（HTFDE 已于批次1 重写并通过公式与集成验证，不再计入 FAIL）
-ENGINEERING：      ICE 3-92（ρ 加权 LS，待补 MMSE 加权原式）、FDDA γ_f/γ_b=0.97（原文仅 γ<1）、
+ENGINEERING：      ICE 3-92（ρ 加权 LS，待补 MMSE 加权原式）、FDDA γ_f/γ_b=0.97（原文仅 γ<1）、FDDA 跨训练边界逐样本 desired/反馈策略（工程决策，待来源确认）、FDDA 译码驱动包装器连续 hop（重叠拼接规则未确认）、
                    ESE damping（独立 ENGINEERING 算法 csk_ese_damped.m）、CCK Turbo 外码（重复码替代）、
                    CCK-FDE 软值混合/回退、Soft-SIC 阻尼及候选裁剪等
 PARAM-UNRECOVERABLE：第3章 N/M/P 具体值、第5章 3km 信道 taps、CCK Turbo 外码参数、γ_f/γ_b
@@ -376,3 +376,29 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 分母中剔除（见 BOOK_CONVENTIONS.md scope 规则）。CCK-SM (5-75)~(5-82) 为
 收发算法公式，标未实现并计入分母，不得 THEORY-ONLY。每章完成后按上方表格
 更新状态。
+
+---
+
+## FDDA 批次2 整改记录（2026-08，commit 见 git log）
+
+- **`fdda-teq`（注册 ID）**：公式结构 (4-74)~(4-82) 已按 book/26.png 人工复核锁定并重写
+  `ch4_fdda_teq_core.m`：非对称窗口 `[Nf;N;Nb]`（`L=Nf+N+Nb`）、滑动步长 `N_s<N`
+  重叠窗、`W_m^H` 共轭、反馈加号、多阵元求和、单一公共误差、逐阵元标量分母
+  `δ+R_m^H R_m`、γ^i 按**内层**编号自 i=1 起、内层权值继承 (4-81)、FGF⁻¹ 约束、
+  trace 全量元数据（effectiveParameters/formulaMode/bookExperimentEquivalent）。
+  验证（本机复验）：test_fdda_eq_4_74_82 **15/15**、test_fblms_and_curve_benchmark
+  **23/23**、运行契约 **21/21**、全量 papers/tests **158/158**、Incomplete 0。
+  状态：**公式结构 BOOK-EXACT**；实验复现仍 **PARAM-UNRECOVERABLE**（γ_f/γ_b 数值、
+  实验信道、QPSK 调制环境、重叠窗口输出拼接规则均未恢复/未确认），
+  `bookExperimentEquivalent=false`。
+- **`fdda-dfe-teq`（注册 ID）**：迁移到共享 FDDA 内核（`ch4_fdda_teq_core`），仅反馈来源
+  不同（`fddaDfeFeedbackMode`："hard" 默认 / "turbo-soft" 显式工程扩展）；已删除
+  `ch4_iterate_fd_blms_turbo` 调用与全部 BLMS 参数读取；`trace.kernel="fdda"`。
+  等级 **ALG-EQUIV**（项目组合名，非原书独立方法，不存在独立 BOOK-EXACT 路径）。
+- **冻结/工程决策**：重叠窗口（hop<N）最终输出拼接规则 **SOURCE-UNCERTAIN** —— 内核
+  重叠模式 `dataOut=[]` 且不驱动译码器；译码驱动包装器固定连续 hop（`trace.hopMode`
+  记录，`cfg.fddaHopLength` 暂存不用）；跨训练边界窗口采用逐样本 desired/反馈策略，
+  标为显式工程决策，待来源确认。
+- **待办（非阻塞）**：`fddaDfeFeedbackMode` 非法值显式拒绝（当前静默回退 "hard"）；
+  两个旧语义测试（testFddaEquationDenominatorThreeBlocks / 已更名
+  testFddaLegacyBridgeMapsIterationsToInnerRounds）已迁移到新公式基线。

@@ -500,9 +500,13 @@ verifyGreaterThan(testCase, max(r1.traces{1}.feedbackNorm(:)), 0, ...
 % so the mu_b sensitivity must be checked with I_outer=3.
 rMu0 = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(0, 3));
 rMuBig = scfde.equalizers.fdda_teq_true(ch, src, mkCfg(100, 3));
+% Hard decisions can coincide on a single random sample even when the
+% equalizer genuinely responds to mu_b; compare the CONTINUOUS
+% equalized output of the last iteration instead.
 verifyGreaterThan(testCase, ...
-    norm(rMu0.outputs{1} - rMuBig.outputs{1}), 1e-6, ...
-    "changing mu_b must change the output");
+    norm(rMu0.traces{1}.softEstimates(end, :) - ...
+        rMuBig.traces{1}.softEstimates(end, :)), 1e-6, ...
+    "changing mu_b must change the continuous equalized output");
 verifyGreaterThan(testCase, ...
     norm(rMuBig.traces{1}.finalB - rMu0.traces{1}.finalB), 1e-12, ...
     "changing mu_b must change the feedback filter B");
@@ -561,74 +565,100 @@ verifyEqual(testCase, cfg2.config.eseDamping, 0.58, ...
 end
 
 function testFddaEquationDenominatorThreeBlocks(testCase)
-% The default denominator must be the book Eq. (4-82) scalar
-% delta + R^H R with the Eq. (4-75) feedback window; THREE training
-% blocks are used so the middle block has past AND future neighbours
-% (non-zero feedback Xb), and every block's W and B update is compared
-% against a manual block-by-block evaluation of Eq. (4-82).
-Nc = 32; Nf = 32; Nb = 10;
-fftLength = Nc + 2 * max(Nf, Nb);
-numBlocks = 3;
+% The default denominator must be the book Eq. (4-82) per-element scalar
+% delta + R_m^H R_m with the Eq. (4-75) feedback window
+% [x~_pre^{Nf}; 0_N; x~_post^{Nb}] and the Eq. (4-77) output
+% IFFT{ conj(W).*R + B.*X~ } (plus feedback); THREE training windows are
+% used so the middle window has past AND future neighbours (non-zero
+% feedback Xb), and every window's W and B update is compared against a
+% manual window-by-window evaluation of Eq. (4-82) with gamma^i starting
+% at i = 1 (first inner round scale gamma^1).
+Nf = 3; N = 4; Nb = 2; hop = N;
+fftLength = Nf + N + Nb;
+numWindows = 3;
+frameLength = numWindows * N + Nb;         % 14: 3 windows + final post
 rng(7, "twister");
-training = (1 - 2 * randi([0 1], 1, Nc * numBlocks));
+training = (1 - 2 * randi([0 1], 1, frameLength));
 imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
-received = ifft(fft([imp, zeros(1, numel(training) - numel(imp))]).' .* ...
+received = ifft(fft([imp, zeros(1, frameLength - numel(imp))]).' .* ...
     fft(training).');
 received = received + 0.1 * (randn(size(received)) + 1j * randn(size(received)));
 received = received.';
-params = struct("blockLength", Nc, "ffLength", Nf, "fbLength", Nb, ...
-    "stepFf", 0.2, "stepFb", 0.01, "outerIterations", 1, ...
-    "forgettingF", 0.97, "denomMode", "equation", ...
-    "trainLength", Nc * numBlocks, "referenceData", training);
+gamma = 0.97;
+reg = 1e-6;
+params = struct("blockLength", N, "ffLength", Nf, "fbLength", Nb, ...
+    "hopLength", hop, "ffConstraintLength", Nf, "fbConstraintLength", Nb, ...
+    "stepFf", 0.2, "stepFb", 0.01, "innerIterations", 1, ...
+    "outerIterations", 1, "forgettingF", gamma, "forgettingB", gamma, ...
+    "denomMode", "equation", "trainLength", frameLength, ...
+    "regularization", reg);
 params.decisionFn = @(x) sign(real(x));
 [~, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
     received, training, params, @(o, d) d);
 Wk = trace.finalW; Bk = trace.finalB;
-% Manual block-by-block Eq. (4-82) with the Eq. (4-75) window.
+% Manual window-by-window Eq. (4-82) with the (4-74)/(4-75) windows.
 W = ones(fftLength, 1); B = zeros(fftLength, 1);
-frontTail = zeros(1, Nf);
-xNorm = zeros(1, numBlocks);
-for block = 0:numBlocks - 1
-    blockStart = block * Nc + 1;
-    current = received(blockStart:blockStart + Nc - 1);
-    rearStart = blockStart + Nc;
-    rearEnd = min(rearStart + Nf - 1, numel(received));
-    rear = zeros(1, Nf);
-    if rearStart <= numel(received)
-        rear(1:rearEnd - rearStart + 1) = received(rearStart:rearEnd);
+xNorm = zeros(1, numWindows);
+for win = 0:numWindows - 1
+    s = 1 + win * hop;
+    % (4-74): [pre^{Nf}; cur^{N}; post^{Nb}] with zero padding.
+    window = zeros(1, fftLength);
+    for preSlot = 1:Nf
+        idx = s - Nf - 1 + preSlot;
+        if idx >= 1 && idx <= frameLength
+            window(preSlot) = received(idx);
+        end
     end
-    inputBlock = [frontTail, current, rear];
-    R = fft(inputBlock, fftLength);
-    % Eq. (4-75) window over the training sequence.
-    fbBlock = scfde.equalizers.ch4_fdda_feedback_block( ...
-        training, blockStart - 1, Nc, Nf);
-    Xb = fft(fbBlock, fftLength);
-    xNorm(block + 1) = norm(Xb);
-    filtered = ifft(W .* R.' - B .* Xb.').';
-    valid = filtered(Nf + 1:Nf + Nc);
-    desired = training(blockStart:blockStart + Nc - 1);
+    window(Nf + 1:Nf + N) = received(s:s + N - 1);
+    for postSlot = 1:Nb
+        idx = s + N - 1 + postSlot;
+        if idx <= frameLength
+            window(Nf + N + postSlot) = received(idx);
+        end
+    end
+    R = fft(window, fftLength).';
+    % (4-75): known training neighbours, middle N strictly zero.
+    fb = zeros(1, fftLength);
+    for preSlot = 1:Nf
+        idx = s - Nf - 1 + preSlot;
+        if idx >= 1 && idx <= frameLength
+            fb(preSlot) = training(idx);
+        end
+    end
+    for postSlot = 1:Nb
+        idx = s + N - 1 + postSlot;
+        if idx <= frameLength
+            fb(Nf + N + postSlot) = training(idx);
+        end
+    end
+    Xb = fft(fb, fftLength).';
+    xNorm(win + 1) = norm(Xb);
+    % (4-77): conj(W) feedforward, PLUS feedback.
+    filtered = conj(W) .* R + B .* Xb;
+    valid = ifft(filtered, fftLength);
+    valid = valid(Nf + 1:Nf + N).';
+    desired = training(s:s + N - 1);
     err = desired - valid;
-    errorBlock = zeros(1, fftLength);
-    errorBlock(Nf + 1:Nf + Nc) = err;
-    E = fft(errorBlock, fftLength);
-    denomF = 1e-6 + real(R * R');
-    W = W + 0.2 * (conj(R.') .* E.') / denomF;
-    wT = ifft(W); wT(Nf + 1:end) = 0; W = fft(wT);
-    denomB = 1e-6 + real(Xb * Xb');
-    B = B + 0.01 * (conj(Xb.') .* E.') / denomB;
-    bT = ifft(B); bT(Nb + 1:end) = 0; B = fft(bT);
-    frontTail = current(end - Nf + 1:end);
+    E = fft([zeros(1, Nf), err, zeros(1, Nb)], fftLength).';
+    % (4-82): per-element scalar denominator, gamma^1 scale.
+    denomF = reg + real(R' * R);
+    W = W + gamma * 0.2 * (conj(R) .* E) / denomF;
+    wT = ifft(W, fftLength); wT(Nf + 1:end) = 0; W = fft(wT, fftLength);
+    denomB = reg + real(Xb' * Xb);
+    B = B + gamma * 0.01 * (conj(Xb) .* E) / denomB;
+    bT = ifft(B, fftLength); bT(Nb + 1:end) = 0; B = fft(bT, fftLength);
 end
 verifyGreaterThan(testCase, xNorm(2), 0, ...
-    "the middle block must have a non-zero feedback spectrum");
+    "the middle window must have a non-zero feedback spectrum");
 verifyGreaterThan(testCase, norm(B), 0, ...
-    "the feedback filter must be non-zero after three training blocks");
+    "the feedback filter must be non-zero after three training windows");
 verifyEqual(testCase, Wk, W, "AbsTol", 1e-12, ...
     "kernel W must equal the manual Eq. (4-82) updates");
 verifyEqual(testCase, Bk, B, "AbsTol", 1e-12, ...
     "kernel B must equal the manual Eq. (4-82) updates");
-verifyEqual(testCase, trace.stepScale(1, 1), 1, ...
-    "first block step scale must be gamma^0 = 1");
+verifyEqual(testCase, trace.stepScale(1, :), gamma * ones(1, numWindows), ...
+    "AbsTol", 1e-12, ...
+    "the first inner round scale must be gamma^1 for every window");
 end
 
 function testFddaWrapperDefaultDenominatorIsEquation(testCase)
@@ -676,38 +706,43 @@ verifyGreaterThan(testCase, ...
     "production default must differ from the bin engineering mode");
 end
 
-function testFddaForgettingIndexedByOuterIteration(testCase)
-% Eq. (4-82) uses gamma_f^i / gamma_b^i with i the OUTER ITERATION
-% index: ALL blocks inside the same outer iteration share the same
-% scale, and the next outer iteration scales by gamma.  A per-block
-% (global block counter) implementation must fail this test.
-Nc = 32; Nf = 32; Nb = 10;
-fftLength = Nc + 2 * max(Nf, Nb);
+function testFddaLegacyBridgeMapsIterationsToInnerRounds(testCase)
+% Legacy compatibility bridge: when params.innerIterations is absent the
+% kernel runs params.outerIterations rounds as the inner loop.  With
+% iterations=2 the two effective inner rounds must use gamma^1 and
+% gamma^2, identical across all windows of one round; a per-window
+% (global counter) decay must fail.
+Nf = 3; N = 4; Nb = 2; hop = N;
 rng(3, "twister");
-% Frame of 2 blocks: 1 training block + 1 data block.
-training = (1 - 2 * randi([0 1], 1, Nc));
-dataBlock = (1 - 2 * randi([0 1], 1, Nc));
-tx = [training, dataBlock];
+% Frame of 2 contiguous windows: 1 training window + 1 data window.
+training = (1 - 2 * randi([0 1], 1, N));
+dataBlock = (1 - 2 * randi([0 1], 1, N + Nb));
+tx = [training, dataBlock];                 % 10 samples
 imp = [1, 0.5 * exp(1j * 0.4), 0.2 * exp(-1j * 0.8)];
 received = (ifft(fft([imp, zeros(1, numel(tx) - numel(imp))]) .* ...
     fft(tx)) + 0.05 * (randn(1, numel(tx)) + 1j * randn(1, numel(tx))));
 gamma = 0.9;
-params = struct("blockLength", Nc, "ffLength", Nf, "fbLength", Nb, ...
+reg = 1e-6;
+params = struct("blockLength", N, "ffLength", Nf, "fbLength", Nb, ...
+    "hopLength", hop, "ffConstraintLength", Nf, "fbConstraintLength", Nb, ...
     "stepFf", 0.2, "stepFb", 0.01, "outerIterations", 2, ...
-    "forgettingF", gamma, "denomMode", "equation", ...
-    "trainLength", Nc, "referenceData", dataBlock);
+    "forgettingF", gamma, "forgettingB", gamma, "denomMode", "equation", ...
+    "trainLength", N, "regularization", reg);
 params.decisionFn = @(x) sign(real(x));
+pattern = [1, -1, 1, 1, -1, -1, 1, -1, 1, -1];   % frame-aligned feedback
 [~, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
-    received, training, params, @(o, d) d);
-ss = trace.stepScale;   % outerIterations x numBlocks
-verifyEqual(testCase, ss(1, 1), 1, "AbsTol", 1e-12, ...
-    "first outer iteration scale must be gamma^0 = 1");
-verifyEqual(testCase, ss(1, 2), ss(1, 1), "AbsTol", 1e-12, ...
-    "all blocks of outer 1 must share the same scale");
-verifyEqual(testCase, ss(2, 1), gamma, "AbsTol", 1e-12, ...
-    "outer 2 scale must be gamma^1");
-verifyEqual(testCase, ss(2, 2), ss(2, 1), "AbsTol", 1e-12, ...
-    "all blocks of outer 2 must share the same scale");
+    received, training, params, @(o, d) pattern);
+verifyEqual(testCase, trace.effectiveParameters.innerIterations, 2, ...
+    "legacy iterations=2 must map to two effective inner rounds");
+verifyEqual(testCase, trace.effectiveParameters.outerIterations, 2);
+numWindows = floor((numel(tx) - N) / hop) + 1;
+ss = trace.stepScale;   % innerRounds x numWindows
+verifyEqual(testCase, ss(1, :), gamma * ones(1, numWindows), ...
+    "AbsTol", 1e-12, ...
+    "inner round 1 must use gamma^1 for every window");
+verifyEqual(testCase, ss(2, :), gamma^2 * ones(1, numWindows), ...
+    "AbsTol", 1e-12, ...
+    "inner round 2 must use gamma^2 for every window");
 verifyEqual(testCase, trace.stepScaleF, trace.stepScaleB, ...
     "AbsTol", 1e-12, ...
     "default gamma_f = gamma_b assumption must hold");
