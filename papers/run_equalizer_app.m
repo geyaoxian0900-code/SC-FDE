@@ -25,11 +25,11 @@ itemLabels = arrayfun(@(k) sprintf('[ch%d/%s] %s', registry.chapter(k), ...
 
 fig = uifigure("Name", "水声均衡器仿真平台 - BER vs SNR", ...
     "Position", [80 60 1200 720], "Color", "w");
-grid = uigridlayout(fig, [1 3], "ColumnWidth", {280, 300, "1x"}, ...
+mainGrid = uigridlayout(fig, [1 3], "ColumnWidth", {280, 300, "1x"}, ...
     "RowHeight", {"1x"}, "Padding", 10, "ColumnSpacing", 10);
 
 %% Left: equalizer selection
-selPanel = uipanel(grid, "Title", "均衡方式选择（多选）", "FontWeight", "bold");
+selPanel = uipanel(mainGrid, "Title", "均衡方式选择（多选）", "FontWeight", "bold");
 selGrid = uigridlayout(selPanel, [2 1], "RowHeight", {"1x", 28});
 selList = uilistbox(selGrid, "Items", itemLabels, "Value", {itemLabels{1}}, ...
     "Multiselect", "on", "ValueChangedFcn", @onSel);
@@ -44,7 +44,7 @@ function onSel(~, ~)
 end
 
 %% Middle: channel + SNR
-midPanel = uipanel(grid, "Title", "信道与仿真参数", "FontWeight", "bold");
+midPanel = uipanel(mainGrid, "Title", "信道与仿真参数", "FontWeight", "bold");
 midGrid = uigridlayout(midPanel, [13 2], "RowHeight", ...
     {22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22}, ...
     "ColumnWidth", {"1x", "1x"}, "RowSpacing", 6);
@@ -83,6 +83,8 @@ resetBtn = uibutton(midGrid, "push", "Text", "恢复默认参数", ...
     "ButtonPushedFcn", @onReset);
 cancelBtn = uibutton(midGrid, "push", "Text", "取消", ...
     "Enable", "off", "ButtonPushedFcn", @onCancel);
+waveBtn = uibutton(midGrid, "push", "Text", "查看波形", ...
+    "Enable", "off", "ButtonPushedFcn", @onWave);
 
 st = struct();   % shared sweep state across nested functions
 sweepTimer = timer("TimerFcn", @stepOnce, "ExecutionMode", "fixedRate", ...
@@ -91,6 +93,50 @@ sweepTimer = timer("TimerFcn", @stepOnce, "ExecutionMode", "fixedRate", ...
 function onCancel(~, ~)
     st.cancelRequested = true;
     selInfo.Text = "正在取消…";
+end
+
+function onWave(~, ~)
+    if ~isfield(st, "wave") || isempty(st.wave)
+        uialert(fig, "请先运行仿真。", "无数据");
+        return;
+    end
+    w = st.wave;
+    wf = uifigure("Name", "发射 / 接收 / 均衡 波形", "Position", [120 60 900 760], "Color", "w");
+    wg = uigridlayout(wf, [5 1], "RowHeight", {30, "1x", "1x", "1x", 26}, ...
+        "Padding", 8, "RowSpacing", 4);
+    selDd = uidropdown(wg, "Items", cellstr(w.ids), "Value", char(w.ids(1)), ...
+        "ValueChangedFcn", @(s, ~) redraw());
+    axTx = uiaxes(wg); axRx = uiaxes(wg); axEq = uiaxes(wg);
+    lbl = uilabel(wg, "Text", "", "FontColor", [0.4 0.4 0.4]);
+    Nshow = min(60, numel(w.tx));
+    function redraw()
+        k = find(w.ids == string(selDd.Value), 1);
+        cla(axTx); cla(axRx); cla(axEq);
+        n = 1:Nshow;
+        plot(axTx, n, real(w.tx(n)), "-", "LineWidth", 1.2, "DisplayName", "I");
+        hold(axTx, "on");
+        plot(axTx, n, imag(w.tx(n)), "-", "LineWidth", 1.2, "DisplayName", "Q");
+        hold(axTx, "off");
+        title(axTx, "发射符号 (I/Q)");
+        grid(axTx, "on");
+        legend(axTx, "Location", "northeast");
+        plot(axRx, n, real(w.received(n)), "-", "LineWidth", 1.2, "DisplayName", "I");
+        hold(axRx, "on");
+        plot(axRx, n, imag(w.received(n)), "-", "LineWidth", 1.2, "DisplayName", "Q");
+        hold(axRx, "off");
+        title(axRx, "接收波形 (含信道与噪声)"); grid(axRx, "on"); legend(axRx, "Location", "northeast");
+        est = w.estimates{k};
+        m = min(Nshow, numel(est));
+        plot(axEq, 1:m, real(est(1:m)), "-", "LineWidth", 1.2, "DisplayName", "I");
+        hold(axEq, "on");
+        plot(axEq, 1:m, imag(est(1:m)), "-", "LineWidth", 1.2, "DisplayName", "Q");
+        hold(axEq, "off");
+        title(axEq, sprintf("均衡输出估计 (%s)", w.ids(k))); grid(axEq, "on");
+        legend(axEq, "Location", "northeast");
+        lbl.Text = sprintf("发射 %d 符号 | 接收 %d | 均衡输出 %d", ...
+            numel(w.tx), numel(w.received), numel(est));
+    end
+    redraw();
 end
 
 function onReset(~, ~)
@@ -116,7 +162,7 @@ end
 onChMode();
 
 %% Right: plot + table
-rightGrid = uigridlayout(grid, [2 1], "RowHeight", {"1x", "0.8x"});
+rightGrid = uigridlayout(mainGrid, [2 1], "RowHeight", {"1x", "0.8x"});
 ax = uiaxes(rightGrid, "XScale", "linear", "YScale", "log", ...
     "YLim", [1e-4 1], "Box", "on", "XGrid", "on", "YGrid", "on", ...
     "FontSize", 11);
@@ -225,6 +271,7 @@ function stepOnce(src, ~)
             "pathGains", st.chOpts.pathGains, "channelMode", "synthetic"));
     end
     st.ber(:, i) = r.ber;
+    st.lastR = r;
     st.done = st.done + 1;
     st.curI = st.curI + 1;
     if st.curI > numel(st.snrs)
@@ -254,6 +301,13 @@ function finalizeSweep(msg)
     end
     st.cancelRequested = false;
     st.idle = true;
+    if isfield(st, "lastR") && isfield(st.lastR, "lastFrame")
+        lf = st.lastR.lastFrame;
+        st.wave = struct("tx", lf.tx, "received", lf.received, ...
+            "ids", st.lastR.ids, "outputs", {st.lastR.outputs}, ...
+            "estimates", {st.lastR.estimates});
+        waveBtn.Enable = "on";
+    end
     hold(ax, "off");
     legend(ax, "Location", "southwest", "Interpreter", "none", "FontSize", 9);
     title(ax, sprintf("BER vs SNR (frameCount=%d, channel=%s) - %s", ...

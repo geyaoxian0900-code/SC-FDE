@@ -234,6 +234,8 @@ for frame = 1:cfg.frameCount
         totalErrors = zeros(1, numel(recv.ids));
         totalBits = zeros(1, numel(recv.ids));
     end
+    lastFrame = struct("tx", block, "received", received, ...
+        "impulse", impulse, "data", data);
     for eq = 1:numel(recv.ids)
         out = recv.outputs{eq}(:).';
         if numel(out) == N
@@ -263,6 +265,7 @@ results.outputs = recv.outputs;
 results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "qpsk";
+results.lastFrame = lastFrame;
 end
 
 %% Chapter 5 CCK link
@@ -296,6 +299,8 @@ for frame = 1:cfg.frameCount
         results.ids = recv.ids;
         results.names = recv.names;
     end
+    lastFrame = struct("tx", block, "received", received, ...
+        "impulse", impulse, "data", data);
     for eq = 1:numel(recv.ids)
         trace = recv.traces{eq};
         if isfield(trace, "indices")
@@ -334,6 +339,7 @@ results.outputs = recv.outputs;
 results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "cck";
+results.lastFrame = lastFrame;
 end
 
 %% Chapter 6 CSK link
@@ -385,6 +391,8 @@ for frame = 1:cfg.frameCount
         results.ids = recv.ids;
         results.names = recv.names;
     end
+    lastFrame = struct("tx", block, "received", received, ...
+        "impulse", impulse, "data", data);
     for eq = 1:numel(recv.ids)
         trace = recv.traces{eq};
         if isfield(trace, "indices")
@@ -441,6 +449,7 @@ results.outputs = recv.outputs;
 results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "csk";
+results.lastFrame = lastFrame;
 end
 
 function scenario = infer_scenario(equalizers)
@@ -578,6 +587,8 @@ for frame = 1:cfg.frameCount
         results.names = recv.names;
     end
     ref = 1 - 2 * info;
+    lastFrame = struct("tx", block, "received", received, ...
+        "impulse", impulse, "data", data);
     for eq = 1:numel(recv.ids)
         out = recv.outputs{eq}(:).';
         totalErrors(eq) = totalErrors(eq) + ...
@@ -593,6 +604,7 @@ results.outputs = recv.outputs;
 results.estimates = recv.estimates;
 results.config = link;
 results.scenario = "turbo";
+results.lastFrame = lastFrame;
 end
 
 function path = plot_unified(results)
