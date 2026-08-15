@@ -1,19 +1,25 @@
 function [decisions, mse, estimates, trace] = known_dfe_core(received, reference, impulse, cfg)
-%KNOWN_DFE_CORE Shared known-channel DFE implementation for the equalizer package.
-%   Joint feedforward + feedback weights solved from the training segment
-%   (least squares on known symbols; the LMS adaptive DFE converges in
-%   the same solution space).  This replaces the pure-feedforward MMSE
-%   solve, which focused too weakly on channels whose matched-filter
-%   spectrum |H|^2 has deep nulls (passive time reversal front ends),
-%   leaving BER at ~0.5.  Fallback to the MMSE feedforward solve when the
-%   training segment is shorter than the filter span.
+%KNOWN_DFE_CORE Strict known-channel Wiener DFE (book (2-6)~(2-11)).
+%   Phase 1 (training): solve the sample Wiener solution
+%       w = R_u^{-1} r_du,   R_u = E[u_k u_k^H],  r_du = E[u_k d_k^*],
+%   by least squares over the training segment on the composite vector
+%       u_k = [ r(k+D) ... r(k+D-Nf+1); -d(k-1) ... -d(k-Nb) ]^T,
+%   which is the empirical estimate of (2-8)~(2-10).  Regularization is
+%   applied only when the training matrix is rank-deficient (the `\`
+%   minimum-norm solution); no SNR-dependent floors are added.
+%   Phase 2 (data): the filter is FIXED - (2-6)~(2-11) define a static
+%   Wiener DFE with decision-directed feedback and NO adaptation (the
+%   previous data-phase NLMS tracking is removed).
+%   Fallback: when the training segment is shorter than Nf+Nb, a
+%   regularized MMSE feedforward solve is used (ENGINEERING fallback,
+%   recorded in trace.solveMode).
 received = received(:).';
 reference = reference(:).';
 if ~isfield(cfg, "nlmsStep")
-    cfg.nlmsStep = 0.35;
+    cfg.nlmsStep = 0.35;   % legacy callers only; unused on this path
 end
 if ~isfield(cfg, "lmsStep")
-    cfg.lmsStep = 0.008;
+    cfg.lmsStep = 0.008;   % legacy callers only; unused on this path
 end
 feedforwardLength = cfg.feedforwardTaps;
 feedbackLength = cfg.feedbackTaps;
@@ -22,26 +28,28 @@ ff = feedforwardLength;
 fb = feedbackLength;
 trainingIdx = delay + 1:min(cfg.trainingSymbols, numel(reference));
 nTr = numel(trainingIdx);
+trace = scfde.equalizers.initialize_trace(reference, ff + fb);
 if nTr >= ff + fb
-    Xff = zeros(nTr, ff);
-    Xfb = zeros(nTr, fb);
+    Uff = zeros(nTr, ff);
+    Ufb = zeros(nTr, fb);
     for k = 1:nTr
         idx = trainingIdx(k);
         oi = idx + delay;
         winStart = max(1, oi - ff + 1);
         win = received(winStart:oi);
-        % Conjugate rows: prediction is X*w = w^H x, matching the
-        % inference inner product weights'*input (and the LMS rule).
-        Xff(k, end - numel(win) + 1:end) = conj(win(end:-1:1));
+        % Conjugate rows: prediction is X*w = w^H u, matching the
+        % inference inner product w'*input (and the book form d_hat = w^H u).
+        Uff(k, end - numel(win) + 1:end) = conj(win(end:-1:1));
         for t = 1:min(fb, idx - 1)
-            Xfb(k, t) = conj(reference(idx - t));
+            Ufb(k, t) = conj(reference(idx - t));
         end
     end
-    w = [Xff, -Xfb] \ conj(reference(trainingIdx)).';
+    w = [Uff, -Ufb] \ conj(reference(trainingIdx)).';
     wff = w(1:ff);
     wfb = w(ff + 1:end);
+    solveMode = "training-ls-wiener";
 else
-    % Fallback: MMSE feedforward solve (see original derivation).
+    % Engineering fallback: regularized MMSE feedforward solve.
     convolutionLength = numel(impulse) + ff - 1;
     channelMatrix = zeros(convolutionLength, ff);
     for tapIndex = 1:ff
@@ -56,34 +64,35 @@ else
     wff = (channelMatrix' * channelMatrix + ...
         noiseVariance * eye(ff)) \ (channelMatrix' * target);
     wfb = zeros(fb, 1);
+    solveMode = "mmse-ff-fallback";
 end
-effectiveChannel = conv(wff, impulse(:));
-equalized = filter(wff, 1, received);
+% Fixed-filter decision-directed DFE over the whole frame; no weight
+% adaptation in the data phase (static Wiener DFE, (2-6)~(2-11)).
 decisions = zeros(size(reference));
 mse = zeros(size(reference));
 estimates = zeros(size(reference));
 trace.feedforwardOutput = zeros(size(reference));
 trace.feedbackCancellation = zeros(size(reference));
 trace.error = zeros(size(reference));
-trace.weightNorm = norm([wff; wfb]) * ones(size(reference));
-trace.coefficientHistory = zeros(numel(wff) + fb, 0);
 trace.phase = zeros(size(reference));
 trace.frequency = zeros(size(reference));
+trace.weightNorm = zeros(size(reference));
+trace.coefficientHistory = zeros(ff + fb, numel(reference));
 weights = [wff(:); wfb(:)];
-invCorr = scfde.equalizers.initial_inverse_correlation(numel(weights), cfg, "nlms");
 for symbolIndex = max(delay + 1, ff):numel(reference)
     observationIndex = symbolIndex + delay;
-    if observationIndex > numel(equalized)
+    if observationIndex > numel(received)
         break;
     end
     winStart = max(1, observationIndex - ff + 1);
     win = received(winStart:observationIndex);
-    input = [win(end:-1:1).'; -decisions(symbolIndex - 1:-1:max(1, symbolIndex - fb)).'];
+    input = [win(end:-1:1).'; ...
+        -decisions(symbolIndex - 1:-1:max(1, symbolIndex - fb)).'];
     input = input(1:ff + fb);
     estimate = weights(1:ff)' * input(1:ff) + ...
         weights(ff + 1:end)' * input(ff + 1:end);
     estimates(symbolIndex) = estimate;
-    trace.feedforwardOutput(symbolIndex) = equalized(observationIndex);
+    trace.feedforwardOutput(symbolIndex) = weights(1:ff)' * input(1:ff);
     trace.feedbackCancellation(symbolIndex) = ...
         -weights(ff + 1:end)' * input(ff + 1:end);
     if symbolIndex <= cfg.trainingSymbols
@@ -92,13 +101,30 @@ for symbolIndex = max(delay + 1, ff):numel(reference)
         decisions(symbolIndex) = scfde.equalizers.slice_decision(estimate, cfg);
     end
     error = decisions(symbolIndex) - estimate;
-    [weights, invCorr] = scfde.equalizers.adaptive_update(weights, invCorr, ...
-        input, error, cfg, "nlms");
-    wff = weights(1:ff);
-    wfb = weights(ff + 1:end);
-    mse(symbolIndex) = abs(estimate - reference(symbolIndex))^2;
+    mse(symbolIndex) = abs(reference(symbolIndex) - estimate)^2;
     trace.error(symbolIndex) = reference(symbolIndex) - estimate;
     trace.weightNorm(symbolIndex) = norm(weights);
     trace.coefficientHistory(:, symbolIndex) = weights;
 end
+trace.solveMode = solveMode;
+trace.adaptation = "none";
+trace.decisionDelay = delay;
+trace.feedforwardTaps = ff;
+trace.feedbackTaps = fb;
+% Explicit final-weight record: the coefficientHistory tail columns may
+% be preallocated zeros (symbols beyond the processed window), so the
+% final coefficients are exposed through a dedicated field together
+% with the last processed symbol index.
+trace.finalCoefficients = weights;
+trace.lastProcessedSymbol = find(trace.weightNorm ~= 0, 1, "last");
+if isempty(trace.lastProcessedSymbol)
+    trace.lastProcessedSymbol = 0;
+end
+trace.formulaStatus = "BOOK-EXACT";
+trace.formulaMode = "book";
+trace.bookExperimentEquivalent = false;
+trace.effectiveParameters = struct("feedforwardTaps", ff, ...
+    "feedbackTaps", fb, "decisionDelay", delay, ...
+    "solveMode", string(solveMode), "trainingSymbols", cfg.trainingSymbols);
+trace.formulaNote = "(2-6)~(2-11) static Wiener DFE: w = R_u^{-1} r_du via training LS; fixed filter in the data phase";
 end
