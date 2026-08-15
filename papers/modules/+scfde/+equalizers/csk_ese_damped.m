@@ -1,4 +1,4 @@
-﻿function receiver = csk_ese_damped(channel, source, cfg)
+function receiver = csk_ese_damped(channel, source, cfg)
 %CSK_ESE_DAMPED CSK-IDMA ESE with posterior damping (ENGINEERING).
 %   ENGINEERING variant (BOOK_CONVENTIONS.md rule 2): the book defines
 %   no posterior damping step, so the book path (csk_ese.m) uses
@@ -76,6 +76,7 @@ softChips = ifft(conj(fft(channel.impulse, numel(channel.received))) .* ...
     fft(channel.received));
 receiver = scfde.equalizers.pack_equalizer("CSK-IDMA-ESE-DAMPED", "csk-ese-damped", ...
     decisions, zeros(size(decisions)), softChips, ...
-    struct("indices", codeIndices, "infoIndices", infoIndices));
+    struct("indices", codeIndices, "infoIndices", infoIndices, ...
+    "damping", damping, "formulaStatus", "ENGINEERING"));
 end
 
