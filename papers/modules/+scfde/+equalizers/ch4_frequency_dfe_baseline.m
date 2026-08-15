@@ -11,6 +11,7 @@ feedforward = scfde.equalizers.ch4_normalized_mmse(H, noiseVariance);
 linearEstimate = ifft(feedforward .* Y);
 initialDecision = scfde.equalizers.ch4_hard_bpsk(linearEstimate);
 feedback = feedforward .* H - 1;
+feedback = feedback - mean(feedback);   % (4-52): sum_k b_k = 0
 estimate = ifft(feedforward .* Y - feedback .* fft(initialDecision));
 equalizerLlr = 2 * real(estimate) / noiseVariance;
 previous = zeros(1, N);
@@ -26,4 +27,11 @@ for iteration = 1:cfg.iterations
     trace.softEstimates(iteration, :) = estimate;
 end
 trace.finalChannel = H;
+trace.formulaStatus = "ALG-EQUIV";
+trace.formulaMode = "book";
+trace.bookExperimentEquivalent = false;
+trace.effectiveParameters = struct("iterations", cfg.iterations, ...
+    "decoderMode", string(cfg.baselineDecoder), ...
+    "noiseVariance", noiseVariance, "frameLength", N);
+trace.formulaNote = "(4-50)~(4-59) structure X_hat = F^{-1}(W Y - B F x_tilde) with hard-decision feedback, zero-mean constraint (4-52) enforced; the (4-57)/(4-58) rho^{(i)} coefficient form is BLOCKED-SOURCE-REVIEW (book/21.png), so this ID is not BOOK-EXACT";
 end

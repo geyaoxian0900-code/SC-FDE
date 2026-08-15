@@ -59,6 +59,14 @@ else
     decisions = output(1:n);
     trace.outputDomain = "frame-symbols";
 end
+trace.formulaStatus = "BOOK-EXACT";
+trace.formulaMode = "book";
+trace.bookExperimentEquivalent = false;
+trace.effectiveParameters = struct("blockLength", blockLength, ...
+    "filterLength", filterLength, "step", step, "epsilon", epsilon, ...
+    "trainingSymbols", trainLength, ...
+    "decisionDirected", logical(useDecisionFeedback));
+trace.formulaNote = "(4-64)~(4-73) strict overlap-save FBLMS: three-segment block, block-scalar denominator, F G F^-1 constraint, boundary discard (batch-2 kernel)";
 receiver = scfde.equalizers.pack_equalizer("FBLMS", "fblms", ...
     decisions, zeros(size(decisions)), decisions, trace);
 end

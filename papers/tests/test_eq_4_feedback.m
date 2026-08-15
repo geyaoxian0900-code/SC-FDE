@@ -3,7 +3,8 @@ function tests = test_eq_4_feedback
 %   The book defines no soft-feedback damping (feedback uses decoder
 %   soft symbols directly, eq. 4-47/4-49), so ch4_setup locks
 %   cfg.turboDamping = 1 by default.  With alpha = 1 the rebuilt soft
-%   frame equals the decoder candidate tanh(posterior/2) and is
+%   frame equals the decoder candidate tanh(L_D^e/2) built from the
+%   decoder EXTRINSIC LLR (spec 4.3: x_bar = E[x|L_D^{e,(i-1)}]) and is
 %   independent of the previous frame; training positions stay locked.
 
 tests = functiontests(localfunctions);
@@ -62,11 +63,16 @@ previousB = randn(1, frame.frameLength) * 100;
 % independent of previous frame on the data positions
 verifyEqual(testCase, softA(frame.dataIndices), ...
     softB(frame.dataIndices), "AbsTol", 1e-12);
-% equals tanh(posterior/2): rebuild via the same BCJR path
+% equals tanh(L_D^e/2): rebuild the decoder extrinsic through the
+% same BCJR path (spec 4.3: the feedback mean must come from the
+% extrinsic LLR, not the posterior).
 [~, ~, ~, ~, codedLlr] = scfde.equalizers.ch4_decoder_feedback_frame( ...
     equalizerLlr, frame, previousA, 1, "Log-MAP");
-posteriorTx = codedLlr(frame.permutation);
-candidate = tanh(posteriorTx / 2);
+decoderInput = equalizerLlr(frame.dataIndices);
+decoderInput = decoderInput(frame.inversePermutation);
+extrinsicTx = (codedLlr - decoderInput);
+extrinsicTx = extrinsicTx(frame.permutation);
+candidate = tanh(extrinsicTx / 2);
 verifyEqual(testCase, softA(frame.dataIndices), candidate, "AbsTol", 1e-12);
 % training positions locked to the known training symbols
 verifyEqual(testCase, softA(frame.trainingIndices), ...

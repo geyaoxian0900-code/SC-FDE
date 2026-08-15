@@ -39,8 +39,11 @@ if numel(informationLlr) ~= frame.informationLength || ...
 end
 extrinsicOriginalOrder = codedLlr - decoderInput;
 extrinsicTxOrder = extrinsicOriginalOrder(frame.permutation);
-posteriorTxOrder = codedLlr(frame.permutation);
-candidate = tanh(posteriorTxOrder / 2);
+% (4-3)/(4-5): the feedback symbol mean must come from the DECODER
+% EXTRINSIC LLR (L_D^e), not the posterior (spec 4.3: x_bar =
+% E[x | L_D^{e,(i-1)}]); the posterior was previously fed back, which
+% re-injected the equalizer prior into the next iteration.
+candidate = tanh(extrinsicTxOrder / 2);
 softFrame = previousSoftFrame;
 softFrame(frame.trainingIndices) = frame.trainingSymbols;
 softFrame(frame.dataIndices) = ...
