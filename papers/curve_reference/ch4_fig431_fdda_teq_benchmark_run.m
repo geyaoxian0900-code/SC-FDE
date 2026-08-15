@@ -40,7 +40,7 @@ end
 % curve enters the log-BER RMSE so zero points are not distorted to eps.
 benchmark = scfde.equalizers.curve_benchmark(censored, snrGrid, ...
     reference, reference.method);
-fprintf("\n=== FDDA-TEQ uncoded QPSK vs book Fig 4-31 (same conditions) ===\n");
+fprintf("\n=== FDDA-TEQ uncoded QPSK vs book Fig 4-31 (book-structure/trend benchmark; project synthetic channel) ===\n");
 fprintf("logRmse      = %.4f (censored, Clopper-Pearson 95%% upper)\n", ...
     benchmark.logRmse);
 fprintf("maxSnrDev    = %.3f dB\n", benchmark.maxSnrDeviation);
@@ -56,7 +56,29 @@ benchmark.censorMethod = "Clopper-Pearson 95% upper bound";
 benchmark.framesPerSnr = framesPerSnr;
 benchmark.bitsPerSnr = totBits(1);
 benchmark.conditions = reference.parameters;
+benchmark.gitCommit = git_commit_short();
+benchmark.matlabVersion = version;
+benchmark.timestamp = datetime("now");
 benchmark.notes = "book-structure/trend benchmark (NOT experiment-identical): shared-kernel FDDA-TEQ with the book Eq. (4-82) scalar denominator (denomMode=equation, mu_f=0.2, mu_b=0.01, I_outer=3) on the project synthetic 3-tap channel; the absolute offsets and the high-SNR plateau are the mathematical consequence of the book's small step under the full spectral block energy, plus the undisclosed book channel realization; trend and ordering match, grade C";
 save(fullfile(pwd, "ch4_fig431_fdda_teq_true_benchmark.mat"), ...
     "berSim", "censored", "errBits", "totBits", "benchmark", "reference");
-fprintf("Saved ch4_fig431_fdda_teq_true_benchmark.mat\n");
+fprintf("Saved ch4_fig431_fdda_teq_true_benchmark.mat (gitCommit=%s)\n", ...
+    benchmark.gitCommit);
+
+function commit = git_commit_short()
+commit = "";
+try
+    here = fileparts(mfilename("fullpath"));
+    if isempty(here)
+        here = pwd;
+    end
+    repo = fileparts(here);
+    [status, out] = system("git -C " + string(repo) + ...
+        " rev-parse --short HEAD 2>nul");
+    if status == 0
+        commit = strtrim(string(out));
+    end
+catch
+    commit = "";
+end
+end

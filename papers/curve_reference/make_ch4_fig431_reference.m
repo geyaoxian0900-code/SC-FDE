@@ -23,8 +23,30 @@ reference.ber = [
 reference.source = "book/27.png (Fig 4-31)";
 reference.digitizer = "vision-assisted visual readout";
 reference.date = datetime("now");
+reference.gitCommit = git_commit_short();
+reference.matlabVersion = version;
+reference.timestamp = datetime("now");
 reference.notes = "No standalone BLMS BER curve in book chapter 4; " + ...
     "FDDA-TEQ is the frequency-domain adaptive family reference.";
 save(fullfile(fileparts(mfilename("fullpath")), ...
     "ch4_fig431_fdda_teq.mat"), "reference");
-fprintf("Saved ch4_fig431_fdda_teq.mat\n");
+fprintf("Saved ch4_fig431_fdda_teq.mat (gitCommit=%s)\n", ...
+    reference.gitCommit);
+
+function commit = git_commit_short()
+commit = "";
+try
+    here = fileparts(mfilename("fullpath"));
+    if isempty(here)
+        here = pwd;
+    end
+    repo = fileparts(here);
+    [status, out] = system("git -C " + string(repo) + ...
+        " rev-parse --short HEAD 2>nul");
+    if status == 0
+        commit = strtrim(string(out));
+    end
+catch
+    commit = "";
+end
+end
