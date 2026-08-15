@@ -1,8 +1,10 @@
-% Regenerate the fdda-teq benchmark against book Fig. 4-31 under the
-% BOOK-IDENTICAL simulation conditions (uncoded QPSK, I_outer=3,
-% 1024 data symbols/block, 256 training, Eb/N0 axis), using the true
-% adaptive FDDA-TEQ implementation (feedforward W / feedback B
-% updates).
+% Regenerate the fdda-teq benchmark against book Fig. 4-31 under
+% book-STRUCTURE / TREND conditions (uncoded QPSK, I_outer=3, 1024 data
+% symbols/block, 256 training, Eb/N0 axis), using the true adaptive
+% FDDA-TEQ implementation (feedforward W / feedback B updates).  This is
+% NOT an experiment-identical reproduction: the book experiment channel
+% is undisclosed and the run uses the project synthetic 3-tap channel,
+% so only the curve structure/trend is graded, never pointwise offsets.
 %
 % Zero-error points are censored with the Clopper-Pearson 95% upper
 % bound (p_up = 1 - alpha^(1/n)) instead of machine eps, so the
@@ -54,7 +56,7 @@ benchmark.censorMethod = "Clopper-Pearson 95% upper bound";
 benchmark.framesPerSnr = framesPerSnr;
 benchmark.bitsPerSnr = totBits(1);
 benchmark.conditions = reference.parameters;
-benchmark.notes = "Shared-kernel FDDA-TEQ with the book Eq. (4-82) scalar denominator (denomMode=equation, mu_f=0.2, mu_b=0.01, I_outer=3) on the project synthetic 3-tap channel; the absolute offsets and the high-SNR plateau are the mathematical consequence of the book's small step under the full spectral block energy, plus the undisclosed 3-km channel realization; trend and ordering match, grade C";
+benchmark.notes = "book-structure/trend benchmark (NOT experiment-identical): shared-kernel FDDA-TEQ with the book Eq. (4-82) scalar denominator (denomMode=equation, mu_f=0.2, mu_b=0.01, I_outer=3) on the project synthetic 3-tap channel; the absolute offsets and the high-SNR plateau are the mathematical consequence of the book's small step under the full spectral block energy, plus the undisclosed book channel realization; trend and ordering match, grade C";
 save(fullfile(pwd, "ch4_fig431_fdda_teq_true_benchmark.mat"), ...
     "berSim", "censored", "errBits", "totBits", "benchmark", "reference");
 fprintf("Saved ch4_fig431_fdda_teq_true_benchmark.mat\n");

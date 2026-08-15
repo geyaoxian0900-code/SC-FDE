@@ -693,15 +693,137 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
   用户本机运行（源码提交后重跑并记录 gitCommit，产物单独提交）。
 - 数字化数据文件必须记录 source page/figure、digitizer、date、modulation、
   channel、frame length、iteration count、known mismatch（见 README 约定）。
+- **批 12 口径修正**：无原文数字化曲线的方法不再进入等级计算，评级驱动直接标
+  **“不适用（无原文数字化曲线）”（见批次12 曲线评级节）**，公式测试不能代替
+  曲线复现。
+
+### 批次12 曲线评级（2026-08，批次11 提交 fce806c 后开展）
+
+- 新增评级驱动 `papers/curve_reference/run_37_curve_grading.m`：四场景银行全 37 法
+  逐点 `snrDb = 0:2:18`、≥3 seed（2024/2025/2026）、每 seed 每点 frameCount=10 帧；
+  只累计**整数** `errorBits/totalBits` 并输出精确 95% Clopper-Pearson 区间；逐方法
+  BER-SNR **趋势诊断**（相邻 SNR 点相对恶化 >1.5× 仅标记，异常必须回算法审计，
+  禁止调参制造趋势）；产物 `.mat` 记录 scenario/equalizerIds/snrGrid/seeds/
+  frameCount/errorBits/totalBits/ber/berLower95/berUpper95/gitCommit/matlabVersion/
+  timestamp/gradePerMethod/gradeSource/trendFlags/effectiveParameters；每场景完成后
+  落盘 partial 检查点，最终文件名含 gitCommit。
+- **评级口径（批 12 规则）**：只有存在**原文数字化曲线**的方法才能获得
+  `curve_benchmark` 等级。当前仅 **fdda-teq** 有原文数字化参考（图 4-31，
+  book/27.png，`ch4_fig431_fdda_teq.mat`；**结构/趋势基准**（非实验条件完全一致：
+  原书信道未披露、使用项目合成三径信道）`ch4_fig431_fdda_teq_benchmark_run.m` +
+  已存档结果 grade C）；其余 36 法的曲线评级列一律写 **“不适用（无原文数字化曲线）”**
+  ——场景银行曲线仅为工程证据，不是原文曲线复现，公式测试不能代替曲线复现。无参考
+  不再使用旧口径“覆盖率 0→等级 D”参与总等级。
+- **预评级与最终评级**：批次12 源码（驱动+文档）未提交前的一切运行均为**预评级**
+  （产物 gitCommit 记录当前 HEAD `fce806c`，仅为证据）；批次12 源码提交后必须在
+  最终哈希上重跑（收尾执行清单第 3 步），产物才可入库。
+- **缩小配置预跑**：驱动支持调用方工作区 `gradingCfgOverride` 结构覆盖配置，例如
+  `gradingCfgOverride = struct("snrGrid", [12, 18], "seeds", 2024, "frameCount", 2)`
+  后运行，先验证 CP 区间矩阵、partial 检查点与最终产物均能保存，再跑完整配置。
+
+### 批次12 预评级结果（用户本机，产物 `run_37_curve_grading_fce806c.mat`，仅证据不入库）
+
+- **tdda-teq 优先审计通过**：BER 随 SNR 单调改善且**无相邻恶化标记**——0 dB
+  0.498633（7659/15360）→ 2 dB 0.496484 → 4 dB 0.492318 → 6 dB 0.450586 →
+  8 dB 0.308529 → 10 dB 0.072526 → **12~18 dB 全部 0/15360**。此前 18 dB
+  0.51 平台已消失（批次11 μ 修复生效）；认证保持 ALG-EQUIV，μ=0.05 仍为
+  ENGINEERING 参数。
+- **18 dB 概况**（10 帧 × 3 seed，CP95 区间见产物）：QPSK 银行 LMS 0.1732、
+  NLMS 0.07083、DPLL 0.07976，其余多数接近零；Turbo 银行 10 法全部 0/15360
+  （95% 上界 2.401e-4）；CCK 银行 TR-diversity 0.003125、FDE 0.001563、
+  RAKE/MFB 0.000521，其余为零；CSK 银行 3 法全部 0/240（95% 上界 0.01525）。
+- **趋势诊断**：37 法异常趋势计数 = 0。
+- **fdda-teq 曲线等级 C**：仅属于 book-structure/trend benchmark（项目合成三径
+  信道），**不能称为原书实验条件完全复现**。
+- 产物元数据契约全部通过：gitCommit=fce806c、SNR 0:2:18、seeds 2024/2025/2026、
+  10 帧/点、17/10/7/3 方法数、BER/误码数/总比特数/置信区间尺寸正确、rngSeeds/
+  effectiveParameters/等级来源完整。该产物为**预评级证据**；最终可追溯产物须在
+  批次12 源码提交后的最终哈希上重跑（收尾执行清单第 3 步）。
+- **tdda-teq 优先审计**：驱动在 turbo 场景单独打印 tdda-teq 的 BER-SNR 逐点表
+  （整数计数 + CI）；须确认 BER 随 SNR 改善（不只是 smoke PASS）。若趋势异常，
+  按“回算法审计、不调参制造趋势”处理，并回写本记录。
+- 评级执行须在用户本机 MATLAB 运行（本沙箱 MATLAB 无法启动）：
+  `cd papers; run('curve_reference/run_37_curve_grading.m')`；
+  产物 `.mat` 在最终源码提交哈希上重跑后**单独提交**（不与源码混合）。
+
+### 批次12 收尾执行清单（最终哈希重跑与分开提交）
+
+1. 本机执行评级驱动与书式条件基准（产物记录当前 gitCommit）：
+   `cd papers; run('curve_reference/run_37_curve_grading.m')`；
+   `run('curve_reference/make_ch4_fig431_reference.m')`；
+   `run('curve_reference/ch4_fig431_fdda_teq_benchmark_run.m')`。
+2. 按结果回填本文件批次12 曲线评级节与逐方法终表曲线列（tdda-teq 趋势审计结论、
+   fdda-teq 等级确认），然后提交**批次12 源码**（四份文档 + `curve_reference/`
+   下脚本；不含 `.mat`）。
+3. 在批次12 源码提交后的最终哈希上**重跑**第 1 步三个脚本，使产物元数据
+   `gitCommit` 记录最终哈希。
+4. 产物（`*.mat`）单独暂存、单独提交（消息示例 `chore(papers): batch-12 curve
+   grading artifacts on <hash>`）；不推送。
+5. 最终结论口径：37 法全部模块化可运行；仅 BOOK-EXACT 18 法声明必要公式链严格
+   对应；其余保持 ALG-EQUIV 10 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8；
+   未解决项（(4-57)/(4-58)、BiDFE 初始化次序、(3-86)、(3-92) 方差定义、HTFDE
+   λ 转写、未公开实验参数）在 `SOURCE_REVIEW_REQUEST.md` 持续挂账。
+
+### 批次12 逐方法终表（公式链 / 生产函数 / 参数来源 / 独立测试 / 曲线评级 / 认证状态 / 已知偏差与阻断）
+
+认证遵循“生产链最弱必要环节”原则（批次11）；曲线评级遵循“仅原文数字化曲线可获等级，
+否则不适用”原则（批次12）。曲线列中 tdda-teq 与 fdda-teq 的确认标记在评级运行后回填。
+
+| ID | 公式链（编号） | 生产函数 | 参数来源 | 独立测试 | 曲线评级 | 认证状态 | 已知偏差 / 阻断 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dfe | (2-6)~(2-11) 静态维纳 DFE | `known_dfe_core.m`/`conventional_dfe.m` | 前馈12/反馈6（工程值） | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 数据段不自适应跟踪（书式 (2-6)~(2-11) 无自适应项）；实验参数未公开 |
+| lms-dfe | (2-6)~(2-9)+(2-14) LMS（2μ 显式，cfg.lmsStep=2μ_book） | `lms_dfe.m`/`adaptive_dfe_core.m`/`adaptive_update.m` | 步长工程值（原文未公开） | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 步长数值非原文 |
+| nlms-dfe | (2-6)~(2-9)+(2-16) NLMS（δ=1e-5 仅防零除） | `nlms_dfe.m`/`adaptive_dfe_core.m` | δ=1e-5 防零除约定 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 步长工程值 |
+| rls-dfe | (2-6)~(2-9)+(2-23)~(2-25) RLS（λ∈(0.8,1)，P(0)=δ⁻¹I=100·I 记录） | `rls_dfe.m`/`adaptive_dfe_core.m` | λ、δ⁻¹=100 数值初始化记录 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | λ、P(0) 数值非原文 |
+| dpll-dfe | (2-34)~(2-37) DPLL（(2-36) q 项符号批次5 修正；K2=0.1·K1） | `dpll_dfe.m`/`adaptive_dfe_core.m` | K1 数值工程值；K2=0.1K1 按 (2-37) | test_eq_2_36/testLoopConvergesToRotation/test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | K1/K2 数值（0.002/0.020）为工程选择 |
+| mc-lms-dfe | (2-43)~(2-46) 多阵元 + (2-14) | `multichannel_dfe_core.m`/`mc_lms_dfe.m` | 每阵元独立相位环；步长工程值 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 阵元观测为场景合成（同一 received 复制） |
+| mc-nlms-dfe | (2-43)~(2-46) + (2-16) | `multichannel_dfe_core.m`/`mc_nlms_dfe.m` | 同上 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 同上 |
+| mc-rls-dfe | (2-43)~(2-46) + (2-23)~(2-25) | `multichannel_dfe_core.m`/`mc_rls_dfe.m` | 同上 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 同上 |
+| ptr-dfe | (2-47) Σ_p h_p*⊗r_p 线性卷积 | `ptr_dfe.m`/`known_dfe_core.m`（PTR 前端 + 静态维纳 DFE） | 线性主路径 | test_eq_2_47/test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 工程回退 `ptr_circular_engineering.m` 保留 |
+| subband-ptr-dfe | (2-48)/(2-49) P 子阵（g_p=Σ h̃*⊗h，无 \|Σh\|²） | `subband_ptr_dfe.m`/`multibranch_known_dfe_core.m` | P 子阵分组（round-robin） | test_eq_2_47/test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 子阵分组方式为工程约定 |
+| mmse-fde | (3-42)~(3-45) MMSE-FDE（公共正实因子 N，golden 证明判决等价） | `mmse_fde.m` | m_x=1 单位能量 | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BOOK-EXACT | 与书式差公共因子 N（判决等价已证） |
+| zf-fde | (3-43)/(3-44) C_k=1/(λH_k) 严格无 ε | `zf_fde.m` | λ=1 零多普勒场景 | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BOOK-EXACT | 奇异频点报告 `singularBins`，非有限输出 |
+| htfde | (3-61)/(3-62) 矩阵式逐阵元 C_{m,k} + 子阵和 + 多通道 DPLL-DFE | `ch3_htfde_equalize.m`/`htfde.m`/`multichannel_dpll_dfe_core.m` | P/K 显式必需（缺失抛 SCFDE:BookParameterUnavailable） | test_htfde_eq_3_61_62（12/12 本机） | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-61) λ 转写 SOURCE-INCONSISTENT（默认 λ=1 退化 D=I）；N/M/P/K、DPLL 增益、μ PARAM-UNRECOVERABLE |
+| sd-ibdfe | (3-64)/(3-65)/(3-82)/(3-84)/(3-85)/(3-87) unit-gain，首迭代 MMSE-FDE 退化 | `ch3_ibdfe_equalize.m`/`sd_ibdfe.m` | ρ 估计（可靠度）工程式 | test_eq_3_87/test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-86) A_k 完整形式未确认（H* 形替代） |
+| hd-ibdfe | 同上（硬反馈 = 上一整块判决） | `ch3_ibdfe_equalize.m`/`hd_ibdfe.m` | 同上 | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-86) A_k |
+| ice-sd-ibdfe | (3-88)~(3-91) LS+DFT 截断 + (3-92) 盒式（权重排列扫描确认） | `ice_sd_ibdfe.m`/`ch3_ibdfe_equalize.m` | 方差为残差能量（ENGINEERING 估计） | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-92) 两个方差定义未恢复 |
+| ice-hd-ibdfe | 同上 | `ice_hd_ibdfe.m`/`ch3_ibdfe_equalize.m` | 同上 | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-92) 方差定义 |
+| td-turbo | (4-24)~(4-31) 盒式 LMMSE V=diag(1−\|x̄\|²) + (4-3)/(4-5) 外信息均值反馈（无阻尼） | `ch4_iterate_time_turbo.m`/`td_turbo.m` | 训练 256/数据 1024/信息 512（工程帧契约） | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | BOOK-EXACT | 帧结构为项目契约；实验配置未公开 |
+| fd-dfe | (4-50)~(4-52) 结构 + 零均值约束 Σb_k=0 | `ch4_frequency_dfe_baseline.m`/`ch4_fd_ibdfe_weights.m`/`fd_dfe.m` | 现有构造 + 显式零均值 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | (4-57)/(4-58) 分子分母 BLOCKED-SOURCE-REVIEW（book/21.png） |
+| fd-turbo | (4-42)/(4-43)/(4-50)/(4-60)/(4-61) 训练段 μ̂/σ̂² + 高斯外信息 LLR | `ch4_iterate_frequency_turbo.m`/`fd_turbo.m` | μ̂/σ̂² 按 (4-60)/(4-61) | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (4-57)/(4-58) 系数形式未确认（其余已验） |
+| tf-turbo | (3-61)/(4-43)~(4-49) HTF 前端 + 时域软反馈（无固定 0.5 混合） | `ch4_iterate_time_frequency_turbo.m`/`tf_turbo.m` | 反馈抽头设计（推导） | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 反馈抽头设计未逐项见于扫描件 |
+| bitf-turbo | (2-50)~(2-53)/(4-42)~(4-49) 双向独立 pass + 等权 1/2 合并 + rev[] 恢复 | `ch4_iterate_time_frequency_turbo.m`(bidirectional)/`bitf_turbo.m` | 同上 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 反馈抽头设计推导；(2-53) 等权合并 BOOK-EXACT |
+| blms-tf-turbo | spec 4.6 要求严格块 FBLMS (4-64)~(4-73)；现用逐频点 BLMS 扩展 | `ch4_iterate_time_frequency_turbo.m`(adaptiveChannel)/`blms_tf_turbo.m` | blmsStep/blmsLeakage 工程值 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ENGINEERING | 未用严格块 FBLMS 内核（spec 4.6 禁止标 BOOK） |
+| fblms | (4-64)~(4-73) 块 FBLMS（频域滤波/时域约束/误差块） | `fblms.m`/`fblms_equalizer.m` | 块长 32/滤波长 16（工程值） | test_fblms_and_curve_benchmark | 不适用（无原文数字化曲线） | BOOK-EXACT | 块参数为工程值 |
+| tdda-teq | spec 4.8 盒式未归一化 LMS（零初始权值；第 1 轮无数据先验仅训练段自适应；因果零填充窗；μ=0.05 工程步长） | `ch4_iterate_td_nlms_turbo.m`/`tdda_teq.m` | μ=0.05 按均值收敛参考约半选取（ENGINEERING） | test_tdda_teq_spec4_8/test_ch4_turbo_eq_4_24_73 | 预评级（fce806c）：0 dB 0.4986 → 8 dB 0.3085 → 10 dB 0.0725 → 12 dB 起 0/15360，无相邻 SNR 恶化标记；高 SNR 0.51 平台已消失；待最终哈希重跑确认 | ALG-EQUIV | 项目组合；2/λ_max(R̂) 仅为均值收敛参考（非稳定保证，μ 低于参考仍可发散，已实测）；μ 数值非原文 |
+| fdda-teq | (4-74)~(4-82) 非对称窗/W_m^H⊙R_m 和/B⊙X̃/逐阵元标量分母/γ^i/权重继承 | `ch4_fdda_teq_core.m`/`fdda_teq_true.m` | μ_f=0.2/μ_b=0.01/γ 工程值 | test_fdda_eq_4_74_82 | C（图4-31 结构/趋势基准，预评级确认；合成信道，非原书信道；待最终哈希重跑确认） | BOOK-EXACT | γ_f/γ_b、实验信道、重叠拼接规则未公开/未确认；bookExperimentEquivalent=false |
+| fdda-dfe-teq | 共享 FDDA 内核 (4-74)~(4-82)，仅反馈源不同（hard/turbo-soft） | `fdda_dfe_teq.m` | 同内核 | test_fdda_eq_4_74_82 | 不适用（无原文数字化曲线） | ALG-EQUIV | 项目组合名，非原书独立方法（显式覆盖内核 BOOK-EXACT） |
+| cck-rake | (5-11) 接收模型 + MRC 合并等价 | `cck_rake.m`/`ch5_rake_detect.m` | 码本 FR-CCK | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BOOK-EXACT | 场景码本/信道为工程设定 |
+| cck-dfe | (5-40)~(5-47) CMF+CIR、双向消除、临时判决 | `cck_dfe.m`/`ch5_dfe_detect.m`/`ch5_backward_dfe_detect.m` | 候选裁剪 128（工程值） | test_ch5_cck_eq_5_11_80/test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | BOOK-EXACT | 候选裁剪上限为工程值 |
+| cck-bidfe | BiDFE 双向结构 | `cck_bidfe.m` | 初始化与次序 ENGINEERING | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | 初始化与执行次序待 book/31.png 复核 |
+| cck-bidfe2 | BiDFE-2 结构 | `cck_bidfe2.m` | 同上 | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | 初始化与执行次序待 book/32.png 复核 |
+| cck-tr-diversity | (5-57) 等权 1/2 合并 + rev[] 恢复 + (5-58) 判决 | `cck_tr_diversity.m`/`ch5_dfe_detect.m`/`ch5_backward_dfe_detect.m`/`ch5_tr_diversity_combine.m`/`ch5_tr_diversity_restore.m` | 支路软输出按 (5-46)/(5-47) 生产模型 | test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | ALG-EQUIV | (5-57) 合并 BOOK-EXACT；支路软输出 ALG-EQUIV、帧头 ENGINEERING；全码本信道模型判决为恒等信道退化 |
+| cck-fde | (5-80)~(5-82) 指数似然后验均值反馈（无 0.65/0.35 混合、无回滚） | `cck_fde.m`/`ch5_fde_cck_detect.m` | 后验反馈按 (5-81)/(5-82) | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | ALG-EQUIV | (5-80) 系数形式 ALG-EQUIV |
+| cck-mfb | (5-40)~(5-43) CMF 全线性卷积 + 主抽头对齐 + (5-24) 最近码本 | `cck_mfb.m`/`ch5_matched_filter_detect.m` | CMF oracle 锁定 | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BOOK-EXACT | MFB 基准接收（无反馈） |
+| csk-matched-filter | (6-6)~(6-12)/(6-16)~(6-19) 信道匹配字典相关（根序列 ±1，(6-9) 接收侧共轭，mod(−(peak−1),G) 映射） | `csk_matched_filter.m`/`ch6_select_csk_root.m`/`ch6_dictionary_channels.m` | RandStream mt19937ar Seed 2024（局部，不重置全局 RNG） | test_csk_matched_filter_eq_6_6_19 | 不适用（无原文数字化曲线） | ALG-EQUIV | (6-16)~(6-19) 仍 TRANSCRIPTION-PENDING；恒等信道与 (6-9) 峰决策等价 |
+| csk-soft-sic | 功率排序软串行 SIC（后验均值抵消、(6-25) 后验二阶矩方差、无阻尼） | `csk_soft_sic.m`/`ch6_soft_sic_detect.m` | userOrder 能量降序 | test_csk_ese_sic_eq_6_21_65 | 不适用（无原文数字化曲线） | ALG-EQUIV | 派生实现（spec 6.2）；无固定阻尼 |
+| csk-ese | (6-21)~(6-25)/(6-64)/(6-65) 矩 + (6-53) 盒式 LLR（字典域码字级似然 + 重复码先验）+ α=1 | `csk_ese.m`/`ch6_csk_idma_detect.m`/`ch6_ese_residual.m` | 阻尼 α=1（BOOK 路径；α<1 仅 `csk_ese_damped`） | test_csk_ese_sic_eq_6_21_65 | 不适用（无原文数字化曲线） | ALG-EQUIV | 矩运算 BOOK-EXACT；(6-53) 以字典域码字级似然实现（首迭代一致先验下与逐码片 LLR 相等） |
+
+计数核对：BOOK-EXACT 18 / ALG-EQUIV 10 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8，
+与 `test_37_registry_audit.m` 逐 ID 期望表一致（2026-08，批次11 提交 fce806c 之后）。
 
 ### 批次12 文档
 
-- 新建 `SOURCE_REVIEW_REQUEST.md`：5 项人工复核请求（book/21.png (4-57)/(4-58)；
-  book/31.png+32.png BiDFE 初始化/次序；第3章 (3-86) A_k；book/17.png (3-92) 方差
-  定义（权重排列已确认不再列为未知）；未公开参数清单）。
+- 新建 `SOURCE_REVIEW_REQUEST.md`：人工复核请求已扩展为 **6 项**（book/21.png
+  (4-57)/(4-58)；book/31.png+32.png BiDFE 初始化/次序；第3章 (3-86) A_k；
+  book/17.png (3-92) 方差定义（权重排列已确认不再列为未知）；HTFDE (3-61) λ 转写；
+  未公开参数清单），并已按批次11 最弱环节认证同步各 ID 级影响（fd-turbo、
+  sd/hd-ibdfe、ice-sd/ice-hd、htfde 整体 BLOCKED-SOURCE-REVIEW）。
 - 本文件各批次记录、行状态与 App 分组已同步；最终每方法四维状态
   （公式实现/实验参数/信道恢复/曲线复现）见各章表格与批次记录，禁止概括为
-  “37 种全部严格复现”。
+  “37 种全部严格复现”。最终认证矩阵：**BOOK-EXACT 18 / ALG-EQUIV 10 /
+  ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8**（`test_37_registry_audit` 逐 ID
+  期望表锁定）。
 
 ---
 

@@ -89,6 +89,20 @@ receiver = equalizer(channel, source, cfg)
 - `run_all_equalizers` 独立运行全部 37 个 ID 并返回 37 行审计表（含 gitCommit 元数据）。
 - 每个方法在 `trace` 中记录 `formulaStatus/formulaMode/bookExperimentEquivalent/
   effectiveParameters`；统一入口另汇总 `results.formulaStatus`。
+- 曲线评级（批次12）：`curve_reference/run_37_curve_grading.m` 对 37 法按场景跑
+  多点 SNR × 多种子并记录整数 errorBits/totalBits 与 Clopper-Pearson 95% 区间；
+  仅存在**原文数字化曲线**的方法（当前仅 fdda-teq，图 4-31）获得
+  `curve_benchmark` 等级，其余明确写“不适用（无原文数字化曲线）”——场景银行曲线
+  是工程证据，不是原文曲线复现，公式测试不能代替曲线复现。
+
+### 数字化参考曲线约定（`curve_reference/`）
+
+任何进入 `curve_benchmark` 评级的数字化数据文件必须随 `.mat` 结构记录：
+`source`（book 图片文件名与图号）、`figure`、`digitizer`（数字化方式/工具）、
+`date`、`modulation`、`channel`、`frame length`、`iteration count`、
+`known mismatch`（已知与原文条件的差异）。示例：
+`curve_reference/make_ch4_fig431_reference.m`（图 4-31，book/27.png）。
+不满足该约定的数字化文件不得用于等级计算。
 - 公式状态、剩余扫描复核项与未公开参数清单见 `FORMULA_TRACEABILITY.md` 与仓库根
   `SOURCE_REVIEW_REQUEST.md`。
 
