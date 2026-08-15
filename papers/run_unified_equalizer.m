@@ -111,6 +111,21 @@ results.gitCommit = git_commit_short();
 results.matlabVersion = version;
 results.timestamp = datetime("now");
 results.rngSeed = rng_seed();
+results.equalizerId = results.ids;
+% Per-method formula status recorded by the receiver traces (rule 6
+% metadata contract); methods without a recorded status are marked
+% NOT-RECORDED rather than silently defaulted.
+if isfield(results, "traces")
+    status = strings(1, numel(results.ids));
+    for index = 1:numel(results.ids)
+        if isfield(results.traces{index}, "formulaStatus")
+            status(index) = string(results.traces{index}.formulaStatus);
+        else
+            status(index) = "NOT-RECORDED";
+        end
+    end
+    results.formulaStatus = status;
+end
 
 if cfg.makePlot && numel(results.ids) > 1
     results.figurePath = plot_unified(results);

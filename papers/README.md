@@ -87,6 +87,10 @@ receiver = equalizer(channel, source, cfg)
 - `outputs{1}` 的度量域随场景而定（qpsk 符号估计 / turbo 信息判决 / cck-csk 码片估计 + trace 索引），并非普遍与 `source.tx` 对齐。
 - `errorBits`/`totalBits`/Clopper-Pearson 95% 区间为逐方法精确向量（`ber = errorBits ./ totalBits`，不用 `round` 重建）。
 - `run_all_equalizers` 独立运行全部 37 个 ID 并返回 37 行审计表（含 gitCommit 元数据）。
+- 每个方法在 `trace` 中记录 `formulaStatus/formulaMode/bookExperimentEquivalent/
+  effectiveParameters`；统一入口另汇总 `results.formulaStatus`。
+- 公式状态、剩余扫描复核项与未公开参数清单见 `FORMULA_TRACEABILITY.md` 与仓库根
+  `SOURCE_REVIEW_REQUEST.md`。
 
 通过 `cfg.equalizers` 选择要运行的均衡器：
 

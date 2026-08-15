@@ -43,6 +43,13 @@ else
     trace.scenarioMode = "engineering";
 end
 trace.bookExperimentEquivalent = false;
+trace.formulaStatus = "IMPLEMENTED-VERIFIED-FORMULA-CORE";
+trace.formulaMode = string(mode);
+trace.effectiveParameters = struct( ...
+    "subarrayCount", cfg.htfdeSubarrayCount, ...
+    "elementsPerSubarray", cfg.htfdeElementsPerSubarray, ...
+    "feedforwardTaps", htfde_field_default(cfg, "feedforwardTaps", 12), ...
+    "feedbackTaps", htfde_field_default(cfg, "feedbackTaps", 6));
 if isfield(channel, "branches")
     branches = channel.branches;
 else

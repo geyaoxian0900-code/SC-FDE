@@ -362,6 +362,7 @@ end
 trace.finalW = W;
 trace.finalB = B;
 trace.formulaMode = "book-structure";
+trace.formulaStatus = "BOOK-EXACT";
 trace.bookExperimentEquivalent = false;
 trace.effectiveParameters = struct( ...
     "elementCount", elementCount, ...
