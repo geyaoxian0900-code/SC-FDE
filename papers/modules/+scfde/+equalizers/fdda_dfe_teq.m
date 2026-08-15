@@ -65,6 +65,13 @@ feedbackFn = @(innerRound, dataOut) make_dfe_feedback(innerRound, ...
 [dataOut, trace] = scfde.equalizers.ch4_fdda_teq_core( ...
     received, training, params, feedbackFn);
 trace.kernel = "fdda";
+% Certification override: fdda-dfe-teq is a project combination that
+% reuses the shared FDDA kernel; it is NOT an independent book method,
+% so the kernel's BOOK-EXACT status never applies to this registered
+% method (maximum certification is ALG-EQUIV).
+trace.formulaStatus = "ALG-EQUIV";
+trace.formulaMode = "project-combination";
+trace.bookExperimentEquivalent = false;
 trace.feedbackMode = char(feedbackMode);
 trace.hopMode = "contiguous (overlap stitching SOURCE-UNCERTAIN)";
 trace.iterationError = trace.iterationMse;

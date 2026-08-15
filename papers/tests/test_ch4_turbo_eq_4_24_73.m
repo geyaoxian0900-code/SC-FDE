@@ -140,7 +140,7 @@ verifyEqual(testCase, trace.equivalentGain(1), mu, "AbsTol", 1e-9);
 verifyEqual(testCase, trace.residualVariance(1), sig2, "AbsTol", 1e-9);
 verifyEqual(testCase, trace.equalizerLlr(1, frame.dataIndices), ...
     2 * real(conj(mu) * est(frame.dataIndices)) / sig2, "AbsTol", 1e-9);
-verifyEqual(testCase, trace.formulaStatus, "BOOK-EXACT-STRUCTURE");
+verifyEqual(testCase, trace.formulaStatus, "BLOCKED-SOURCE-REVIEW");
 end
 
 function testZeroMeanFeedbackConstraintEq4_52(testCase)
@@ -154,24 +154,29 @@ end
 
 function testTddaBoxedLmsEq4_8(testCase)
 % Inline replica of the spec-4.8 boxed recursion; RED against the
-% previous NLMS + MMSE-from-true-channel implementation.
+% previous NLMS + MMSE-from-true-channel implementation.  The replica
+% follows the CURRENT boundary conventions: causal zero-padded input
+% window, no-prior first-round soft symbols, iteration-1 adaptation on
+% the training segment only, effective step cfg.tddaMu.
 [channel, source, cfg] = buildCh4Fixture(806, 18, 1);
 N = numel(channel.received);
 cfg = scfde.equalizers.ch4_setup(cfg, N);
 frame = scfde.equalizers.ch4_turbo_frame_contract(channel, source, cfg);
-H = fft([channel.impulse, zeros(1, N - numel(channel.impulse))]);
 [~, ~, trace] = scfde.equalizers.ch4_iterate_td_nlms_turbo( ...
-    channel.received, fft(channel.received), H, H, ...
-    cfg.noiseVariance, frame, cfg);
+    channel.received, [], [], [], cfg.noiseVariance, frame, cfg);
 taps = min(cfg.tdAdaptiveTaps, N);
 fb = min(cfg.feedbackTaps, N - 1);
+mu = cfg.tddaMu;    % the effective boxed step after ch4_setup
 wf = complex(zeros(taps, 1));
 wb = complex(zeros(fb, 1));
-xbar = scfde.equalizers.ch4_initial_soft_feedback( ...
-    fft(channel.received), H, cfg.noiseVariance, frame, cfg);
+xbar = zeros(1, N);
+xbar(frame.trainingIndices) = frame.trainingSymbols;
 for n = 1:N
-    idx = mod(n - 1 - (0:taps - 1), N) + 1;
-    r = channel.received(idx).';
+    if n >= taps
+        r = channel.received(n:-1:n - taps + 1).';
+    else
+        r = [channel.received(n:-1:1).'; complex(zeros(taps - n, 1))];
+    end
     fbvec = complex(zeros(fb, 1));
     if n > 1
         c = min(fb, n - 1);
@@ -179,8 +184,10 @@ for n = 1:N
     end
     z = wf' * r - wb' * fbvec;
     e = xbar(n) - z;
-    wf = wf + cfg.tdNlmsStep * r * conj(e);
-    wb = wb - cfg.tdNlmsStep * fbvec * conj(e);
+    if n <= numel(frame.trainingIndices)
+        wf = wf + mu * r * conj(e);
+        wb = wb - mu * fbvec * conj(e);
+    end
 end
 prodWf = ifft(trace.finalChannel);
 prodWf = prodWf(1:taps).';
@@ -211,7 +218,7 @@ xbar(frame.trainingIndices) = frame.trainingSymbols;
 oracle = ifft(feedforward .* fft(channel.received)) - ...
     timeFeedbackInline(xbar, g, N, fb);
 verifyEqual(testCase, trace.softEstimates(1, :), oracle, "AbsTol", 1e-9);
-verifyEqual(testCase, trace.formulaStatus, "BOOK-EXACT-STRUCTURE");
+verifyEqual(testCase, trace.formulaStatus, "ALG-EQUIV");
 end
 
 function testBitfEqualWeightMergeEq2_53(testCase)
@@ -249,7 +256,7 @@ xbarR = [xbar(1), xbar(N:-1:2)];
 rev = ifft(ffR .* fft(revRecv)) - timeFeedbackInline(xbarR, gR, N, fb);
 oracle = 0.5 * fwd + 0.5 * [rev(1), rev(N:-1:2)];
 verifyEqual(testCase, trace.softEstimates(1, :), oracle, "AbsTol", 1e-9);
-verifyEqual(testCase, trace.formulaStatus, "BOOK-EXACT-STRUCTURE");
+verifyEqual(testCase, trace.formulaStatus, "ALG-EQUIV");
 end
 
 function testCh4WrappersRngPreservedAndStatus(testCase)

@@ -53,12 +53,12 @@ for iteration = 1:cfg.iterations
     trace.residualVariance(iteration) = sigmaHat2;
 end
 trace.finalChannel = Hest;
-trace.formulaStatus = "BOOK-EXACT-STRUCTURE";
+trace.formulaStatus = "BLOCKED-SOURCE-REVIEW";
 trace.formulaMode = "book";
 trace.bookExperimentEquivalent = false;
 trace.effectiveParameters = struct("iterations", cfg.iterations, ...
     "decoderMode", string(decoderMode), ...
     "noiseVariance", noiseVariance, "frameLength", N, ...
     "adaptiveChannel", logical(adaptiveChannel));
-trace.formulaNote = "(4-42)/(4-43)/(4-50)/(4-60)/(4-61): FD-IBDFE with decoder-extrinsic soft feedback, mu/sigma^2 from the training segment, extrinsic-only exchange, undamped; (4-57)/(4-58) coefficient form BLOCKED-SOURCE-REVIEW (book/21.png)";
+trace.formulaNote = "(4-42)/(4-43)/(4-50)/(4-60)/(4-61): FD-IBDFE with decoder-extrinsic soft feedback, mu/sigma^2 from the training segment, extrinsic-only exchange, undamped; the IBDFE coefficient form (4-57)/(4-58) is still BLOCKED-SOURCE-REVIEW (book/21.png), so the method as a whole is NOT certified BOOK-EXACT";
 end

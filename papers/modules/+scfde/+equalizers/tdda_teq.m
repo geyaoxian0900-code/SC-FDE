@@ -5,10 +5,12 @@ function receiver = tdda_teq(channel, source, cfg)
 N = numel(channel.received);
 cfg = scfde.equalizers.ch4_setup(cfg, N);
 frame = scfde.equalizers.ch4_turbo_frame_contract(channel, source, cfg);
-Hinitial = fft([channel.impulse, zeros(1, N - numel(channel.impulse))]);
+% No true-channel quantity enters the equalizer: spec 4.8 forbids
+% true-channel initial weights, and the first round has NO data prior
+% (no channel-assisted MMSE initialization).  Y/Hinitial/Hreference are
+% all passed empty; the equalizer adapts from the training segment only.
 [bits, ~, trace] = scfde.equalizers.ch4_iterate_td_nlms_turbo( ...
-    channel.received, fft(channel.received), Hinitial, Hinitial, ...
-    cfg.noiseVariance, frame, cfg);
+    channel.received, [], [], [], cfg.noiseVariance, frame, cfg);
 decisions = 1 - 2 * bits;
 receiver = scfde.equalizers.pack_equalizer("TDDA-TEQ", "tdda-teq", ...
     decisions, zeros(size(decisions)), decisions, trace);

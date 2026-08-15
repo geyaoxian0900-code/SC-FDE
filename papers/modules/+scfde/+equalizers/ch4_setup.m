@@ -14,6 +14,18 @@ if ~isfield(cfg, "iterations"), cfg.iterations = 4; end
 if ~isfield(cfg, "infoBits"), cfg.infoBits = blockLength / 2; end
 if ~isfield(cfg, "tdAdaptiveTaps"), cfg.tdAdaptiveTaps = 16; end
 if ~isfield(cfg, "tdNlmsStep"), cfg.tdNlmsStep = 0.35; end
+% Step selected with reference to the independence-based mean-convergence
+% diagnostic for the spec-4.8 UNNORMALIZED LMS: the NLMS-era
+% tdNlmsStep=0.35 exceeds the joint-regressor MEAN-convergence reference
+% 2/lambda_max(R_hat), u_n = [r_n; -x_bar_{n-1}] (measured ~0.096 on
+% the unit-energy 16-tap turbo input at 18 dB) and diverges.  tddaMu
+% defaults to 0.05, which is about HALF that reference; the reference is
+% measured PER ROUND inside ch4_iterate_td_nlms_turbo and recorded in
+% trace.meanConvergenceBound / trace.withinMeanConvergenceBound
+% (per-round arrays; theoretical diagnostic only, NOT a stability
+% guarantee - the overall diagnostic meanBoundSatisfiedAllIterations
+% uses the minimum across rounds).
+if ~isfield(cfg, "tddaMu"), cfg.tddaMu = 0.05; end
 if ~isfield(cfg, "feedbackTaps"), cfg.feedbackTaps = 6; end
 if ~isfield(cfg, "feedforwardTaps"), cfg.feedforwardTaps = 12; end
 if ~isfield(cfg, "blmsStep"), cfg.blmsStep = 0.06; end

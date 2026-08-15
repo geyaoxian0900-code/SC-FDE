@@ -45,14 +45,24 @@ trace.normalization = complex(zeros(1, cfg.ibdfeIterations));
 trace.channelHistory = complex(zeros(cfg.ibdfeIterations, N));
 trace.feedbackMode = string(feedbackMode);
 trace.updatesChannel = logical(updateChannel);
-trace.formulaStatus = "BOOK-EXACT";
+% Weakest-link certification (batch-11): the whole registered method can
+% be BOOK-EXACT only when EVERY necessary formula in its production
+% chain is source-confirmed.  The plain SD/HD IBDFE chain includes A_k
+% ((3-86), still BLOCKED-SOURCE-REVIEW); the ICE chain additionally
+% includes the (3-92) variance definitions (still BLOCKED-SOURCE-REVIEW).
+% Both paths are therefore BLOCKED-SOURCE-REVIEW overall.
+trace.formulaStatus = "BLOCKED-SOURCE-REVIEW";
 trace.formulaMode = "book";
 trace.bookExperimentEquivalent = false;
 trace.effectiveParameters = struct("iterations", cfg.ibdfeIterations, ...
     "fftSize", N, "channelEstimateLength", cfg.channelEstimateLength, ...
     "noiseVariance", noiseVariance, "feedbackMode", string(feedbackMode), ...
     "updatesChannel", logical(updateChannel));
-trace.formulaNote = "(3-64)~(3-71) C=A/Gamma, B=CH-1, unit gain; iteration 1 = MMSE-FDE degradation; A_k H*-form + rho estimation: BLOCKED-SOURCE-REVIEW ((3-86)/(3-87) pending book/17.png)";
+if updateChannel
+    trace.formulaNote = "(3-64)/(3-65)/(3-82)/(3-84)/(3-85)/(3-87) and (3-88)~(3-91) verified; the (3-92) variance DEFINITIONS remain BLOCKED-SOURCE-REVIEW (book/17.png) -> weakest-link certification";
+else
+    trace.formulaNote = "(3-64)/(3-65)/(3-82)/(3-84)/(3-85)/(3-87) verified; the A_k form (3-86) remains BLOCKED-SOURCE-REVIEW (book/17.png) -> weakest-link certification";
+end
 trace.channelUpdateStatus = "ENGINEERING-BLOCKED";
 trace.channelUpdateNote = "(3-88)~(3-91) LS + DFT truncation implemented (book/17.png confirms H_LS = R/X_D^0); (3-92) boxed MMSE variance mix applied with the scan-confirmed numerator order (sigmaDft2*H_old + sigmaOld2*H_DFT); the two variance DEFINITIONS (residual energies) are ENGINEERING estimates, not recovered from the scan";
 

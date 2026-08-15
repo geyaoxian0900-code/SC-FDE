@@ -43,8 +43,9 @@ else
     trace.scenarioMode = "engineering";
 end
 trace.bookExperimentEquivalent = false;
-trace.formulaStatus = "IMPLEMENTED-VERIFIED-FORMULA-CORE";
+trace.formulaStatus = "BLOCKED-SOURCE-REVIEW";
 trace.formulaMode = string(mode);
+trace.formulaNote = "(3-61)/(3-62): implemented per the scan-confirmed per-element matrix form x_m = IFFT{ sum_k C_{m,k} R_{m,k} } with the sub-array sum; the lambda-subscript transcription of (3-61) remains SOURCE-INCONSISTENT (implemented with the default lambda = 1 degradation D = I and the residual-phase-matrix lambda from (3-39)~(3-41)) -> weakest-link certification BLOCKED-SOURCE-REVIEW pending human re-review of the scan; experiment parameters (P/K/DPLL gains) PARAM-UNRECOVERABLE";
 trace.effectiveParameters = struct( ...
     "subarrayCount", cfg.htfdeSubarrayCount, ...
     "elementsPerSubarray", cfg.htfdeElementsPerSubarray, ...

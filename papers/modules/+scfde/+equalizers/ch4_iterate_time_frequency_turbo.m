@@ -76,16 +76,16 @@ trace.effectiveParameters = struct("iterations", cfg.iterations, ...
     "adaptiveChannel", logical(adaptiveChannel));
 if bidirectional
     trace.formulaMode = "book";
-    trace.formulaStatus = "BOOK-EXACT-STRUCTURE";
-    trace.formulaNote = "(2-50)~(2-53)/(4-42)~(4-49): forward and time-reversed TF passes with independent states, rev restoration and equal-weight 1/2 merge; no fixed 0.5 time/frequency mixing; feedback tap design ALG-EQUIV";
+    trace.formulaStatus = "ALG-EQUIV";
+    trace.formulaNote = "(2-50)~(2-53)/(4-42)~(4-49): forward and time-reversed TF passes with independent states, rev restoration and equal-weight 1/2 merge; no fixed 0.5 time/frequency mixing; feedback tap design ALG-EQUIV (not itemized in the scan)";
 elseif adaptiveChannel
     trace.formulaMode = "engineering";
     trace.formulaStatus = "ENGINEERING";
     trace.formulaNote = "spec 4.6 requires the strict block FBLMS feedforward (4-64)~(4-73); the per-bin BLMS channel adaptation kept here is an ENGINEERING extension (recorded); soft feedback = decoder extrinsic mean";
 else
     trace.formulaMode = "book";
-    trace.formulaStatus = "BOOK-EXACT-STRUCTURE";
-    trace.formulaNote = "(3-61)/(4-43)~(4-49): HTF front end (single-channel degenerate) + time-domain soft feedback; no fixed 0.5 mixing (spec 4.4); feedback tap design ALG-EQUIV";
+    trace.formulaStatus = "ALG-EQUIV";
+    trace.formulaNote = "(3-61)/(4-43)~(4-49): HTF front end (single-channel degenerate) + time-domain soft feedback; no fixed 0.5 mixing (spec 4.4); feedback tap design ALG-EQUIV (not itemized in the scan)";
 end
 end
 

@@ -794,7 +794,8 @@ if ~isfield(rA.traces{1}, "kernel")
     return;
 end
 verifyEqual(testCase, rA.traces{1}.kernel, "fdda");
-verifyEqual(testCase, rA.traces{1}.formulaMode, "book-structure");
+verifyEqual(testCase, rA.traces{1}.formulaMode, "project-combination");
+verifyEqual(testCase, rA.traces{1}.formulaStatus, "ALG-EQUIV");
 verifyEqual(testCase, rA.traces{1}.bookExperimentEquivalent, false);
 end
 

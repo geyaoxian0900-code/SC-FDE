@@ -125,7 +125,8 @@ for iteration = 1:cfg.ibdfeIterations
         trace.feedforward(iteration, :) .* H - 1, "AbsTol", 1e-12);
     verifyEqual(testCase, trace.normalization(iteration), 1, "AbsTol", 1e-12);
 end
-verifyEqual(testCase, trace.formulaStatus, "BOOK-EXACT");
+verifyEqual(testCase, trace.formulaStatus, "BLOCKED-SOURCE-REVIEW", ...
+    "weakest link ((3-86) A_k) keeps the plain IBDFE from BOOK-EXACT");
 end
 
 function testHardFeedbackUsesPreviousCompleteBlock(testCase)

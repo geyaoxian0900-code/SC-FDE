@@ -48,18 +48,18 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 
 | 章节 | 核心递推可对应 | 部分对应/工程近似 | 明显不能认证为原文实现 |
 |---|---|---|---|
-| 第2章 | dfe、lms-dfe、nlms-dfe、rls-dfe、dpll-dfe、mc-lms-dfe、mc-nlms-dfe、mc-rls-dfe、ptr-dfe、subband-ptr-dfe（批次5 全部按 (2-6)~(2-49) 严格化：静态维纳 DFE、盒式 LMS/NLMS/RLS、每阵元 DPLL、(2-36) 符号修正、多阵元 PTR 求和、P 子阵结构） | — | — |
-| 第3章 | mmse-fde、zf-fde、sd-ibdfe、hd-ibdfe、ice-sd-ibdfe、ice-hd-ibdfe（批次6：MMSE 公共因子 golden、严格 ZF、IBDFE 结构 oracle、ICE (3-88)~(3-92) 盒式；(3-92) 方差定义仍 BLOCKED-SOURCE-REVIEW） | — | —（htfde 已于批次1 重写为逐阵元 (3-61)/(3-62)，IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED） |
-| 第4章 | fd-turbo、fblms、fdda-teq（公式结构已验证）、td-turbo、tf-turbo、bitf-turbo（批次7 盒式/结构严格化） | tdda-teq（ALG-EQUIV 项目组合）、fdda-dfe-teq（ALG-EQUIV） | fd-dfe（(4-57)/(4-58) BLOCKED-SOURCE-REVIEW）、blms-tf-turbo（ENGINEERING：spec 4.6 要求严格块 FBLMS 内核，现用逐频点 BLMS 扩展） |
-| 第5章 | cck-rake、cck-mfb、cck-dfe、cck-tr-diversity（(5-57) 合并结构 BOOK-EXACT，支路软输出 ALG-EQUIV，帧头 ENGINEERING） | cck-fde（(5-80) ALG-EQUIV；0.65/0.35 软值混合与性能回滚已于批次8 删除） | cck-bidfe、cck-bidfe2 |
-| 第6章 | csk-matched-filter | csk-ese、csk-soft-sic（ESE 矩 BOOK-EXACT/LLR 与域 ALG-EQUIV；SIC 派生 ALG-EQUIV，无阻尼） | — |
+| 第2章 | dfe、lms-dfe、nlms-dfe、rls-dfe、dpll-dfe、mc-lms-dfe、mc-nlms-dfe、mc-rls-dfe、ptr-dfe、subband-ptr-dfe（批次5 逐式严格化**已验证的具体公式**：静态维纳 DFE (2-6)~(2-11)、盒式 LMS (2-14)/NLMS (2-16)/RLS (2-23)~(2-25)、DPLL (2-34)~(2-37)（(2-36) 符号修正）、多阵元 (2-43)~(2-46)、PTR (2-47) 求和、子带 (2-48)/(2-49) P 子阵结构；待转录的 (2-17)~(2-22)/(2-38)~(2-42) 为 Fast RLS/DPLL 推导区，不在任一注册方法的必要生产链内，故不影响 10 法 BOOK-EXACT（口径见“已知缺口”第 7 条）；不得概括为“(2-6)~(2-49) 全部 BOOK-EXACT”） | — | — |
+| 第3章 | mmse-fde、zf-fde（批次6：MMSE 公共因子 golden、严格 ZF） | — | sd-ibdfe、hd-ibdfe（(3-86) A_k BLOCKED-SOURCE-REVIEW）、ice-sd-ibdfe、ice-hd-ibdfe（(3-92) 方差定义 BLOCKED-SOURCE-REVIEW）、htfde（(3-61) λ 转写 SOURCE-INCONSISTENT；批次1 逐阵元重写，公式 12/12 已验证，但最弱环节未复核不得标 BOOK-EXACT） |
+| 第4章 | td-turbo、fblms、fdda-teq（公式结构已验证） | tf-turbo、bitf-turbo、tdda-teq、fdda-dfe-teq（ALG-EQUIV）、blms-tf-turbo（ENGINEERING：spec 4.6 要求严格块 FBLMS 内核，现用逐频点 BLMS 扩展） | fd-dfe、fd-turbo（(4-57)/(4-58) BLOCKED-SOURCE-REVIEW） |
+| 第5章 | cck-rake、cck-mfb、cck-dfe | cck-tr-diversity（(5-57) 合并结构 BOOK-EXACT，支路软输出 ALG-EQUIV，帧头 ENGINEERING → 整体 ALG-EQUIV）、cck-fde（(5-80) ALG-EQUIV；0.65/0.35 软值混合与性能回滚已于批次8 删除） | cck-bidfe、cck-bidfe2 |
+| 第6章 | — | csk-matched-filter、csk-ese、csk-soft-sic（ESE 矩 BOOK-EXACT/LLR 与域 ALG-EQUIV；SIC 派生 ALG-EQUIV，无阻尼） | — |
 
-数量口径：核心递推可对应 14，部分对应/工程近似 15，明显不能认证 8。该分组是当前代码快照的
-审计结论，不得改写成“14 种完整原文复现”。已确认的主要原因包括：
+数量口径：核心递推可对应 18，部分对应/工程近似 10，明显不能认证 9。该分组是当前代码快照的
+审计结论，不得改写成“18 种完整原文复现”。已确认的主要原因包括：
 
 - QPSK/CCK 场景把同一 `received` 复制为两行 `branches`，不构成独立阵元观测；
 - 第4章统一入口使用 BPSK，而原书相应 FDDA 实验使用 QPSK 和多阵元数据；
-- HTFDE 已于批次1 重写为式 (3-61)/(3-62) 的逐阵元 `C_{m,k} R_{m,k}` 合并 + 多通道 DPLL-DFE 后级（IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED）；
+- HTFDE 已于批次1 重写为式 (3-61)/(3-62) 的逐阵元 `C_{m,k} R_{m,k}` 合并 + 多通道 DPLL-DFE 后级（公式 12/12 已验证；但 (3-61) λ 转写 SOURCE-INCONSISTENT → 认证 BLOCKED-SOURCE-REVIEW，最弱环节原则）；
 - FDDA 式 (4-77) 的 `W_m^H`、反馈加号、多阵元求和及内层迭代已按 book/26.png 人工复核并通过独立 oracle（批次2，test_fdda_eq_4_74_82 15/15）；
 - BiDFE 式 (5-57) 已由批次3 接入生产路径：`ch5_tr_diversity_combine`（等权 1/2）+ `ch5_tr_diversity_restore`（rev[]=conj(fliplr) 恢复到同一时间序）驱动 `cck-tr-diversity`；支路码片级软输出按 (5-46)/(5-47) 生产模型推导（ALG-EQUIV，帧头前 memory 码片无时反窗取前向支路 = ENGINEERING），待 (5-48)~(5-56) 逐式转录复核；
 - 第6章 App 默认单用户；Soft-SIC 固定 0.45/0.55 阻尼已由批次4 移除（spec 6.2 禁止），改为按接收功率排序的后验软均值串行 SIC（ID 级 ALG-EQUIV）；ESE BOOK 路径阻尼 α=1，α<1 仅在 `csk_ese_damped`；
@@ -151,8 +151,8 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 | (3-45) `ŝ=F^H CHFs+w̃=AĤs+w̃` | 55-58 | 时域输出 | IDFT 含 1/N | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-46) `ŝ_k=β_k s_k+w'_k` 相位补偿 | 55-58 | 残余相位 | — | — | scfde.book_formulas.ch3_time_output | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
 | (3-47)~(3-60) | 59-62 | 扫描已存在；区间待逐式转录与生产核对 | — | — | — | — | — | TRANSCRIPTION-PENDING | N/A |
-| (3-61) `C_{m,k}=(\tilde H^H\Phi^H\Phi\tilde H+\sigma^2I)^{-1}\tilde H^H\Phi^H`，`\Phi=\lambda I` 时为 `(\|λ\|²Ĥ^HĤ+σ²I)^{-1}λ*Ĥ^H`（逐阵元） | 59-60 | 频域 MMSE | — | `ch3_htfde_equalize.m`（批次1 重写） | — | — | test_htfde_eq_3_61_62 | SOURCE-INCONSISTENT（转写第二行 λ 似无共轭；Resolution：跟随第一行矩阵式与 (3-44)，实现 \|λ\|² 分母、λ* 分子）；生产 IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED（12/12 PASS，本机复验） | OK |
-| (3-62) `x_m=F^H Σ_{k=1}^{K} C_{m,k}R_{m,k}` 子阵频域合并输出 | 59-60 | 频域合并 | 1/N（IFFT） | `ch3_htfde_equalize.m`（批次1 重写） | — | — | test_htfde_eq_3_61_62 | IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED（12/12 PASS，本机复验） | OK |
+| (3-61) `C_{m,k}=(\tilde H^H\Phi^H\Phi\tilde H+\sigma^2I)^{-1}\tilde H^H\Phi^H`，`\Phi=\lambda I` 时为 `(\|λ\|²Ĥ^HĤ+σ²I)^{-1}λ*Ĥ^H`（逐阵元） | 59-60 | 频域 MMSE | — | `ch3_htfde_equalize.m`（批次1 重写） | — | — | test_htfde_eq_3_61_62 | SOURCE-INCONSISTENT（转写第二行 λ 似无共轭；Resolution：跟随第一行矩阵式与 (3-44)，实现 \|λ\|² 分母、λ* 分子）；生产 BLOCKED-SOURCE-REVIEW（最弱环节：矩阵式实现 12/12 PASS 本机复验，但 λ 转写未复核） | OK |
+| (3-62) `x_m=F^H Σ_{k=1}^{K} C_{m,k}R_{m,k}` 子阵频域合并输出 | 59-60 | 频域合并 | 1/N（IFFT） | `ch3_htfde_equalize.m`（批次1 重写） | — | — | test_htfde_eq_3_61_62 | BLOCKED-SOURCE-REVIEW（逐阵元实现 12/12 PASS 本机复验；整体认证随 (3-61) λ 转写为最弱环节） | OK |
 | (3-64) `X̂^l=(C^l)^H R-(B^l)^H X̂^{l-1}` | 63-64 | IBDFE 迭代 | — | `ch3_ibdfe_equalize.m`（批次6：首迭代反馈为零退化为 MMSE-FDE） | — | C IBDFE | test_eq_3_87/test_ch3_fde_ibdfe_eq_3_39_92 | BOOK-EXACT | OK |
 | (3-65) `M_Xk=E\ | X_k\ | ², M_X̂k=E\ | X̂_k\ | `BOOK_CONVENTIONS` | — | — | — | BOOK-EXACT | OK |
 | (3-66) `r_{Xk,X̂k*}=E[X_k X̂_k^*]` | 63-64 | 相关 | — | — | scfde.book_formulas.ch3_ibdfe_corr | — | test_book_formulas_ch3 | BOOK-EXACT | OK |
@@ -176,9 +176,9 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 算法 | 状态 | 说明 | OK |
 |---|---|---|
 MMSE-FDE（`mmse_fde.m`） | BOOK-EXACT | 与书式 `H*/(Nσ_w²+M_x\ | H\ | ²)` 差公共正实因子 N（m_x=1 单位能量），批次6 golden 证明判决等价（test_ch3_fde_ibdfe_eq_3_39_92） | OK |
-IBDFE（`sd_ibdfe.m`/`hd_ibdfe.m`/`ch3_ibdfe_equalize.m`） | BOOK-EXACT | 3-64/3-65/3-82/3-84/3-85/3-87 全闭环；unit-gain 断言 `\ | mean(CH)-1\ | <1e-10`；首迭代退化为 MMSE-FDE、软路径后验均值（不硬切）、硬路径上一整块判决，批次6 oracle 锁定 | OK |
-HTFDE（`htfde.m`） | IMPLEMENTED-VERIFIED-FORMULA-CORE / INTEGRATION-VERIFIED | 批次1：逐阵元 (3-61)/(3-62) 前端 + 多通道 DPLL-DFE 后级；本机复验：公式测试 12/12、多阵元及 BER 契约 8/8、运行契约 21/21、全量 143/143 均 PASS；seed=42、12 dB 时 0/112、BER=0（训练区不计入）；BOOK 模式要求显式 P/K，缺失抛 `SCFDE:BookParameterUnavailable`；原书实验参数（N/M/P/K、DPLL 增益、μ）PARAM-UNRECOVERABLE，不得宣称原文实验复现 | OK |
-ICE（`ice_sd_ibdfe.m`/`ice_hd_ibdfe.m`） | (3-88)~(3-91) BOOK-EXACT + (3-92) 盒式（方差定义 BLOCKED-SOURCE-REVIEW） | 批次6：数据驱动 LS→DFT 截断→盒式 MMSE 方差加权，首轮保持训练估计 H，固定 ρ 混合已移除；训练观测合成与 randn 已删除（RNG 透明） | OK |
+IBDFE（`sd_ibdfe.m`/`hd_ibdfe.m`/`ch3_ibdfe_equalize.m`） | BLOCKED-SOURCE-REVIEW（最弱环节） | 3-64/3-65/3-82/3-84/3-85/3-87 全闭环已 oracle 锁定；unit-gain 断言 `\ | mean(CH)-1\ | <1e-10`；首迭代退化为 MMSE-FDE、软路径后验均值（不硬切）、硬路径上一整块判决；但 (3-86) A_k 完整形式仍待 book/17.png 复核，故整体不得标 BOOK-EXACT | OK |
+HTFDE（`htfde.m`） | BLOCKED-SOURCE-REVIEW（最弱环节） | 批次1：逐阵元 (3-61)/(3-62) 前端 + 多通道 DPLL-DFE 后级；本机复验：公式测试 12/12、多阵元及 BER 契约 8/8、运行契约 21/21、全量 143/143 均 PASS；seed=42、12 dB 时 0/112、BER=0（训练区不计入）；但 (3-61) λ 转写 SOURCE-INCONSISTENT 未复核，故整体不得标 BOOK-EXACT；BOOK 模式要求显式 P/K，缺失抛 `SCFDE:BookParameterUnavailable`；原书实验参数（N/M/P/K、DPLL 增益、μ）PARAM-UNRECOVERABLE，不得宣称原文实验复现 | OK |
+ICE（`ice_sd_ibdfe.m`/`ice_hd_ibdfe.m`） | BLOCKED-SOURCE-REVIEW（最弱环节） | 批次6：数据驱动 LS→DFT 截断→盒式 MMSE 方差加权（(3-88)~(3-91) 与 (3-92) 权重排列均已确认），首轮保持训练估计 H，固定 ρ 混合已移除；训练观测合成与 randn 已删除（RNG 透明）；但 (3-92) 两个方差定义仍待 book/17.png 复核，故整体不得标 BOOK-EXACT | OK |
 ZF-FDE（`zf_fde.m`） | BOOK-EXACT | spec 3.2 框定 `C_k=1/(λH_k)`；批次6 严格化：无 ε 下限、奇异频点 trace.singularBins 报告（λ=1 零多普勒场景） | OK |
 
 ## 第 4 章 单载波迭代均衡（书页 75~112）
@@ -213,7 +213,7 @@ ZF-FDE（`zf_fde.m`） | BOOK-EXACT | spec 3.2 框定 `C_k=1/(λH_k)`；批次6 
 | (4-47) `x̄_k=E(x_k)=Σs_i P(x_k=s_i)` 软符号 | 87-88 | 软符号 | — | `ch4_decoder_feedback_frame.m`（批次7：反馈均值改由译码器**外信息** tanh(L_D^e/2) 计算，训练位置锁定） | — | — | test_ch4_turbo_eq_4_24_73 | BOOK-EXACT | OK |
 | (4-48) `P(x_k=s_i)=ΠP(c_{k,j}=s_{i,j})` | 87-88 | 比特独立 | — | ch4_probability_posteriors | — | — | — | BOOK-EXACT | OK |
 | (4-49) `x̄_n=Σ(f_l^H)^*y_{n+l}^H-(g_l)^T x̄_n` | 87-88 | 时域软反馈 | — | ch4_iterate_time_turbo | — | — | — | OCR-UNCERTAIN | N/A |
-| (4-50)~(4-63) | 89-90 | 扫描已存在；FD-DFE/FD-Turbo 权重区：零均值约束 (4-52) 已显式施加（批次7）；(4-57)/(4-58) 分子分母仍 **BLOCKED-SOURCE-REVIEW**（book/21.png），故 `fd-dfe` 标 ALG-EQUIV、`fd-turbo` 标 BOOK-EXACT-STRUCTURE | — | `ch4_fd_ibdfe_weights.m`/`ch4_frequency_dfe_baseline.m`/`ch4_iterate_frequency_turbo.m` | — | — | test_ch4_turbo_eq_4_24_73 | TRANSCRIPTION-PENDING | N/A |
+| (4-50)~(4-63) | 89-90 | 扫描已存在；FD-DFE/FD-Turbo 权重区：零均值约束 (4-52) 已显式施加（批次7）；(4-57)/(4-58) 分子分母仍 **BLOCKED-SOURCE-REVIEW**（book/21.png），故 `fd-dfe` 标 ALG-EQUIV、`fd-turbo` 标 **BLOCKED-SOURCE-REVIEW**（批次11 认证枚举统一，旧 BOOK-EXACT-STRUCTURE 非标准值已废弃） | — | `ch4_fd_ibdfe_weights.m`/`ch4_frequency_dfe_baseline.m`/`ch4_iterate_frequency_turbo.m` | — | — | test_ch4_turbo_eq_4_24_73 | TRANSCRIPTION-PENDING | N/A |
 | (4-64) `y'_u,y_u,y'_d,r_u` 块定义 | 103-106 | BLMS 块 | N、N_v | — | — | C FBLMS | test_fblms_and_curve_benchmark | BOOK-EXACT | OK |
 | (4-65) `R_u(k)=F r_u(k)` | 103-106 | 频域变换 | 无 1/N | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-66) `X̂(k)=ΣW_n⊙R_n` | 103-106 | 频域滤波 | ⊙ | fblms.m | — | — | — | BOOK-EXACT | OK |
@@ -349,10 +349,18 @@ ZF-FDE（`zf_fde.m`） | BOOK-EXACT | spec 3.2 框定 `C_k=1/(λH_k)`；批次6 
 4. **CCK Turbo 外码**（第5章）：原书未公开 → PARAM-UNRECOVERABLE，重复码标 ENGINEERING。
 5. **ESE damping**（第6章）：主路径需 α=1；α=0.58 拆 `csk_ese_damped.m`。
 6. **第4章 (4-56)~(4-58)**：FD-DFE 生产已施加 (4-52) 零均值约束（批次7）；(4-57)/(4-58) 分子分母仍待 book/21.png 人工复核（BLOCKED-SOURCE-REVIEW），复核前 `fd-dfe` 不得标 BOOK-EXACT；FDDA (4-77)~(4-82) 部分已由批次2 完成独立原式验证。
-7. **待逐式转录/核对区间**：2-16~2-25、2-38~2-46、3-8~3-26、3-68~3-80、
+7. **待逐式转录/核对区间**：2-17~2-22、2-38~2-42、3-8~3-26、3-68~3-80、
    4-10~4-15、4-24~4-41、4-50~4-63、5-1~5-7、5-13~5-23、5-30~5-40、
    5-48~5-56、5-62~5-69、5-83~5-96、6-16~6-19、6-26~6-37、6-43~6-63。
    上述区间的图片均已存在于 `book/`，缺的是完整人工转录、变量映射和生产路径验证，不是扫描页。
+   **第2章口径说明（批次11 最弱环节复核）**：第2章注册 10 法的必要公式链为
+   (2-6)~(2-11) 结构 + 各自盒式递推 —— NLMS (2-16)、RLS (2-23)~(2-25)、
+   DPLL (2-34)~(2-37)、多阵元 (2-43)~(2-46)、PTR (2-47)、子带 (2-48)/(2-49) ——
+   全部已逐式转录并经独立 oracle 锁定（批次5），故 10 法整体 BOOK-EXACT 成立。
+   待转录的 (2-17)~(2-22)（Fast RLS 推导区）与 (2-38)~(2-42)（DPLL 推导余部）是
+   推导/分析区间，不包含任何注册方法生产路径所读取的公式；若未来某 ID 改用这些推导
+   公式，其认证须重新评估。此处不再使用旧的“2-16~2-25、2-38~2-46”区间表述（与
+   逐式表格中 (2-16)/(2-23)~(2-25)/(2-43)~(2-46) 的 BOOK-EXACT 行矛盾）。
 
 ## 完成统计（本批基线）
 
@@ -575,9 +583,72 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 
 ## 批次 9~12 记录（2026-08）
 
+### 批次11 `tdda-teq` 根因审计（返修完成，待本机复验后提交）
+
+- **根因（理论推导，非调参）**：spec 4.8 盒式为**未归一化 LMS**；`cfg.tdNlmsStep=0.35`
+  是 NLMS 时代遗留值，超出联合回归量均值收敛参考 → 发散 → 18 dB 实测 BER≈0.51。修复：
+  新增 `cfg.tddaMu`（默认 0.05，ch4_setup 锁定），内核优先使用 tddaMu 并在 trace 记录
+  逐轮均值收敛参考与 `trainingErrorPower/dataErrorPower` 拆分。
+- **均值收敛参考（P1 返修）**：不再声称 `2/(Nf·E|r|²)`（前馈分量近似被误当整体界）。现按
+  **联合回归量** `u_n=[r_n; −x̄_{n−1}]` 计算 `R̂=mean(u u^H)`、`2/λ_max(R̂)`（独立同分布
+  近似）；`2/(Nf·mean|r|²)` 仅作 `feedforwardOnlyMeanBound` 保留。18 dB 实测≈0.096，
+  故 μ=0.05 约为参考的 0.5 倍（不再声称固定 0.4×）。
+- **逐轮重测与语义降级（P1 二轮返修）**：反馈回归量随轮次变化（第 1 轮无先验、第 ≥2
+  轮译码外信息），只在第 1 轮测一次不能覆盖后续轮次。现每轮开始时按当前 softSymbols
+  重测：`trace.meanConvergenceBound(iteration)` / `trace.withinMeanConvergenceBound
+  (iteration)` 为逐轮数组，总体诊断 `meanBoundSatisfiedAllIterations = μ <
+  min(参考)`（`trace.minimumMeanConvergenceBound`）。**该量仅为独立性假设下的均值
+  收敛参考（理论诊断），不是稳定性保证**：实测 10 dB 夹具参考≈0.8586 时 μ=0.5 仍在
+  参考之下却严重发散，实际发散改由误差/权值轨迹（errorPower/trainingErrorPower/
+  finalChannel）判定，trace 与文档已按此口径命名与表述。
+- **特征值标量化（P0 返修）**：`max(real(eig(R̂)), eps)` 为逐元素比较、返回特征值向量
+  导致标量槽赋值失败（11 Incomplete），已改为先 `max(real(eig(R̂)))` 取 λ_max 再算参考，
+  并加 Hermitian 清理 `(R̂+R̂')/2`；测试内联 oracle 同步。
+- **越界步长动态选取（P0 返修）**：旧测试固定 `μ=0.5`，但该夹具参考≈0.8586，0.5 低于
+  参考 → “应当越界”的断言不成立。现按 `μ_over = 1.1 × 实测参考` 动态选取，再验证越界
+  标记与发散轨迹。
+- **训练误差判定去阈值化（P1 返修）**：无来源的绝对阈值 `<1e-4`（实测末轮训练误差
+  ≈7.2e-4）替换为组合判定：相对首轮下降 ≥10×、轮间不恶化（diff ≤ 1e-12）、权值有限且
+  非零、无噪声判决精确；迭代数作为显式工程参数记录（effectiveParameters.iterations）。
+- **零填充拼接维度（P0 返修）**：帧首零填充窗原为横向拼接（两列向量行数不同 →
+  `MATLAB:catenate:dimensionMismatch`），已改纵向拼接，TDDA 内核与两处内联副本同步。
+- **边界规则（P1 返修）**：因果输入窗 `r_n` 帧首**零填充**（删除 mod() 循环回绕，
+  帧尾编码数据不得泄漏进帧首训练回归量）；新增负测试
+  `testFrameTailDoesNotLeakIntoHeadTraining`（线性卷积帧、仅翻转最后编码符号，前 Nf
+  样本第 1 轮估计须逐位相同——旧循环窗会被击穿）。
+- **第一轮无先验（P1 返修）**：删除 `ch4_initial_soft_feedback`（真信道 MMSE 初始化
+  曾把真信道辅助注入数据软目标）；现第 1 轮数据软符号为 0（无 d_a 目标），**仅在训练段
+  自适应**，数据段只均衡；第 ≥2 轮用译码器外信息均值全帧自适应。包装器
+  `tdda_teq.m` 不再从真信道构造任何输入（Y/Hinitial/Hreference 均传空，NMSE 度量退
+  位为 NaN，不进自适应）。
+- **认证枚举统一与最弱环节重审（P2 返修）**：废弃非标准值
+  `IMPLEMENTED-VERIFIED-FORMULA-CORE` 与 `BOOK-EXACT-STRUCTURE`；认证按**生产链最弱
+  必要环节**重新制定（某核心递推/合并公式精确不等于整个注册 ID 可标 BOOK-EXACT）：
+  * htfde → **BLOCKED-SOURCE-REVIEW**（(3-61) λ 转写 SOURCE-INCONSISTENT）；
+  * sd/hd-ibdfe → **BLOCKED-SOURCE-REVIEW**（(3-86) A_k 未确认）；
+  * ice-sd/ice-hd → **BLOCKED-SOURCE-REVIEW**（(3-92) 方差定义未确认）；
+  * fd-turbo → **BLOCKED-SOURCE-REVIEW**（(4-57)/(4-58) 未确认）；
+  * tf-turbo/bitf-turbo → **ALG-EQUIV**（反馈抽头设计未逐项见于扫描件）；
+  * cck-tr-diversity → **ALG-EQUIV**（(5-57) 合并 BOOK-EXACT，但支路软输出
+    ALG-EQUIV、帧头 ENGINEERING）；
+  * `fdda_dfe_teq.m` 显式覆盖共享内核状态为 ALG-EQUIV/project-combination/false。
+  `test_37_registry_audit` 新增枚举合法性 + 逐 ID 期望认证断言（合法枚举五值，
+  期望表按最弱环节制定并镜像注册表顺序）。
+- 决定性测试 `test_tdda_teq_spec4_8.m`（7 项）：单位信道/双径无噪声精确恢复与对齐、
+  训练后权值非零且训练误差收敛（相对下降+轮间不恶化，无绝对阈值）、联合回归量均值
+  收敛参考逐轮复现 + 动态越界步长被标记且权值/误差轨迹发散、帧尾不泄漏负测试、加长
+  训练不恶化（合成帧）、同 seed 精确复现 + 异 seed 变化；batch-7
+  `testTddaBoxedLmsEq4_8` 内联副本同步新语义（tddaMu、零填充窗、无先验）。
+- 状态：`tdda-teq` 保持 **ALG-EQUIV / project-combination / bookExperimentEquivalent
+  =false**；μ 为 ENGINEERING 参数（进入 effectiveParameters 与 trace），不得冒充原文
+  参数；曲线评级（0:2:18 dB、多帧、≥3 seed、Clopper-Pearson）待本机执行后录入。
+- 其余方法曲线评级使用 `curve_benchmark.m`（不外推、NaN 保留、逐方法覆盖率分母、
+  最差方法保守总等级），待本机执行。
+
 ### 批次9 `csk-matched-filter`
 
-- **返修后状态 IMPLEMENTED-UNVERIFIED（待本机复验）**：本机首测 5/8（根序列主峰
+- **状态：已由用户本机复验通过（批次9 测试 8/8、ESE 回归 8/8、全量 233/233，提交
+  87c5b4e）**；本机首测 5/8（根序列主峰
   1/G≠1、相关方向、恒等测试发射字典不匹配），已按实测修正：
   1. **根序列严格 ±1**（删除 `root/‖root‖`，(6-5)/(6-7) 的 1/G 相关主峰 = 1；字典
      域行能量归一由 `ch6_apply_circular_channel` 的 scale 精确吸收，三 CSK 方法决策
@@ -593,7 +664,8 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 
 ### 批次10 37 法统一入口与注册表审计
 
-- **返修后状态 IMPLEMENTED-UNVERIFIED（待本机复验）**：本机首测 3/4 + 1 Incomplete
+- **状态：已由用户本机复验通过（批次10 测试 5/5、四场景 17/10/7/3 全跑通、全量
+  233/233，提交 169e038）**；本机首测 3/4 + 1 Incomplete
   （`unique()` 不接受函数句柄 cell；四字段元数据缺 12 个方法），已按实测修正：
   1. 句柄唯一性改经 `func2str` 名字比较；模块文件存在性改用
      `which(func2str(handle))` 解析（`functions(handle).file` 对包函数句柄返回空）；
