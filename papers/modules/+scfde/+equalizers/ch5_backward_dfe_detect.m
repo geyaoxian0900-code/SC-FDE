@@ -1,5 +1,9 @@
-function [detected, scores] = ch5_backward_dfe_detect(received, book, channel, noiseVariance, limit)
+function [detected, scores, soft] = ch5_backward_dfe_detect(received, book, channel, noiseVariance, limit) %#ok<INUSD>
 %CH5_BACKWARD_DFE_DETECT Time-reversed DFE on the CCK stream.
+%
+% LIMIT is part of the shared detector interface (the forward detector
+% uses a candidate-list screen) but the reverse path scores the FULL
+% codebook, so it is unused here.
 %
 % The reversed stream block j equals the ORIGINAL block (N-j+1) with
 % its chips reversed:  obs_j = conj(fliplr(block m')) where block m'
@@ -12,16 +16,37 @@ function [detected, scores] = ch5_backward_dfe_detect(received, book, channel, n
 % model plus the reversed codebook double-reversed the codeword and
 % the reverse path detected the wrong indices - identity+zero-noise
 % reverse BER ~0.39-0.42 while a nearest-codeword oracle is exact).
+%
+% DETECTED/SCORES are returned in ORIGINAL block order (fliplr/flipud
+% applied before returning).  SOFT is the chip-level reversed-domain DFE
+% soft output: row j is the reversed-stream window for reversed block j
+% (observation minus the reversed-domain state spill), RAW - neither the
+% block order nor the chips are restored here.  Use
+% ch5_tr_diversity_restore to map SOFT back to the original time order
+% for the (5-57) merge.
 wordLength = size(book, 2);
 % Full codeword blocks: ceil covers the last block even when the
-        % channel-tail overlap leaves fewer than memory samples at the
-        % end (identity channels then detect all 8 blocks instead of 7).
-        blockCount = ceil((numel(received) - numel(channel) + 1) / wordLength);
-memory = numel(channel) - 1;
+% channel-tail overlap leaves fewer than memory samples at the end
+% (identity channels then detect all blocks instead of one fewer).
+% The block count follows the FRAME convention (numel(channel) tail
+% samples in the received frame).
+blockCount = ceil((numel(received) - numel(channel) + 1) / wordLength);
+% Effective channel memory: the LAST NONZERO tap.  Trailing zeros do
+% not create channel memory: [1], [1,0] and [1,0,0] must behave as
+% zero-memory channels (the previous numel-based memory turned the
+% zero-padding into a phantom 2-tap inter-block state).  The FULL
+% channel vector is still used for every convolution; only the state
+% length (and the state spill window) uses the effective tail.
+lastTap = find(channel ~= 0, 1, "last");
+if isempty(lastTap)
+    lastTap = numel(channel);
+end
+memory = lastTap - 1;
 reverseReceived = conj(fliplr(received));
 state = zeros(1, memory);
 detected = zeros(1, blockCount);
 scores = -inf(blockCount, size(book, 1));
+soft = complex(zeros(blockCount, wordLength));
 for block = 1:blockCount
     observation = reverseReceived((block - 1) * wordLength + (1:wordLength));
     % The candidate list must be computed in the OBSERVATION domain:
@@ -31,14 +56,14 @@ for block = 1:blockCount
     % reverse misses).  The row indices of reverseBook equal the
     % original book indices, so the selected candidates are used with
     % the original codebook for the prediction.
-    % Under multipath the observation's leading taps also carry the
-    % KNOWN spill of the following ORIGINAL block (the state); remove
-    % it before the nearest-neighbour screen, or the true codeword
-    % falls out of the top-`limit` list (multipath reverse misses).
-    screenObs = observation;
-    if any(state ~= 0)
-        screenObs(1:memory) = screenObs(1:memory) - state;
-    end
+    % Time-reversed (5-47) soft output: remove the reversed-domain
+    % state spill (the following original block's head, read backwards)
+    % from the observation; the current reversed block's own decision is
+    % NOT fed back into its own output.  Captured before the state
+    % update, mirroring ch5_dfe_detect.
+    statePadded = zeros(1, wordLength);
+    statePadded(1:memory) = state;
+    soft(block, :) = observation - statePadded;
     % The reversed-stream observation is the FRAME-TAIL segment of the
     % original block's convolution (5:12), which includes the block's
     % OWN tail taps (9:12).  Those taps are codeword-dependent, so no
@@ -88,4 +113,7 @@ for block = 1:blockCount
 end
 detected = fliplr(detected);
 scores = flipud(scores);
+% SOFT deliberately stays in reversed-block order (raw reversed domain):
+% the (5-57) time-order restoration is a separate, independently tested
+% step (ch5_tr_diversity_restore).
 end
