@@ -11,8 +11,10 @@ function tests = test_ch4_turbo_eq_4_24_73
 %   * decoder feedback: soft mean from the decoder EXTRINSIC
 %     tanh(L_D^e/2) (RED against the previous posterior-based mean);
 %   * fd-turbo: mu_hat/sigma_hat^2 from (4-60)/(4-61) over the training
-%     segment + Gaussian extrinsic LLRs (4-42)/(4-43);
-%   * FD-DFE weights: zero-mean constraint sum_k b_k = 0 (4-52);
+%     segment + Gaussian extrinsic LLRs (4-42)/(4-43); W/B coefficients
+%     now from the strict (4-56)~(4-58) helper (book/P90.png);
+%   * FD-DFE weights: zero-mean constraint sum_k b_k = 0 derived from
+%     (4-58) (asserted, never B - mean(B) projected);
 %   * tdda-teq: boxed LMS recursion (zero init, no normalization,
 %     feedback branch) - inline replica of the spec-4.8 equations;
 %   * tf-turbo: HTF feedforward + time soft feedback, NO fixed 0.5
@@ -144,10 +146,14 @@ verifyEqual(testCase, trace.formulaStatus, "BLOCKED-SOURCE-REVIEW");
 end
 
 function testZeroMeanFeedbackConstraintEq4_52(testCase)
+% (4-52)/(4-58): the strict (4-56)~(4-58) helper (book/P90.png) must
+% return feedback with sum_k b_k = 0 derived from lambda (4-58) - the
+% assertion inside the helper rejects a projected B, and the returned
+% coefficients satisfy the constraint to machine precision.
 rng(805, "twister");
 H = fft(randn(1, 64) + 1j * randn(1, 64));
 for rho = [0, 0.5, 0.9]
-    [~, feedback] = scfde.equalizers.ch4_fd_ibdfe_weights(H, 0.05, rho);
+    [~, feedback] = scfde.equalizers.ch4_fd_dfe_weights(H, rho, 0.05);
     verifyEqual(testCase, sum(feedback), 0, "AbsTol", 1e-12);
 end
 end
