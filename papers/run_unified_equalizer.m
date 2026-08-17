@@ -215,10 +215,21 @@ link.equalizers = cfg.equalizers;
 % Build the multipath impulse response honoring the configured delays;
 % channelMode="bellhop" samples a Bellhop shallow-water run instead of
 % the synthetic path table (quasi-static channel, one realization per
-% scenario call).
+% scenario call).  channelMode="book-table-3-2" is the OPT-IN reference
+% mode using the recovered Chapter-3 Table 3-2 five-path channel
+% (book/P68.png): the millisecond delays are converted at the explicit
+% link symbol rate and silent rounding is PROHIBITED - a non-integer
+% sample delay raises SCFDE:BookParameterUnavailable unless
+% cfg.chapter3FractionalDelay="linear" is given explicitly.
 if strcmpi(field_default(cfg, "channelMode", "synthetic"), "bellhop")
     impulse = scfde_bellhop_impulse(field_default(cfg, "bellhopOptions", struct()), ...
         link.symbolRate, 32);
+    impulse = [impulse, zeros(1, N - numel(impulse))];
+elseif strcmpi(field_default(cfg, "channelMode", "synthetic"), "book-table-3-2")
+    [impulse, tableInfo] = scfde.equalizers.ch3_table32_channel( ...
+        link.symbolRate, field_default(cfg, "chapter3FractionalDelay", "raise"));
+    link.chapter3Table32 = tableInfo;
+    link.chapter3ChannelMode = "book-table-3-2";
     impulse = [impulse, zeros(1, N - numel(impulse))];
 else
     impulse = zeros(1, N);
