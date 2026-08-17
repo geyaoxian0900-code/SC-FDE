@@ -50,6 +50,31 @@ trace.updatesChannel = logical(updateChannel);
 trace.lambdaHistory = complex(zeros(cfg.ibdfeIterations, N));
 trace.gammaHistory = complex(zeros(1, cfg.ibdfeIterations));
 trace.sigmaHistory = complex(zeros(cfg.ibdfeIterations, N));
+if updateChannel
+    trace.iceSigma0Squared = zeros(1, cfg.ibdfeIterations);
+    trace.iceSigmaDftSquared = zeros(1, cfg.ibdfeIterations);
+end
+% (3-92) variance policy resolved up front (see the ICE update block):
+% strict-explicit requires source variances, engineering-residual uses
+% residual-energy estimates and is recorded as ENGINEERING (never BOOK).
+if updateChannel
+    trace.iceVarianceMode = "engineering-residual";
+    if isfield(cfg, "iceVarianceMode") && ~isempty(cfg.iceVarianceMode)
+        trace.iceVarianceMode = lower(string(cfg.iceVarianceMode));
+    end
+    if trace.iceVarianceMode == "strict-explicit"
+        if ~isfield(cfg, "iceSigma0Squared") || ...
+                ~isfield(cfg, "iceSigmaDftSquared") || ...
+                isempty(cfg.iceSigma0Squared) || ...
+                isempty(cfg.iceSigmaDftSquared)
+            error("SCFDE:BookParameterUnavailable", ...
+                "strict-explicit (3-92) fusion requires cfg.iceSigma0Squared and cfg.iceSigmaDftSquared (the exact variance estimator is not recovered from the source).");
+        end
+    elseif trace.iceVarianceMode ~= "engineering-residual"
+        error("SCFDE:InvalidOption", ...
+            "cfg.iceVarianceMode must be engineering-residual or strict-explicit.");
+    end
+end
 % Weakest-link certification (2026-08-17): the plain SD/HD IBDFE chain is
 % complete once (3-86)/(3-87) are implemented and oracle-locked
 % (book/P67.png) - the ICE chain additionally includes the (3-92)
@@ -63,13 +88,13 @@ trace.effectiveParameters = struct("iterations", cfg.ibdfeIterations, ...
     "noiseVariance", noiseVariance, "feedbackMode", string(feedbackMode), ...
     "updatesChannel", logical(updateChannel));
 if updateChannel
-    trace.formulaNote = "(3-64)~(3-87) verified incl. (3-86)/(3-87) from book/P67.png; the (3-92) variance DEFINITIONS remain BLOCKED-SOURCE-REVIEW (book/P68.png) -> ICE weakest-link certification";
+    trace.formulaNote = "(3-64)~(3-87) verified incl. (3-86)/(3-87) from book/P67.png; (3-92) fusion OWN-weight ordering from book/P68.png; variance VALUES are a caller policy (engineering-residual = ENGINEERING, strict-explicit = source variances) - the exact estimator is NOT recovered -> ICE weakest-link certification stays BLOCKED-SOURCE-REVIEW";
 else
     trace.formulaStatus = "BOOK-EXACT";
     trace.formulaNote = "(3-64)~(3-87) verified: C=Lambda/Gamma, B=CH-1, unit gain, iteration 1 = MMSE-FDE degradation with N*sigma_w^2 per (3-86)/(3-87) (book/P67.png); first-iteration filter oracle-locked in test_ch3_fde_ibdfe_eq_3_39_92";
 end
 trace.channelUpdateStatus = "ENGINEERING-BLOCKED";
-trace.channelUpdateNote = "(3-88)~(3-91) LS + DFT truncation implemented (book/17.png confirms H_LS = R/X_D^0); (3-92) boxed MMSE variance mix applied with the scan-confirmed numerator order (sigmaDft2*H_old + sigmaOld2*H_DFT); the two variance DEFINITIONS (residual energies) are ENGINEERING estimates, not recovered from the scan";
+trace.channelUpdateNote = "(3-88)~(3-91) LS + DFT truncation implemented (book/P68.png confirms H_LS = R/X_D^0); (3-92) fusion applied with the recovered OWN-weight ordering (H_old*sigma_old^2 + H_DFT*sigma_DFT^2)/(sigma_old^2+sigma_DFT^2), book/P68.png - the cross-weight ordering is rejected by the oracle; variance VALUES: engineering-residual (residual energies, ENGINEERING) or strict-explicit (cfg.iceSigma0Squared/iceSigmaDftSquared); the exact variance estimator is not recovered from the source";
 
 for iteration = 1:cfg.ibdfeIterations
     symbolVariance = max(1 - reliability, eps);
@@ -102,7 +127,7 @@ for iteration = 1:cfg.ibdfeIterations
         % (3-88)/(3-89): LS channel from the current soft/hard estimates,
         % H_LS = R ./ X_bar = R .* conj(X_bar) ./ |X_bar|^2 (numerically
         % safe complex division with a floor only on the denominator
-        % magnitude - the book form R/X_D^0 confirmed against book/17.png).
+        % magnitude - the book form R/X_D^0 confirmed against book/P68.png).
         softSpectrum = fft(feedbackMean);
         hLs = Y .* conj(softSpectrum) ./ max(abs(softSpectrum).^2, eps);
         % (3-90)/(3-91): DFT-domain truncation to channelEstimateLength.
@@ -110,15 +135,24 @@ for iteration = 1:cfg.ibdfeIterations
         hDft = hEst;
         hDft(cfg.channelEstimateLength + 1:end) = 0;
         hDftSpectrum = fft(hDft);
-        % (3-92) boxed MMSE variance-weighted mix.  The numerator
-        % ordering (sigmaDft2 * H_old + sigmaOld2 * H_DFT) matches the
-        % scan (book/17.png) - DO NOT swap.  The two variance
-        % DEFINITIONS are residual energies (not recovered from the
-        % scan) and remain ENGINEERING-BLOCKED.
-        sigmaDft2 = mean(abs(hLs - hDftSpectrum).^2);
-        sigmaOld2 = mean(abs(H - hLs).^2);
-        H = (H .* sigmaDft2 + hDftSpectrum .* sigmaOld2) ./ ...
-            max(sigmaOld2 + sigmaDft2, eps);
+        % (3-92) fusion with the recovered OWN-weight ordering
+        % (book/P68.png): each branch weighted by ITS OWN variance.
+        % The variance VALUES follow the resolved policy (see init):
+        %   engineering-residual: residual-energy estimates, recorded as
+        %     ENGINEERING (never labelled BOOK);
+        %   strict-explicit: cfg.iceSigma0Squared / cfg.iceSigmaDftSquared
+        %     used verbatim (missing fields raise earlier).
+        if trace.iceVarianceMode == "strict-explicit"
+            sigma0Sq = cfg.iceSigma0Squared;
+            sigmaDftSq = cfg.iceSigmaDftSquared;
+        else
+            sigmaDftSq = mean(abs(hLs - hDftSpectrum).^2);
+            sigma0Sq = mean(abs(H - hLs).^2);
+        end
+        H = scfde.equalizers.ch3_channel_estimate_fuse( ...
+            H, hDftSpectrum, sigma0Sq, sigmaDftSq);
+        trace.iceSigma0Squared(iteration) = sigma0Sq;
+        trace.iceSigmaDftSquared(iteration) = sigmaDftSq;
     end
     trace.channelHistory(iteration, :) = H;
 

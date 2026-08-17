@@ -27,6 +27,7 @@ tests = functiontests({ ...
     @testHardFeedbackUsesPreviousCompleteBlock, ...
     @testSoftFeedbackPosteriorMeanNoHardSlice, ...
     @testIceChannelUpdateEq3_88_92, ...
+    @testIceStrictExplicitVarianceMode, ...
     @testCh3WrappersRngPreservedAndStatus});
 %#ok<*DEFNU>  % setupOnce is invoked by the framework, not by name
 %#ok<*NASGU>  % fixture outputs unused by individual tests are intentional
@@ -234,9 +235,10 @@ Y = fft(received);
 % estimates (trace.feedbackMeans(2,:)), per the production semantics:
 %   H_LS^2 = R ./ X_D^0 = Y .* conj(X_bar^2) ./ |X_bar^2|^2
 %   h_est = IFFT(H_LS), DFT truncation to channelEstimateLength taps,
-%   H^2 = (sigmaDft2 * H_old + sigmaOld2 * H_DFT) / (sigmaDft2 + sigmaOld2)
-% with sigmaDft2 = mean|H_LS - H_DFT|^2, sigmaOld2 = mean|H_old - H_LS|^2
-% (scan-confirmed numerator order; variance definitions ENGINEERING).
+%   H^2 = (H_old*sigma_old^2 + H_DFT*sigma_DFT^2) / (sigma_old^2+sigma_DFT^2)
+% with sigma_DFT^2 = mean|H_LS - H_DFT|^2, sigma_old^2 = mean|H_old - H_LS|^2
+% (OWN-weight ordering recovered from book/P68.png; variance definitions
+% engineering-residual, recorded as ENGINEERING).
 softSpectrum = fft(trace.feedbackMeans(2, :));
 hLs = Y .* conj(softSpectrum) ./ max(abs(softSpectrum).^2, eps);
 hEst = ifft(hLs);
@@ -245,11 +247,59 @@ hDft(cfg.channelEstimateLength + 1:end) = 0;
 hDftSpectrum = fft(hDft);
 sigmaDft2 = mean(abs(hLs - hDftSpectrum).^2);
 sigmaOld2 = mean(abs(H0 - hLs).^2);
-H2Oracle = (H0 .* sigmaDft2 + hDftSpectrum .* sigmaOld2) ./ ...
+H2Oracle = (H0 .* sigmaOld2 + hDftSpectrum .* sigmaDft2) ./ ...
     max(sigmaOld2 + sigmaDft2, eps);
-verifyEqual(testCase, trace.channelHistory(2, :), H2Oracle, "AbsTol", 1e-9);
+% The old cross-weight ordering must differ on this fixture.
+wrongCross = (H0 .* sigmaDft2 + hDftSpectrum .* sigmaOld2) ./ ...
+    max(sigmaOld2 + sigmaDft2, eps);
+verifyTrue(testCase, any(abs(H2Oracle - wrongCross) > 1e-9), ...
+    "premise: own-weight and cross-weight fusion differ on the fixture");
+verifyEqual(testCase, trace.channelHistory(2, :), H2Oracle, "AbsTol", 1e-9, ...
+    "(3-92) must use the own-weight ordering (book/P68.png)");
 verifyEqual(testCase, HEnd, trace.channelHistory(end, :), "AbsTol", 0);
 verifyEqual(testCase, trace.channelUpdateStatus, "ENGINEERING-BLOCKED");
+verifyEqual(testCase, trace.iceVarianceMode, "engineering-residual");
+verifyEqual(testCase, trace.iceSigma0Squared(2), sigmaOld2, "AbsTol", 0);
+verifyEqual(testCase, trace.iceSigmaDftSquared(2), sigmaDft2, "AbsTol", 0);
+end
+
+function testIceStrictExplicitVarianceMode(testCase)
+% (3-92) variance policy: strict-explicit mode requires source variances
+% and raises SCFDE:BookParameterUnavailable when they are missing;
+% provided values are used verbatim in the own-weight fusion.
+[received, block, H, h, nv] = buildCh3Frame(testCase, 709, 15);
+N = 64;
+uw = scfde.equalizers.ch3_zadoff_chu(24, 1);
+training = scfde.equalizers.ch3_zadoff_chu(N, 1);
+cfg = struct("fftSize", N, "dataSymbols", 40, "uwLength", 24, ...
+    "ibdfeIterations", 2, "channelEstimateLength", 8, ...
+    "channelRegularization", 0.1, "noiseVariance", nv, ...
+    "modulation", "qpsk", "snrDb", 15, ...
+    "iceVarianceMode", "strict-explicit");
+verifyError(testCase, @() scfde.equalizers.ch3_ibdfe_equalize( ...
+    received, [], training, H, nv, uw, cfg, "soft", true), ...
+    "SCFDE:BookParameterUnavailable", ...
+    "strict-explicit without source variances must raise");
+cfg.iceSigma0Squared = 0.01 + 0.02 * rand;
+cfg.iceSigmaDftSquared = 0.02 + 0.03 * rand;
+[~, trace] = scfde.equalizers.ch3_ibdfe_equalize( ...
+    received, [], training, H, nv, uw, cfg, "soft", true);
+verifyEqual(testCase, trace.iceVarianceMode, "strict-explicit");
+verifyEqual(testCase, trace.iceSigma0Squared(2), cfg.iceSigma0Squared, "AbsTol", 0);
+verifyEqual(testCase, trace.iceSigmaDftSquared(2), cfg.iceSigmaDftSquared, "AbsTol", 0);
+% The iteration-2 fusion must use exactly the provided variances.
+Y = fft(received);
+softSpectrum = fft(trace.feedbackMeans(2, :));
+hLs = Y .* conj(softSpectrum) ./ max(abs(softSpectrum).^2, eps);
+hEst = ifft(hLs);
+hDft = hEst;
+hDft(cfg.channelEstimateLength + 1:end) = 0;
+hDftSpectrum = fft(hDft);
+H2Oracle = (H .* cfg.iceSigma0Squared + ...
+    hDftSpectrum .* cfg.iceSigmaDftSquared) ./ ...
+    (cfg.iceSigma0Squared + cfg.iceSigmaDftSquared);
+verifyEqual(testCase, trace.channelHistory(2, :), H2Oracle, "AbsTol", 1e-9, ...
+    "strict-explicit fusion must use the provided variances verbatim");
 end
 
 function testCh3WrappersRngPreservedAndStatus(testCase)
