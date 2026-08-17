@@ -1,9 +1,15 @@
-function [detected, scores, soft] = ch5_backward_dfe_detect(received, book, channel, noiseVariance, limit) %#ok<INUSD>
+function [detected, scores, soft] = ch5_backward_dfe_detect(received, book, channel, noiseVariance, limit, initialState) %#ok<INUSD>
 %CH5_BACKWARD_DFE_DETECT Time-reversed DFE on the CCK stream.
 %
 % LIMIT is part of the shared detector interface (the forward detector
 % uses a candidate-list screen) but the reverse path scores the FULL
 % codebook, so it is unused here.
+%
+% INITIALSTATE (optional) seeds the reversed-domain state with prior
+% tentative decisions of a previous iteration per (5-59): the reversed
+% stream of the CURRENT frame inherits the reversed prior decisions of
+% the previous iteration.  The default empty state keeps the unseeded
+% flow unchanged.
 %
 % The reversed stream block j equals the ORIGINAL block (N-j+1) with
 % its chips reversed:  obs_j = conj(fliplr(block m')) where block m'
@@ -43,7 +49,15 @@ if isempty(lastTap)
 end
 memory = lastTap - 1;
 reverseReceived = conj(fliplr(received));
-state = zeros(1, memory);
+if nargin < 6 || isempty(initialState)
+    state = zeros(1, memory);
+else
+    state = initialState(:).';
+    if numel(state) ~= memory
+        error("SCFDE:InvalidInitialState", ...
+            "initialState must have exactly %d elements.", memory);
+    end
+end
 detected = zeros(1, blockCount);
 scores = -inf(blockCount, size(book, 1));
 soft = complex(zeros(blockCount, wordLength));

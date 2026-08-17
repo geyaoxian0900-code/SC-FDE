@@ -1,4 +1,4 @@
-function [detected, scores, soft] = ch5_dfe_detect(received, book, channel, noiseVariance, limit)
+function [detected, scores, soft] = ch5_dfe_detect(received, book, channel, noiseVariance, limit, initialState)
 %CH5_DFE_DETECT Forward DFE on the CCK stream (book (5-46)/(5-47) path).
 %   DETECTED: 1 x blockCount codeword indices (original block order).
 %   SCORES:   blockCount x codebookSize candidate log-likelihoods.
@@ -10,6 +10,10 @@ function [detected, scores, soft] = ch5_dfe_detect(received, book, channel, nois
 %             block `block`; under an identity channel SOFT equals the
 %             received chips.  Added for the (5-57) time-reversal
 %             diversity merge in cck_tr_diversity.
+%   INITIALSTATE (optional): a 1 x memory row of prior channel state
+%             (built from tentative decisions of a previous iteration per
+%             (5-59)); the default empty state keeps the unseeded flow
+%             unchanged.
 wordLength = size(book, 2);
 % Full codeword blocks: ceil covers the last block even when the
 % channel-tail overlap leaves fewer than memory samples at the end
@@ -26,7 +30,15 @@ if isempty(lastTap)
     lastTap = numel(channel);
 end
 memory = lastTap - 1;
-state = zeros(1, memory);
+if nargin < 6 || isempty(initialState)
+    state = zeros(1, memory);
+else
+    state = initialState(:).';
+    if numel(state) ~= memory
+        error("SCFDE:InvalidInitialState", ...
+            "initialState must have exactly %d elements.", memory);
+    end
+end
 detected = zeros(1, blockCount);
 scores = -inf(blockCount, size(book, 1));
 soft = complex(zeros(blockCount, wordLength));

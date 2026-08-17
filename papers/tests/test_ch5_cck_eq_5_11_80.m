@@ -202,9 +202,11 @@ verifyEqual(testCase, detected, oracle);
 end
 
 function testBidfeBlockedStatusAndSubmodules(testCase)
-% The BiDFE initialization/order remains BLOCKED-SOURCE-REVIEW
-% (book/31.png, book/32.png); the forward/reverse DFE sub-modules are
-% exact under identity (independent of the blocked execution order).
+% The BiDFE wrappers now execute the strict (5-46)~(5-54) signal flow
+% (book/P133.png~P137.png, Task 6); the certification status remains
+% BLOCKED-SOURCE-REVIEW until the Task 9 weakest-link re-certification,
+% and the forward/reverse DFE sub-modules are exact under identity
+% (independent of the certification step).
 book = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 [received, idx, chips, h] = buildMultipathFrame(testCase, 905, 15);
 ch = struct("received", received, "impulse", h, ...
@@ -216,9 +218,9 @@ cfg = struct("noiseVariance", 10^(-15 / 10), ...
 recv1 = scfde.equalizers.cck_bidfe(ch, src, cfg);
 recv2 = scfde.equalizers.cck_bidfe2(ch, src, cfg);
 verifyEqual(testCase, recv1.traces{1}.formulaStatus, "BLOCKED-SOURCE-REVIEW");
-verifyEqual(testCase, recv1.traces{1}.formulaMode, "engineering");
+verifyEqual(testCase, recv1.traces{1}.formulaMode, "book");
 verifyEqual(testCase, recv2.traces{1}.formulaStatus, "BLOCKED-SOURCE-REVIEW");
-verifyEqual(testCase, recv2.traces{1}.formulaMode, "engineering");
+verifyEqual(testCase, recv2.traces{1}.formulaMode, "book");
 % Identity sub-module check (forward and reverse detectors).
 rng(906, "twister");
 idxI = randi(size(book, 1), 1, 4);

@@ -330,9 +330,9 @@ end
 
 function testWrapperMergesAlignedBranchOutputs(testCase)
 % Wiring RED test: the wrapper's soft output must be EXACTLY the
-% equal-weight average of the two restored branch streams (inline
-% restore/combine oracle).  The old wrapper emitted a matched-filter
-% output and would fail here.
+% equal-weight average of the two BiDFE-2 branch streams restored to the
+% same time order (inline restore/combine oracle).  The old wrapper
+% merged plain forward/reversed DFE soft outputs and would fail here.
 book = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 imp = scfde.equalizers.ch5_short_turbo_channel();
 memory = numel(imp) - 1;
@@ -350,14 +350,13 @@ src = struct("data", reshape(book(idx, :).', 1, []), ...
     "tx", chips, "training", chips(1:32));
 cfg = struct("noiseVariance", nv, "receiverCandidateLimit", 128, "snrDb", 10);
 recv = scfde.equalizers.cck_tr_diversity(ch, src, cfg);
-[~, ~, fw] = scfde.equalizers.ch5_dfe_detect(received, book, imp, nv, 128);
-[~, ~, bw] = scfde.equalizers.ch5_backward_dfe_detect( ...
-    received, book, imp, nv, 128);
-revStream = nan(1, numel(received));
-for j = 1:size(bw, 1)
-    k0 = numel(received) - 8 * j + 1;
-    revStream(k0:k0 + 7) = conj(fliplr(bw(j, :)));
-end
+% BiDFE-2 branches: forward on the stream, reversed on the time-reversed
+% stream restored to the same time order.
+[~, fw] = scfde.equalizers.ch5_bidfe2_detect(received, book, imp, nv, 128);
+[~, bw] = scfde.equalizers.ch5_bidfe2_detect( ...
+    conj(fliplr(received)), book, imp, nv, 128);
+revStream = scfde.equalizers.ch5_tr_diversity_restore( ...
+    bw, numel(received), memory);
 fwStream = reshape(fw.', 1, []);
 oracle = fwStream;
 valid = ~isnan(revStream(1:numel(fwStream)));
