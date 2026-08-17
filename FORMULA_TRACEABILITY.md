@@ -226,7 +226,7 @@ ZF-FDE（`zf_fde.m`） | BOOK-EXACT | spec 3.2 框定 `C_k=1/(λH_k)`；批次6 
 | (4-47) `x̄_k=E(x_k)=Σs_i P(x_k=s_i)` 软符号 | 87-88 | 软符号 | — | `ch4_decoder_feedback_frame.m`（批次7：反馈均值改由译码器**外信息** tanh(L_D^e/2) 计算，训练位置锁定） | — | — | test_ch4_turbo_eq_4_24_73 | BOOK-EXACT | OK |
 | (4-48) `P(x_k=s_i)=ΠP(c_{k,j}=s_{i,j})` | 87-88 | 比特独立 | — | ch4_probability_posteriors | — | — | — | BOOK-EXACT | OK |
 | (4-49) `x̄_n=Σ(f_l^H)^*y_{n+l}^H-(g_l)^T x̄_n` | 87-88 | 时域软反馈 | — | ch4_iterate_time_turbo | — | — | — | OCR-UNCERTAIN | N/A |
-| (4-50)~(4-63) | 89-90 | 扫描已存在；FD-DFE/FD-Turbo 权重区：零均值约束 (4-52) 已显式施加（批次7）；(4-57)/(4-58) 分子分母仍 **BLOCKED-SOURCE-REVIEW**（book/21.png），故 `fd-dfe` 标 ALG-EQUIV、`fd-turbo` 标 **BLOCKED-SOURCE-REVIEW**（批次11 认证枚举统一，旧 BOOK-EXACT-STRUCTURE 非标准值已废弃） | — | `ch4_fd_ibdfe_weights.m`/`ch4_frequency_dfe_baseline.m`/`ch4_iterate_frequency_turbo.m` | — | — | test_ch4_turbo_eq_4_24_73 | TRANSCRIPTION-PENDING | N/A |
+| (4-50)~(4-63) | 89-90 | 扫描已存在；FD-DFE/FD-Turbo 权重区：(4-57)/(4-58) 已由 `book/P90.png` 转写锁定（2026-08-17，Task 5），零和约束由 (4-58) 代数导出（断言、不投影），故 `fd-dfe` 标 **BOOK-EXACT**（注册 wrapper 用严格迭代核心 ch4_iterate_fd_dfe）、`fd-turbo` 标 **ALG-EQUIV**（系数已锁定，训练段 μ̂/σ̂² 估计器为工程放置） | — | `ch4_fd_dfe_weights.m`/`ch4_iterate_fd_dfe.m`/`ch4_iterate_frequency_turbo.m` | — | — | test_new_scan_ch4_eq_4_56_63/test_ch4_turbo_eq_4_24_73 | BOOK-EXACT (fd-dfe) / ALG-EQUIV (fd-turbo) | OK |
 | (4-64) `y'_u,y_u,y'_d,r_u` 块定义 | 103-106 | BLMS 块 | N、N_v | — | — | C FBLMS | test_fblms_and_curve_benchmark | BOOK-EXACT | OK |
 | (4-65) `R_u(k)=F r_u(k)` | 103-106 | 频域变换 | 无 1/N | fblms.m | — | — | — | BOOK-EXACT | OK |
 | (4-66) `X̂(k)=ΣW_n⊙R_n` | 103-106 | 频域滤波 | ⊙ | fblms.m | — | — | — | BOOK-EXACT | OK |
@@ -807,8 +807,8 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 | ice-sd-ibdfe | (3-88)~(3-91) LS+DFT 截断 + (3-92) 盒式（权重排列扫描确认） | `ice_sd_ibdfe.m`/`ch3_ibdfe_equalize.m` | 方差为残差能量（ENGINEERING 估计） | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-92) 两个方差定义未恢复 |
 | ice-hd-ibdfe | 同上 | `ice_hd_ibdfe.m`/`ch3_ibdfe_equalize.m` | 同上 | test_ch3_fde_ibdfe_eq_3_39_92 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (3-92) 方差定义 |
 | td-turbo | (4-24)~(4-31) 盒式 LMMSE V=diag(1−\|x̄\|²) + (4-3)/(4-5) 外信息均值反馈（无阻尼） | `ch4_iterate_time_turbo.m`/`td_turbo.m` | 训练 256/数据 1024/信息 512（工程帧契约） | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | BOOK-EXACT | 帧结构为项目契约；实验配置未公开 |
-| fd-dfe | (4-50)~(4-52) 结构 + 零均值约束 Σb_k=0 | `ch4_frequency_dfe_baseline.m`/`ch4_fd_ibdfe_weights.m`/`fd_dfe.m` | 现有构造 + 显式零均值 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | (4-57)/(4-58) 分子分母 BLOCKED-SOURCE-REVIEW（book/21.png） |
-| fd-turbo | (4-42)/(4-43)/(4-50)/(4-60)/(4-61) 训练段 μ̂/σ̂² + 高斯外信息 LLR | `ch4_iterate_frequency_turbo.m`/`fd_turbo.m` | μ̂/σ̂² 按 (4-60)/(4-61) | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | (4-57)/(4-58) 系数形式未确认（其余已验） |
+| fd-dfe | (4-50)~(4-58) 结构 + (4-55)~(4-58) 严格系数（P90 锁定，零和由 (4-58) 导出断言） | `ch4_fd_dfe_weights.m`/`ch4_iterate_fd_dfe.m`/`fd_dfe.m` | 严格迭代核心（注册 wrapper 已接线） | test_new_scan_ch4_eq_4_56_63/test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | BOOK-EXACT | sourcePages=book/P90.png；sourceEquations=(4-55)~(4-58) |
+| fd-turbo | (4-42)/(4-43)/(4-50)/(4-55)~(4-58)/(4-60)/(4-61) 训练段 μ̂/σ̂² + 高斯外信息 LLR | `ch4_iterate_frequency_turbo.m`/`fd_turbo.m` | μ̂/σ̂² 按 (4-60)/(4-61)；W/B 用严格 (4-56)~(4-58) 系数 | test_new_scan_ch4_eq_4_56_63/test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 系数链已锁定（P90）；训练段 μ̂/σ̂² 估计器为工程放置（非书式），故不升 BOOK-EXACT |
 | tf-turbo | (3-61)/(4-43)~(4-49) HTF 前端 + 时域软反馈（无固定 0.5 混合） | `ch4_iterate_time_frequency_turbo.m`/`tf_turbo.m` | 反馈抽头设计（推导） | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 反馈抽头设计未逐项见于扫描件 |
 | bitf-turbo | (2-50)~(2-53)/(4-42)~(4-49) 双向独立 pass + 等权 1/2 合并 + rev[] 恢复 | `ch4_iterate_time_frequency_turbo.m`(bidirectional)/`bitf_turbo.m` | 同上 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 反馈抽头设计推导；(2-53) 等权合并 BOOK-EXACT |
 | blms-tf-turbo | spec 4.6 要求严格块 FBLMS (4-64)~(4-73)；现用逐频点 BLMS 扩展 | `ch4_iterate_time_frequency_turbo.m`(adaptiveChannel)/`blms_tf_turbo.m` | blmsStep/blmsLeakage 工程值 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ENGINEERING | 未用严格块 FBLMS 内核（spec 4.6 禁止标 BOOK） |
@@ -818,17 +818,20 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 | fdda-dfe-teq | 共享 FDDA 内核 (4-74)~(4-82)，仅反馈源不同（hard/turbo-soft） | `fdda_dfe_teq.m` | 同内核 | test_fdda_eq_4_74_82 | 不适用（无原文数字化曲线） | ALG-EQUIV | 项目组合名，非原书独立方法（显式覆盖内核 BOOK-EXACT） |
 | cck-rake | (5-11) 接收模型 + MRC 合并等价 | `cck_rake.m`/`ch5_rake_detect.m` | 码本 FR-CCK | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BOOK-EXACT | 场景码本/信道为工程设定 |
 | cck-dfe | (5-40)~(5-47) CMF+CIR、双向消除、临时判决 | `cck_dfe.m`/`ch5_dfe_detect.m`/`ch5_backward_dfe_detect.m` | 候选裁剪 128（工程值） | test_ch5_cck_eq_5_11_80/test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | BOOK-EXACT | 候选裁剪上限为工程值 |
-| cck-bidfe | BiDFE 双向结构 | `cck_bidfe.m` | 初始化与次序 ENGINEERING | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | 初始化与执行次序待 book/31.png 复核 |
-| cck-bidfe2 | BiDFE-2 结构 | `cck_bidfe2.m` | 同上 | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BLOCKED-SOURCE-REVIEW | 初始化与执行次序待 book/32.png 复核 |
-| cck-tr-diversity | (5-57) 等权 1/2 合并 + rev[] 恢复 + (5-58) 判决 | `cck_tr_diversity.m`/`ch5_dfe_detect.m`/`ch5_backward_dfe_detect.m`/`ch5_tr_diversity_combine.m`/`ch5_tr_diversity_restore.m` | 支路软输出按 (5-46)/(5-47) 生产模型 | test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | ALG-EQUIV | (5-57) 合并 BOOK-EXACT；支路软输出 ALG-EQUIV、帧头 ENGINEERING；全码本信道模型判决为恒等信道退化 |
+| cck-bidfe | BiDFE-1 结构（(5-46)~(5-51)，信号流 P133~P137 锁定） | `cck_bidfe.m`/`ch5_bidfe1_detect.m` | 严格信号流（前向临时判决先于时反） | test_new_scan_ch5_eq_5_41_69/test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | ALG-EQUIV | 信号流 oracle 锁定；(5-48)~(5-56) 逐式转录待人工双人复核 |
+| cck-bidfe2 | BiDFE-2 结构（(5-52)~(5-54)，信号流 P133~P137 锁定） | `cck_bidfe2.m`/`ch5_bidfe2_detect.m` | 两个独立反馈滤波器 | test_new_scan_ch5_eq_5_41_69/test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | ALG-EQUIV | 信号流 oracle 锁定；(5-48)~(5-56) 逐式转录待人工双人复核 |
+| cck-tr-diversity | (5-57) 等权 1/2 合并 + rev[] 恢复 + (5-58) 判决 | `cck_tr_diversity.m`/`ch5_bidfe2_detect.m`/`ch5_tr_diversity_combine.m`/`ch5_tr_diversity_restore.m` | 分支为 BiDFE-2 内核（Task 6 重挂） | test_new_scan_ch5_eq_5_41_69/test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | ALG-EQUIV | (5-57) 合并 BOOK-EXACT；分支 ALG-EQUIV（逐式转录待复核）、帧头 ENGINEERING |
 | cck-fde | (5-80)~(5-82) 指数似然后验均值反馈（无 0.65/0.35 混合、无回滚） | `cck_fde.m`/`ch5_fde_cck_detect.m` | 后验反馈按 (5-81)/(5-82) | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | ALG-EQUIV | (5-80) 系数形式 ALG-EQUIV |
 | cck-mfb | (5-40)~(5-43) CMF 全线性卷积 + 主抽头对齐 + (5-24) 最近码本 | `cck_mfb.m`/`ch5_matched_filter_detect.m` | CMF oracle 锁定 | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BOOK-EXACT | MFB 基准接收（无反馈） |
 | csk-matched-filter | (6-6)~(6-12)/(6-16)~(6-19) 信道匹配字典相关（根序列 ±1，(6-9) 接收侧共轭，mod(−(peak−1),G) 映射） | `csk_matched_filter.m`/`ch6_select_csk_root.m`/`ch6_dictionary_channels.m` | RandStream mt19937ar Seed 2024（局部，不重置全局 RNG） | test_csk_matched_filter_eq_6_6_19 | 不适用（无原文数字化曲线） | ALG-EQUIV | (6-16)~(6-19) 仍 TRANSCRIPTION-PENDING；恒等信道与 (6-9) 峰决策等价 |
 | csk-soft-sic | 功率排序软串行 SIC（后验均值抵消、(6-25) 后验二阶矩方差、无阻尼） | `csk_soft_sic.m`/`ch6_soft_sic_detect.m` | userOrder 能量降序 | test_csk_ese_sic_eq_6_21_65 | 不适用（无原文数字化曲线） | ALG-EQUIV | 派生实现（spec 6.2）；无固定阻尼 |
 | csk-ese | (6-21)~(6-25)/(6-64)/(6-65) 矩 + (6-53) 盒式 LLR（字典域码字级似然 + 重复码先验）+ α=1 | `csk_ese.m`/`ch6_csk_idma_detect.m`/`ch6_ese_residual.m` | 阻尼 α=1（BOOK 路径；α<1 仅 `csk_ese_damped`） | test_csk_ese_sic_eq_6_21_65 | 不适用（无原文数字化曲线） | ALG-EQUIV | 矩运算 BOOK-EXACT；(6-53) 以字典域码字级似然实现（首迭代一致先验下与逐码片 LLR 相等） |
 
-计数核对：BOOK-EXACT 18 / ALG-EQUIV 10 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8，
-与 `test_37_registry_audit.m` 逐 ID 期望表一致（2026-08，批次11 提交 fce806c 之后）。
+计数核对：BOOK-EXACT 22 / ALG-EQUIV 12 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 2，
+与 `test_37_registry_audit.m` 逐 ID 期望表一致（2026-08，新扫描批次 Task 9 认证更新之后：
+fd-dfe 升 BOOK-EXACT（P90 严格系数 + 迭代核心）、fd-turbo 升 ALG-EQUIV（系数锁定、
+训练段估计器为工程放置）、cck-bidfe/cck-bidfe2 升 ALG-EQUIV（信号流锁定、逐式转录待
+人工复核）；ICE 两 ID 保持 BLOCKED-SOURCE-REVIEW（(3-92) 方差估计器未恢复））。
 
 ### 批次12 文档
 
@@ -839,9 +842,10 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
   sd/hd-ibdfe、ice-sd/ice-hd、htfde 整体 BLOCKED-SOURCE-REVIEW）。
 - 本文件各批次记录、行状态与 App 分组已同步；最终每方法四维状态
   （公式实现/实验参数/信道恢复/曲线复现）见各章表格与批次记录，禁止概括为
-  “37 种全部严格复现”。最终认证矩阵：**BOOK-EXACT 18 / ALG-EQUIV 10 /
-  ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8**（`test_37_registry_audit` 逐 ID
-  期望表锁定）。
+  “37 种全部严格复现”。最终认证矩阵：**BOOK-EXACT 22 / ALG-EQUIV 12 /
+  ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 2**（`test_37_registry_audit` 逐 ID
+  期望表锁定；Task 9 认证更新：fd-dfe BOOK-EXACT、fd-turbo/cck-bidfe/cck-bidfe2
+  ALG-EQUIV、ICE 保持 BLOCKED）。
 
 ---
 

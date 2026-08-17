@@ -44,11 +44,13 @@ for iteration = 1:cfg.iterations
         softFrame, []);
 end
 trace.finalChannel = H;
-trace.formulaStatus = "ALG-EQUIV";
+trace.formulaStatus = "BOOK-EXACT";
 trace.formulaMode = "book";
 trace.bookExperimentEquivalent = false;
+trace.sourcePages = "book/P90.png";
+trace.sourceEquations = "(4-55)~(4-58)";
 trace.effectiveParameters = struct("iterations", cfg.iterations, ...
     "decoderMode", string(cfg.baselineDecoder), ...
     "noiseVariance", noiseVariance, "frameLength", N);
-trace.formulaNote = "(4-55)~(4-58) strict FD-DFE (book/P90.png): rho=mean(|previous|^2), D_k=sigma^2+(1-rho)|h_k|^2, lambda per (4-58) (imposes sum_k b_k=0 algebraically, asserted not projected), b_k per (4-57), w_k per (4-56); hard-decision feedback, zero feedback on iteration 1; certification update in batch Task 9 (candidate promotion)";
+trace.formulaNote = "(4-55)~(4-58) strict FD-DFE (book/P90.png): rho=mean(|previous|^2), D_k=sigma^2+(1-rho)|h_k|^2, lambda per (4-58) (imposes sum_k b_k=0 algebraically, asserted not projected), b_k per (4-57), w_k per (4-56); hard-decision feedback, zero feedback on iteration 1";
 end

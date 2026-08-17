@@ -63,12 +63,14 @@ for iteration = 1:cfg.iterations
     trace.residualVariance(iteration) = sigmaHat2;
 end
 trace.finalChannel = Hest;
-trace.formulaStatus = "BLOCKED-SOURCE-REVIEW";
+trace.formulaStatus = "ALG-EQUIV";
 trace.formulaMode = "book";
 trace.bookExperimentEquivalent = false;
+trace.sourcePages = "book/P90.png";
+trace.sourceEquations = "(4-42)/(4-43)/(4-50)/(4-55)~(4-58)/(4-60)/(4-61)";
 trace.effectiveParameters = struct("iterations", cfg.iterations, ...
     "decoderMode", string(decoderMode), ...
     "noiseVariance", noiseVariance, "frameLength", N, ...
     "adaptiveChannel", logical(adaptiveChannel));
-trace.formulaNote = "(4-42)/(4-43)/(4-50)/(4-55)~(4-58)/(4-60)/(4-61): FD-Turbo with decoder-extrinsic soft feedback; W/B from the strict (4-56)~(4-58) coefficients (book/P90.png, ch4_fd_dfe_weights, zero-sum asserted not projected); rho = mean(|x_bar|^2) uncapped per (4-55); mu/sigma^2 from the training segment per (4-60)/(4-61); extrinsic-only exchange, undamped; certification promotion deferred to Task 9";
+trace.formulaNote = "(4-42)/(4-43)/(4-50)/(4-55)~(4-58)/(4-60)/(4-61): FD-Turbo with decoder-extrinsic soft feedback; W/B from the strict (4-56)~(4-58) coefficients (book/P90.png, ch4_fd_dfe_weights, zero-sum asserted not projected); rho = mean(|x_bar|^2) uncapped per (4-55); mu/sigma^2 from the training segment per (4-60)/(4-61); extrinsic-only exchange, undamped; ALG-EQUIV because the training-segment mu/sigma^2 estimator is an engineering placement of (4-60)/(4-61) (the book defines the quantities, not this estimator)";
 end

@@ -89,6 +89,12 @@ receiver = equalizer(channel, source, cfg)
 - `run_all_equalizers` 独立运行全部 37 个 ID 并返回 37 行审计表（含 gitCommit 元数据）。
 - 每个方法在 `trace` 中记录 `formulaStatus/formulaMode/bookExperimentEquivalent/
   effectiveParameters`；统一入口另汇总 `results.formulaStatus`。
+- 认证状态（Task 9 更新，`test_37_registry_audit` 逐 ID 期望表锁定）：**BOOK-EXACT 22 /
+  ALG-EQUIV 12 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 2**——`fd-dfe` 升 BOOK-EXACT
+  （(4-56)~(4-58) 由 book/P90.png 锁定，注册 wrapper 用严格迭代核心）；`fd-turbo`、
+  `cck-bidfe`、`cck-bidfe2` 升 ALG-EQUIV（系数/信号流已锁定，训练段 μ̂/σ̂² 估计器与
+  (5-48)~(5-56) 逐式转录仍为工程放置/待人工复核）；ICE 两 ID 保持 BLOCKED（(3-92)
+  方差估计器未恢复）。
 - 曲线评级（批次12）：`curve_reference/run_37_curve_grading.m` 对 37 法按场景跑
   多点 SNR × 多种子并记录整数 errorBits/totalBits 与 Clopper-Pearson 95% 区间；
   仅存在**原文数字化曲线**的方法（当前仅 fdda-teq，图 4-31）获得

@@ -142,7 +142,7 @@ verifyEqual(testCase, trace.equivalentGain(1), mu, "AbsTol", 1e-9);
 verifyEqual(testCase, trace.residualVariance(1), sig2, "AbsTol", 1e-9);
 verifyEqual(testCase, trace.equalizerLlr(1, frame.dataIndices), ...
     2 * real(conj(mu) * est(frame.dataIndices)) / sig2, "AbsTol", 1e-9);
-verifyEqual(testCase, trace.formulaStatus, "BLOCKED-SOURCE-REVIEW");
+verifyEqual(testCase, trace.formulaStatus, "ALG-EQUIV");
 end
 
 function testZeroMeanFeedbackConstraintEq4_52(testCase)

@@ -186,17 +186,27 @@ function testFormulaStatusEnumAndPerIdExpectations(testCase)
 %                                  PARAM-UNRECOVERABLE)
 %   ch4 td-turbo/fblms ........... BOOK-EXACT
 %   ch4 fdda-teq ................. BOOK-EXACT ((4-74)~(4-82))
-%   ch4 fd-dfe/tf/bitf/tdda/
+%   ch4 fd-dfe ................... BOOK-EXACT ((4-55)~(4-58) recovered
+%                                  from book/P90.png; the registered
+%                                  wrapper uses the strict iterative core)
+%   ch4 fd-turbo ................. ALG-EQUIV ((4-56)~(4-58) coefficients
+%                                  recovered from book/P90.png, but the
+%                                  training-segment mu/sigma^2 estimator
+%                                  of (4-60)/(4-61) is an engineering
+%                                  placement, so not BOOK-EXACT)
+%   ch4 tf/bitf/tdda/
 %       fdda-dfe-teq ............. ALG-EQUIV (project combinations /
 %                                  derived tap designs)
-%   ch4 fd-turbo ................. BLOCKED-SOURCE-REVIEW ((4-57)/(4-58)
-%                                  coefficient form book/21.png)
 %   ch4 blms-tf-turbo ............ ENGINEERING (BLMS channel adaptation)
 %   ch5 rake/dfe/mfb ............. BOOK-EXACT
 %   ch5 tr-diversity ............. ALG-EQUIV ((5-57) merge BOOK-EXACT but
 %                                  branch outputs ALG-EQUIV and frame
 %                                  head ENGINEERING)
-%   ch5 bidfe/bidfe2 ............. BLOCKED-SOURCE-REVIEW (init + order)
+%   ch5 bidfe/bidfe2 ............. ALG-EQUIV ((5-46)~(5-54) signal flow
+%                                  recovered from book/P133.png~P137.png
+%                                  and oracle-locked; the per-symbol
+%                                  transcription of (5-48)~(5-56) awaits
+%                                  human double review, so not BOOK-EXACT)
 %   ch5 cck-fde .................. ALG-EQUIV
 %   ch6 csk x3 ................... ALG-EQUIV
 allowed = ["BOOK-EXACT", "ALG-EQUIV", "ENGINEERING", ...
@@ -216,11 +226,11 @@ expectedStatuses = [ ...
     "BOOK-EXACT", "BOOK-EXACT", "BOOK-EXACT", ...
     "BOOK-EXACT", "BOOK-EXACT", ...
     "BLOCKED-SOURCE-REVIEW", "BLOCKED-SOURCE-REVIEW", ...
-    "BOOK-EXACT", "ALG-EQUIV", "BLOCKED-SOURCE-REVIEW", "ALG-EQUIV", ...
+    "BOOK-EXACT", "BOOK-EXACT", "ALG-EQUIV", "ALG-EQUIV", ...
     "ALG-EQUIV", "ENGINEERING", "BOOK-EXACT", "ALG-EQUIV", ...
     "BOOK-EXACT", "ALG-EQUIV", ...
-    "BOOK-EXACT", "BOOK-EXACT", "BLOCKED-SOURCE-REVIEW", ...
-    "BLOCKED-SOURCE-REVIEW", "ALG-EQUIV", "ALG-EQUIV", "BOOK-EXACT", ...
+    "BOOK-EXACT", "BOOK-EXACT", "ALG-EQUIV", ...
+    "ALG-EQUIV", "ALG-EQUIV", "ALG-EQUIV", "BOOK-EXACT", ...
     "ALG-EQUIV", "ALG-EQUIV", "ALG-EQUIV"];
 verifyEqual(testCase, numel(expectedIds), 37);
 verifyEqual(testCase, numel(expectedStatuses), 37);

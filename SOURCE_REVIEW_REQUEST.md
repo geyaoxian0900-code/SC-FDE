@@ -10,28 +10,33 @@
 > （见 `STRICT_FORMULA_SPEC.md`「恢复公式」节）；实现进度见 `FORMULA_TRACEABILITY.md`
 > 与实施计划 `docs/superpowers/plans/2026-08-17-new-scans-strict-formula-upgrade.md`。
 
-## 1. `book/P90.png` — FD-DFE 式 (4-57)/(4-58)（已转写，实现待验证）
+## 1. `book/P90.png` — FD-DFE 式 (4-57)/(4-58)（已转写，实现已验证）
 
 - **待确认（原 book/21.png 版）**：反馈系数 `b_k^{(i)}` 与相关系数 `ρ^{(i)}` 的**精确
   分子、分母**及归一化量；零均值约束 (4-52) 之外的完整表达式。
 - **2026-08-17 状态**：`book/P90.png` 已提供 (4-56)~(4-63) 转写，其中
   `(4-57) b_k=[λ(σ²+|h_k|²)−σ²]/[(σ²+|h_k|²)−ρ|h_k|²]`、
   `(4-58) λ=σ²Σ(1/d_k)/Σ((σ²+|h_k|²)/d_k)`；零和约束由 (4-58) 公式自身导出
-  （不得用 `B−mean(B)` 投影）。实现与 RED oracle 见 Task 5；实现并验证前
-  `fd-dfe` 保持 ALG-EQUIV、`fd-turbo` 保持 BLOCKED-SOURCE-REVIEW。
-- **当前实现**：`ch4_fd_ibdfe_weights.m`（现有构造 + 显式零均值约束，Task 5 迁移）。
+  （不得用 `B−mean(B)` 投影）。Task 5 已实现并 oracle 验证；Task 9 认证更新：
+  `fd-dfe` 升 **BOOK-EXACT**（注册 wrapper 用严格迭代核心）、`fd-turbo` 升
+  **ALG-EQUIV**（系数已锁定；训练段 μ̂/σ̂² 估计器为工程放置，故不升 BOOK-EXACT）。
+- **当前实现**：`ch4_fd_dfe_weights.m`/`ch4_iterate_fd_dfe.m`/`ch4_iterate_frequency_turbo.m`
+  （Task 5 迁移，逐迭代 trace rho/lambda/W/B，sourcePages/sourceEquations 已记录）。
 
-## 2. `book/P133.png`~`P137.png` — CCK-BiDFE / BiDFE2 初始化与执行次序（已转写，实现待验证）
+## 2. `book/P133.png`~`P137.png` — CCK-BiDFE / BiDFE2 初始化与执行次序（信号流已转写，实现已验证）
 
 - **待确认（原 book/31.png、book/32.png 版）**：BiDFE-1 / BiDFE-2 的**初始化次序**、
   前向/反向支路的执行顺序、首块/尾块状态处理；式 (5-48)~(5-56) 的逐符号转录。
 - **2026-08-17 状态**：`book/P133.png`~`P137.png` 提供 (5-41)~(5-59) 信号流级转写
   （CMF/复合冲激、块时反 (5-48)、反向 DFE (5-49)、BiDFE-1 系数 (5-50)/(5-51)、
   BiDFE-2 第二输出 (5-52)、双滤波方向 (5-53)/(5-54)、(5-57) 等权合并、(5-59) 迭代
-  临时判决）。实现见 Task 6；实现并验证前 `cck-bidfe`、`cck-bidfe2` 保持
-  BLOCKED-SOURCE-REVIEW，现有执行次序仍为 ENGINEERING。
+  临时判决）。Task 6 已实现（`ch5_bidfe1_detect`/`ch5_bidfe2_detect`）并 oracle
+  验证；Task 9 认证更新：`cck-bidfe`、`cck-bidfe2` 升 **ALG-EQUIV**——信号流已
+  oracle 锁定（`test_new_scan_ch5_eq_5_41_69.m`），但 (5-48)~(5-56) 的逐式
+  （per-symbol）转录仍待人工双人复核，故不升 BOOK-EXACT。
 - **允许的中间认证**：前向/反向 DFE 子模块、等权合并层已单独 oracle 认证
-  （`test_cck_tr_diversity_eq_5_57.m`、`test_ch5_cck_eq_5_11_80.m`）。
+  （`test_cck_tr_diversity_eq_5_57.m`、`test_ch5_cck_eq_5_11_80.m`）；TR-diversity
+  分支已重挂为 BiDFE-2 内核（Task 6）。
 
 ## 3. `book/P67.png` — IBDFE 式 (3-86) `A_k`/Λ 完整表达式（已转写，实现待验证）
 

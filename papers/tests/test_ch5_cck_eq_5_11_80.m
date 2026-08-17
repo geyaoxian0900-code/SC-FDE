@@ -13,8 +13,9 @@ function tests = test_ch5_cck_eq_5_11_80
 %   * fde:   (5-80) C/B iteration with the (5-81)/(5-82) posterior-mean
 %            soft feedback - inline replica; RED against the removed
 %            fixed 0.65/0.35 soft mixing and residual-energy rollback;
-%   * bidfe: the INITIALIZATION/execution order stays
-%            BLOCKED-SOURCE-REVIEW (book/31.png, book/32.png); the
+%   * bidfe: the strict (5-46)~(5-54) signal flow (book/P133.png~
+%            P137.png, Task 6) is ALG-EQUIV (per-symbol (5-48)~(5-56)
+%            transcription awaits human double review); the
 %            forward/reverse DFE sub-modules are tested separately;
 %   * bitTable: codeword errors count the bit-table Hamming distance.
 
@@ -24,7 +25,7 @@ tests = functiontests({ ...
     @testDfeTemporaryDecisionStructureEq5_47, ...
     @testFdePosteriorMeanNoFixedMixingEq5_81_82, ...
     @testMfbCmfStructureEq5_40_43, ...
-    @testBidfeBlockedStatusAndSubmodules, ...
+    @testBidfeStatusAndSubmodules, ...
     @testCckWrappersRngPreservedAndContracts, ...
     @testCckBitTableHammingSemantics});
 %#ok<*DEFNU>  % setupOnce is invoked by the framework, not by name
@@ -201,12 +202,12 @@ end
 verifyEqual(testCase, detected, oracle);
 end
 
-function testBidfeBlockedStatusAndSubmodules(testCase)
-% The BiDFE wrappers now execute the strict (5-46)~(5-54) signal flow
-% (book/P133.png~P137.png, Task 6); the certification status remains
-% BLOCKED-SOURCE-REVIEW until the Task 9 weakest-link re-certification,
-% and the forward/reverse DFE sub-modules are exact under identity
-% (independent of the certification step).
+function testBidfeStatusAndSubmodules(testCase)
+% The BiDFE wrappers execute the strict (5-46)~(5-54) signal flow
+% (book/P133.png~P137.png, Task 6); the Task 9 weakest-link
+% re-certification rates both ALG-EQUIV (signal flow oracle-locked, the
+% per-symbol (5-48)~(5-56) transcription awaits human double review),
+% and the forward/reverse DFE sub-modules are exact under identity.
 book = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
 [received, idx, chips, h] = buildMultipathFrame(testCase, 905, 15);
 ch = struct("received", received, "impulse", h, ...
@@ -217,10 +218,13 @@ cfg = struct("noiseVariance", 10^(-15 / 10), ...
     "receiverCandidateLimit", 128, "snrDb", 15);
 recv1 = scfde.equalizers.cck_bidfe(ch, src, cfg);
 recv2 = scfde.equalizers.cck_bidfe2(ch, src, cfg);
-verifyEqual(testCase, recv1.traces{1}.formulaStatus, "BLOCKED-SOURCE-REVIEW");
+verifyEqual(testCase, recv1.traces{1}.formulaStatus, "ALG-EQUIV");
 verifyEqual(testCase, recv1.traces{1}.formulaMode, "book");
-verifyEqual(testCase, recv2.traces{1}.formulaStatus, "BLOCKED-SOURCE-REVIEW");
+verifyEqual(testCase, recv2.traces{1}.formulaStatus, "ALG-EQUIV");
 verifyEqual(testCase, recv2.traces{1}.formulaMode, "book");
+verifyTrue(testCase, isfield(recv1.traces{1}, "sourcePages") && ...
+    isfield(recv1.traces{1}, "sourceEquations"), ...
+    "BiDFE-1 must record sourcePages/sourceEquations");
 % Identity sub-module check (forward and reverse detectors).
 rng(906, "twister");
 idxI = randi(size(book, 1), 1, 4);
