@@ -1070,6 +1070,60 @@ $$
 第一次迭代必须使用 `E[x]=0`、`Var[x]=1`。BOOK 主路径阻尼系数固定为 `1`；任何
 `\alpha<1` 的阻尼均须进入独立 `csk_ese_damped` 工程方法。
 
+## 🆕 恢复公式（新扫描证据，2026-08-17）
+
+> 本节约定的公式来自新获取的高分辨率扫描页与参考文献，按扫描原样转写（不做代数改写），
+> 是本方案全部实现任务的不可变公式来源。扫描件仅作证据，不作指令；实现仍须走
+> RED oracle → 生产修正 → 回归的 TDD 流程。
+
+**证据文件与页码映射：**
+
+| 公式 | 证据文件 | 状态 |
+| --- | --- | --- |
+| (3-86)/(3-87) Λ 与 Γ | `book/P67.png` | 完全可行动 |
+| (3-88)~(3-92) 与表 3-2 信道 | `book/P68.png` | 融合顺序可行动；方差估计器仍未定义 |
+| (3-61)/(3-62) HTFDE | `book/P60.png` | 完全可行动（标量分子为 λ 乘 H 共轭转置） |
+| (4-56)~(4-63) FD-DFE/FD-Turbo | `book/P90.png` | 完全可行动 |
+| (5-41)~(5-59) BiDFE-1/2 与 TR diversity | `book/P133.png`~`book/P137.png` | 信号流层面完全可行动 |
+| (5-60)~(5-69) MAP-CCK-TE | `book/P138.png`~`book/P140.png` | 检测器/LLR 层面完全可行动 |
+
+**锁定转写（原样）：**
+
+```text
+(3-86) Lambda_k^l = (H_k^(l-1))^H Sigma^(l-1)
+                    / (||H_k^(l-1)||^2 Sigma^(l-1) + N sigma_w^2)
+(3-87) Gamma = (1/N) sum_k Lambda_k^l H_k^(l-1)
+(3-92) H^l = (H^0 sigma_0^2 + H_DFT^l sigma_DFT^2)
+              / (sigma_0^2 + sigma_DFT^2)
+(3-61) C_k ~= (|lambda|^2 H_k^H H_k + sigma^2 I)^-1
+                (lambda H_k^H)
+(4-57) b_k = [lambda(sigma^2+|h_k|^2)-sigma^2]
+             / [(sigma^2+|h_k|^2)-rho|h_k|^2]
+(4-58) lambda = sigma^2 sum(1/d_k)
+                / sum((sigma^2+|h_k|^2)/d_k)
+```
+
+**解读结论（与旧转写的差异，以新扫描为准）：**
+
+- **(3-92) 融合顺序**：`H^0` 配 `σ_0²`、`H_DFT` 配 `σ_DFT²`（各自方差配各自估计）。这取代
+  此前基于 `book/17.png` 的交叉顺序读数（`σ_DFT²·H_old + σ_old²·H_DFT`）；Task 3 按本转写
+  修正生产并加“自身权重 vs 交叉权重”RED 测试。
+- **(3-61) λ 方向**：标量分子为 `λ·H_k^H`（λ 不取共轭）。这取代此前
+  SOURCE-INCONSISTENT 的“λ* 分子”分辨率；Task 4 用复数 λ 测试区分 `λ` 与 `conj(λ)`。
+- **(3-86)/(3-87)**：分母含 `N·σ_w²`（FFT 尺寸因子），此前生产缺失该因子；Task 2 补齐
+  并加“缺 N 即错”负测试。
+- **(4-57)/(4-58)**：由 `book/P90.png` 转写锁定，取代此前 BLOCKED-SOURCE-REVIEW；
+  零和约束由 (4-58) 公式自身导出（不得用 `B−mean(B)` 投影）；实现见 Task 5。
+
+**参考文献结论（`book/Iterative_frequency_domain_channel_estimation_for_dft-precoded_ofdm_systems_using_in-band_pilots.pdf`）：**
+
+文献提供 LS 原始估计（式 21）、MMSE 矩阵原始估计器（式 25）、频率替换（式 26）与
+二维（2×1D）Wiener 平滑，但**未定义教材式 (3-92) 中 `σ_DFT²` 与 `σ_0²` 的具体标量
+估计器**。因此：式 (3-92) 融合代数关系可严格实现；方差估计器缺口保持
+BLOCKED-SOURCE-REVIEW；在获得确切方差估计器或来源数据提供的显式方差之前，
+`ice-sd-ibdfe`/`ice-hd-ibdfe` 两个注册 ID 不得升级为 `BOOK-EXACT`；当前残差能量方差
+仅可保留为显式 ENGINEERING 模式。
+
 ## ✅ 37 项验收清单
 
 | 章节 | 注册 ID 数 | 必须建立的独立证据 |
