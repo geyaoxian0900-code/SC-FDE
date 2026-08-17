@@ -19,7 +19,7 @@ N = frame.frameLength;
 previous = zeros(1, N);
 rho = 0;                                   % no prior decisions (4-55)
 for pass = 1:2
-    [feedforward, feedback, lambda] = ...
+    [feedforward, feedback, ~] = ...
         scfde.equalizers.ch4_fd_dfe_weights(H, rho, noiseVariance);
     estimate = ifft(feedforward .* Y - feedback .* fft(previous));
     previous = scfde.equalizers.ch4_hard_bpsk(estimate);

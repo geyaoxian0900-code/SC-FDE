@@ -86,8 +86,8 @@ for block = 1:blockCount
             max(noiseVariance, 1e-8);
     end
     [~, dec(block)] = max(scoresM(block, :));
-    state = [state, book(dec(block), :)];
-    state = state(end - memory + 1:end);
+    combined = [state, book(dec(block), :)];
+    state = combined(end - memory + 1:end);
 end
 end
 
@@ -136,6 +136,10 @@ function restored = inlineRestore(backwardSoft, frameLength, memory)
 restored = nan(1, frameLength);
 for j = 1:size(backwardSoft, 1)
     k0 = frameLength - 8 * j + 1;
+    if k0 < 1 || k0 + 7 > frameLength || memory < 0 || ...
+            memory > frameLength
+        error("SCFDE:InlineRestore", "invalid restore geometry");
+    end
     restored(k0:k0 + 7) = conj(fliplr(backwardSoft(j, :)));
 end
 end
@@ -265,7 +269,7 @@ chips = reshape(book(idx, :).', 1, []);
 received = filter(h, 1, [chips, zeros(1, memory)]);
 received = received + sqrt(nv / 2) * ...
     (randn(size(received)) + 1j * randn(size(received)));
-[detected, soft] = scfde.equalizers.ch5_bidfe1_detect( ...
+[~, soft] = scfde.equalizers.ch5_bidfe1_detect( ...
     received, book, h, nv, 256);
 [~, ~, fwSoft] = scfde.equalizers.ch5_dfe_detect( ...
     received, book, h, nv, 256);
@@ -346,7 +350,7 @@ chips = reshape(book(idx, :).', 1, []);
 received = filter(h, 1, [chips, zeros(1, memory)]);
 received = received + sqrt(nv / 2) * ...
     (randn(size(received)) + 1j * randn(size(received)));
-[detected2, soft2] = scfde.equalizers.ch5_bidfe2_detect( ...
+[~, soft2] = scfde.equalizers.ch5_bidfe2_detect( ...
     received, book, h, nv, 256);
 [~, ~, fwSoft] = scfde.equalizers.ch5_dfe_detect( ...
     received, book, h, nv, 256);
