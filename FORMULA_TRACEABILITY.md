@@ -12,6 +12,19 @@
 统一见 [`STRICT_FORMULA_SPEC.md`](STRICT_FORMULA_SPEC.md)。本矩阵负责记录当前实现状态，
 该规范负责定义整改目标；两者不得相互替代。
 
+## 最终状态（2026-08-15）
+
+- 全部批次已复验并提交（未推送）：`fce806c`（批次11）→ `dd29a13`（批次12 文档+评级驱动）→
+  `ace3c5a`（图4-31 生成脚本 gitCommit/matlabVersion/timestamp 元数据 + 控制台措辞）。
+- 全量回归 241/241 PASS（FAIL=0，INCOMPLETE=0）；`test_37_registry_audit` 6/6。
+- 37 法曲线评级**最终产物**在源码哈希 `ace3c5a` 上生成：7 个 `.mat` 均记录
+  `gitCommit=ace3c5a`（`run_37_curve_grading_ace3c5a.mat` + 4 个场景 partial +
+  `ch4_fig431_fdda_teq.mat` + `ch4_fig431_fdda_teq_true_benchmark.mat`）；产物单独提交，
+  不与源码混合。MATLAB 环境问题已解决，评级与测试均成功执行。
+- 最终结论口径：**37 种方法全部模块化可运行**；仅 **BOOK-EXACT 18 法**声明必要公式链严格
+  对应；其余保持 ALG-EQUIV 10 / ENGINEERING 1 / BLOCKED-SOURCE-REVIEW 8。**不得表述为
+  “37 种全部严格复现原文实验”**。未解决项见仓库根 `SOURCE_REVIEW_REQUEST.md`（6 项）。
+
 ## 状态定义（全项目唯一）
 
 | 状态 | 含义 | 是否算原文复现 |
@@ -57,7 +70,7 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 数量口径：核心递推可对应 18，部分对应/工程近似 10，明显不能认证 9。该分组是当前代码快照的
 审计结论，不得改写成“18 种完整原文复现”。已确认的主要原因包括：
 
-- QPSK/CCK 场景把同一 `received` 复制为两行 `branches`，不构成独立阵元观测；
+- QPSK 场景已实现**每阵元独立噪声与独立冲激行**（`run_unified_equalizer.m`，mc-* 方法在该银行运行）；CCK/Turbo 场景把同一 `received` 复制为两行 `branches`，不构成独立阵元观测；
 - 第4章统一入口使用 BPSK，而原书相应 FDDA 实验使用 QPSK 和多阵元数据；
 - HTFDE 已于批次1 重写为式 (3-61)/(3-62) 的逐阵元 `C_{m,k} R_{m,k}` 合并 + 多通道 DPLL-DFE 后级（公式 12/12 已验证；但 (3-61) λ 转写 SOURCE-INCONSISTENT → 认证 BLOCKED-SOURCE-REVIEW，最弱环节原则）；
 - FDDA 式 (4-77) 的 `W_m^H`、反馈加号、多阵元求和及内层迭代已按 book/26.png 人工复核并通过独立 oracle（批次2，test_fdda_eq_4_74_82 15/15）；
@@ -169,7 +182,7 @@ App 的可选信道、SNR、BPSK/QPSK 差异及未公开信道参数需另行核
 | (3-89) `h_est,k^j=Σ_{n=0}^{N-1}H_LS,n^j e^{+j2πkn/N}=h_k+e_k^j`（正文"将 H_LS 进行 IDFT 变换"；原式无 1/N，而 MATLAB ifft 固有 1/N，标度差待 (3-88)~(3-91) 全链 golden 定案） | 67-68 | 时域变换（IDFT 方向） | 1/N 待定 | `ch3_ibdfe_equalize.m` 内 ifft | — | — | — | SOURCE-NORMALIZATION-REVIEW | N/A |
 | (3-90) `h_est'` 前 L 抽头加窗 | 67-68 | 稀疏化 | — | `ch3_estimate_channel_ls.m`（L 截断） | — | — | test_eq_3_90 | BOOK-EXACT | OK |
 | (3-91) `H_est'=DFT(h_est')` | 67-68 | 回频域 | — | 同上 | — | — | — | BOOK-EXACT | OK |
-| (3-92) `H'=(Hσ_DFT²+H_est'σ_old²)/(σ_old²+σ_DFT²)` MMSE 方差加权（spec 3.6 框定） | 67-68 | 信道合并 | — | `ch3_ibdfe_equalize.m`（批次6：盒式实现，固定 ρ 混合已移除；**权重排列 sigmaDft2·H_old+sigmaOld2·H_DFT 已由 book/17.png 人工确认，不得交换**；方差取残差能量 σ_DFT²=mean\|H_LS−H_DFT\|²、σ_old²=mean\|H_old−H_LS\|²） | — | — | test_ch3_fde_ibdfe_eq_3_39_92 | BOOK-EXACT（盒式，权重排列扫描确认）；两方差完整估计公式未恢复 → **ENGINEERING-BLOCKED** | OK |
+| (3-92) `H'=(Hσ_DFT²+H_est'σ_old²)/(σ_old²+σ_DFT²)` MMSE 方差加权（spec 3.6 框定） | 67-68 | 信道合并 | — | `ch3_ibdfe_equalize.m`（批次6：盒式实现，固定 ρ 混合已移除；**权重排列 sigmaDft2·H_old+sigmaOld2·H_DFT 已由 book/17.png 人工确认，不得交换**；方差取残差能量 σ_DFT²=mean\|H_LS−H_DFT\|²、σ_old²=mean\|H_old−H_LS\|²） | — | — | test_ch3_fde_ibdfe_eq_3_39_92 | 盒式结构与权重排列已确认（扫描锁定）；两方差完整估计公式未恢复（ENGINEERING 估计）→ ID 级 BLOCKED-SOURCE-REVIEW（见批次12 终表 ice-* 行） | OK |
 
 ### 第3章算法状态（模板章验收）
 
@@ -343,16 +356,19 @@ ZF-FDE（`zf_fde.m`） | BOOK-EXACT | spec 3.2 框定 `C_k=1/(λH_k)`；批次6 
 
 ## 已知缺口（按本方案状态体系重述）
 
-1. **HTFDE**（第3章）：批次1 已将生产路径重写为式 (3-61)/(3-62) 的逐阵元频域合并 + 多通道 DPLL-DFE 后级；旧单一 `H` 分段实现保留于 `ch3_htfde_equalize_engineering.m`。公式与集成均已完成本机验证（公式 12/12、多阵元及 BER 契约 8/8、运行契约 21/21、全量 143/143；seed=42、12 dB 时 0/112）。剩余约束仅为原书实验参数（N/M/P/K、DPLL 增益、μ）PARAM-UNRECOVERABLE。
+1. **HTFDE**（第3章）：批次1 已将生产路径重写为式 (3-61)/(3-62) 的逐阵元频域合并 + 多通道 DPLL-DFE 后级；旧单一 `H` 分段实现保留于 `ch3_htfde_equalize_engineering.m`。公式与集成均已完成本机验证（公式 12/12、多阵元及 BER 契约 8/8、运行契约 21/21、全量 143/143；seed=42、12 dB 时 0/112）。除原书实验参数（N/M/P/K、DPLL 增益、μ）PARAM-UNRECOVERABLE 外，**(3-61) λ 共轭转写 SOURCE-INCONSISTENT 仍未复核 → 认证 BLOCKED-SOURCE-REVIEW（见 `SOURCE_REVIEW_REQUEST.md` 第 5 项）**。
 2. **第3章 (3-86)**：OCR-UNCERTAIN（Σ^{-1} 项），须回原图 book/17.png 复核后锁定。
 3. **第3章 (3-92)**：批次6 已按 spec 3.6 盒式实现 MMSE 方差加权（固定 ρ 混合已移除）；**权重排列与 (3-88) 的 R/X_D^0 形式已由 book/17.png 人工确认**；两方差的完整估计公式仍未恢复（当前残差能量定义为 ENGINEERING 估计），须回原图复核后方可解除 **ENGINEERING-BLOCKED**。
 4. **CCK Turbo 外码**（第5章）：原书未公开 → PARAM-UNRECOVERABLE，重复码标 ENGINEERING。
 5. **ESE damping**（第6章）：主路径需 α=1；α=0.58 拆 `csk_ese_damped.m`。
 6. **第4章 (4-56)~(4-58)**：FD-DFE 生产已施加 (4-52) 零均值约束（批次7）；(4-57)/(4-58) 分子分母仍待 book/21.png 人工复核（BLOCKED-SOURCE-REVIEW），复核前 `fd-dfe` 不得标 BOOK-EXACT；FDDA (4-77)~(4-82) 部分已由批次2 完成独立原式验证。
 7. **待逐式转录/核对区间**：2-17~2-22、2-38~2-42、3-8~3-26、3-68~3-80、
-   4-10~4-15、4-24~4-41、4-50~4-63、5-1~5-7、5-13~5-23、5-30~5-40、
+   4-10~4-15、4-32~4-41、4-50~4-63、5-1~5-7、5-13~5-23、5-30~5-40、
    5-48~5-56、5-62~5-69、5-83~5-96、6-16~6-19、6-26~6-37、6-43~6-63。
    上述区间的图片均已存在于 `book/`，缺的是完整人工转录、变量映射和生产路径验证，不是扫描页。
+   **第4章区间修正说明**：原“4-24~4-41”区间中 (4-24)~(4-31) 已由 td-turbo 认证
+   BOOK-EXACT（批次7，test_ch4_turbo_eq_4_24_73），故待转录区间缩为 4-32~4-41
+   （LMMSE 推导余部）与 4-50~4-63（FD-DFE/FD-Turbo 权重区，(4-57)/(4-58) 另列阻断）。
    **第2章口径说明（批次11 最弱环节复核）**：第2章注册 10 法的必要公式链为
    (2-6)~(2-11) 结构 + 各自盒式递推 —— NLMS (2-16)、RLS (2-23)~(2-25)、
    DPLL (2-34)~(2-37)、多阵元 (2-43)~(2-46)、PTR (2-47)、子带 (2-48)/(2-49) ——
@@ -439,7 +455,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 - 测试：新增 `test_cck_tr_diversity_eq_5_57.m`（等权平均/交换/线性/退化/帧头/软输出负例/
   恢复置位/恢复无尾帧/探测器软输出恒等/前向支路仅消过去溢出 oracle/包装器恒等精确/
   对齐合并接线 oracle/码字→bitTable 汉明位错/RNG 保持/多径良构）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
 
 ---
@@ -471,7 +487,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
   负例、LMS/NLMS/RLS 手算更新、(2-36) 逐符号符号修正 RED、多阵元每阵元相位递推、
   复合 NLMS 更新、(2-47) 多阵元求和 RED、(2-48)/(2-49) 子阵结构 + |Σh|² 负例、
   10 包装器 RNG/trace 契约）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
 
 ---
@@ -495,7 +511,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 - 测试：新增 `test_ch3_fde_ibdfe_eq_3_39_92.m`（8 项：MMSE 公共因子 golden、首迭代退化、
   严格 ZF+奇异报告 RED、IBDFE 结构/unit-gain、硬反馈上一整块、软后验均值 4 点等价+不硬切、
   ICE (3-88)~(3-92) 盒式 oracle、6 包装器 RNG/trace 契约）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
 
 ---
@@ -525,7 +541,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 - 测试：新增 `test_ch4_turbo_eq_4_24_73.m`（8 项：盒式 LMMSE oracle、外信息反馈均值
   RED、μ̂/σ̂² 外 LLR oracle、零均值约束、TDDA 盒式 LMS 复本 oracle、TF 无 0.5 混合
   RED、BiTF (2-53) 等权合并 oracle、8 包装器 RNG/trace/512 契约）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
 
 ---
@@ -576,7 +592,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 - 测试：新增 `test_ch5_cck_eq_5_11_80.m`（8 项：Rake MRC 等价 oracle、Rake 恒等、DFE
   结构/契约、FDE 后验均值 RED、MFB CMF oracle、BiDFE 阻塞状态+子模块、6 包装器
   RNG/契约、bitTable 汉明语义）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
 
 ---
@@ -715,15 +731,16 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
   ——场景银行曲线仅为工程证据，不是原文曲线复现，公式测试不能代替曲线复现。无参考
   不再使用旧口径“覆盖率 0→等级 D”参与总等级。
 - **预评级与最终评级**：批次12 源码（驱动+文档）未提交前的一切运行均为**预评级**
-  （产物 gitCommit 记录当前 HEAD `fce806c`，仅为证据）；批次12 源码提交后必须在
-  最终哈希上重跑（收尾执行清单第 3 步），产物才可入库。
+  （产物 gitCommit 记录当时 HEAD `fce806c`，仅为证据、不入库）；批次12 源码提交后
+  在最终哈希上重跑（收尾执行清单第 3 步），产物才可入库。**最终产物已于源码哈希
+  `ace3c5a` 上生成（2026-08-15），7 个 MAT 均记录 `gitCommit=ace3c5a`**。
 - **缩小配置预跑**：驱动支持调用方工作区 `gradingCfgOverride` 结构覆盖配置，例如
   `gradingCfgOverride = struct("snrGrid", [12, 18], "seeds", 2024, "frameCount", 2)`
   后运行，先验证 CP 区间矩阵、partial 检查点与最终产物均能保存，再跑完整配置。
 
-### 批次12 预评级结果（用户本机，产物 `run_37_curve_grading_fce806c.mat`，仅证据不入库）
+### 批次12 最终评级结果（源码哈希 `ace3c5a`，7 个 MAT 全部记录 gitCommit=ace3c5a）
 
-- **tdda-teq 优先审计通过**：BER 随 SNR 单调改善且**无相邻恶化标记**——0 dB
+- **tdda-teq 优先审计通过**：BER 随 SNR 单调改善且**无异常趋势标记**——0 dB
   0.498633（7659/15360）→ 2 dB 0.496484 → 4 dB 0.492318 → 6 dB 0.450586 →
   8 dB 0.308529 → 10 dB 0.072526 → **12~18 dB 全部 0/15360**。此前 18 dB
   0.51 平台已消失（批次11 μ 修复生效）；认证保持 ALG-EQUIV，μ=0.05 仍为
@@ -733,20 +750,21 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
   （95% 上界 2.401e-4）；CCK 银行 TR-diversity 0.003125、FDE 0.001563、
   RAKE/MFB 0.000521，其余为零；CSK 银行 3 法全部 0/240（95% 上界 0.01525）。
 - **趋势诊断**：37 法异常趋势计数 = 0。
-- **fdda-teq 曲线等级 C**：仅属于 book-structure/trend benchmark（项目合成三径
-  信道），**不能称为原书实验条件完全复现**。
-- 产物元数据契约全部通过：gitCommit=fce806c、SNR 0:2:18、seeds 2024/2025/2026、
-  10 帧/点、17/10/7/3 方法数、BER/误码数/总比特数/置信区间尺寸正确、rngSeeds/
-  effectiveParameters/等级来源完整。该产物为**预评级证据**；最终可追溯产物须在
-  批次12 源码提交后的最终哈希上重跑（收尾执行清单第 3 步）。
-- **tdda-teq 优先审计**：驱动在 turbo 场景单独打印 tdda-teq 的 BER-SNR 逐点表
-  （整数计数 + CI）；须确认 BER 随 SNR 改善（不只是 smoke PASS）。若趋势异常，
-  按“回算法审计、不调参制造趋势”处理，并回写本记录。
-- 评级执行须在用户本机 MATLAB 运行（本沙箱 MATLAB 无法启动）：
-  `cd papers; run('curve_reference/run_37_curve_grading.m')`；
-  产物 `.mat` 在最终源码提交哈希上重跑后**单独提交**（不与源码混合）。
+- **fdda-teq 曲线等级 C**：log-RMSE 2.3396，最大水平偏差 5.2263 dB，零误码点 0；
+  仅属于 book-structure/trend benchmark（项目合成三径信道），**不能称为原书实验
+  条件完全复现**。
+- 最终产物与 `fce806c` 预评级的误码数、总比特数、BER、置信区间、趋势标记逐数组
+  一致；CP 区间仅存在约 1e-14 量级的数值库舍入差异（seed 确定、算法未变）。
+- 元数据契约：gitCommit=ace3c5a、SNR 0:2:18、seeds 2024/2025/2026、10 帧/点、
+  17/10/7/3 方法数、rngSeeds/effectiveParameters/等级来源完整；`ch4_fig431_fdda_teq.mat`
+  与 `ch4_fig431_fdda_teq_true_benchmark.mat` 亦记录 gitCommit/matlabVersion/timestamp。
+- 历史记录：`run_37_curve_grading_fce806c.mat`（预评级，仅证据）与 `dd29a13` 重跑版
+  均**不入库**（未跟踪保留，不删除）。
 
 ### 批次12 收尾执行清单（最终哈希重跑与分开提交）
+
+> 状态（2026-08-15）：步骤 1~3 已在哈希 `ace3c5a` 上完成（7 个最终 MAT 记录
+> gitCommit=ace3c5a）；后续文档修正会改变哈希，须按步骤 3 在新哈希上重跑后再执行步骤 4。
 
 1. 本机执行评级驱动与书式条件基准（产物记录当前 gitCommit）：
    `cd papers; run('curve_reference/run_37_curve_grading.m')`；
@@ -767,7 +785,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 ### 批次12 逐方法终表（公式链 / 生产函数 / 参数来源 / 独立测试 / 曲线评级 / 认证状态 / 已知偏差与阻断）
 
 认证遵循“生产链最弱必要环节”原则（批次11）；曲线评级遵循“仅原文数字化曲线可获等级，
-否则不适用”原则（批次12）。曲线列中 tdda-teq 与 fdda-teq 的确认标记在评级运行后回填。
+否则不适用”原则（批次12）。曲线列已回填最终评级（`ace3c5a`）结果。
 
 | ID | 公式链（编号） | 生产函数 | 参数来源 | 独立测试 | 曲线评级 | 认证状态 | 已知偏差 / 阻断 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -776,7 +794,7 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 | nlms-dfe | (2-6)~(2-9)+(2-16) NLMS（δ=1e-5 仅防零除） | `nlms_dfe.m`/`adaptive_dfe_core.m` | δ=1e-5 防零除约定 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 步长工程值 |
 | rls-dfe | (2-6)~(2-9)+(2-23)~(2-25) RLS（λ∈(0.8,1)，P(0)=δ⁻¹I=100·I 记录） | `rls_dfe.m`/`adaptive_dfe_core.m` | λ、δ⁻¹=100 数值初始化记录 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | λ、P(0) 数值非原文 |
 | dpll-dfe | (2-34)~(2-37) DPLL（(2-36) q 项符号批次5 修正；K2=0.1·K1） | `dpll_dfe.m`/`adaptive_dfe_core.m` | K1 数值工程值；K2=0.1K1 按 (2-37) | test_eq_2_36/testLoopConvergesToRotation/test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | K1/K2 数值（0.002/0.020）为工程选择 |
-| mc-lms-dfe | (2-43)~(2-46) 多阵元 + (2-14) | `multichannel_dfe_core.m`/`mc_lms_dfe.m` | 每阵元独立相位环；步长工程值 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 阵元观测为场景合成（同一 received 复制） |
+| mc-lms-dfe | (2-43)~(2-46) 多阵元 + (2-14) | `multichannel_dfe_core.m`/`mc_lms_dfe.m` | 每阵元独立相位环；步长工程值 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 阵元观测：QPSK 银行每阵元独立噪声与独立冲激行（run_unified_equalizer） |
 | mc-nlms-dfe | (2-43)~(2-46) + (2-16) | `multichannel_dfe_core.m`/`mc_nlms_dfe.m` | 同上 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 同上 |
 | mc-rls-dfe | (2-43)~(2-46) + (2-23)~(2-25) | `multichannel_dfe_core.m`/`mc_rls_dfe.m` | 同上 | test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 同上 |
 | ptr-dfe | (2-47) Σ_p h_p*⊗r_p 线性卷积 | `ptr_dfe.m`/`known_dfe_core.m`（PTR 前端 + 静态维纳 DFE） | 线性主路径 | test_eq_2_47/test_ch2_tde_eq_2_6_49 | 不适用（无原文数字化曲线） | BOOK-EXACT | 工程回退 `ptr_circular_engineering.m` 保留 |
@@ -795,8 +813,8 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 | bitf-turbo | (2-50)~(2-53)/(4-42)~(4-49) 双向独立 pass + 等权 1/2 合并 + rev[] 恢复 | `ch4_iterate_time_frequency_turbo.m`(bidirectional)/`bitf_turbo.m` | 同上 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ALG-EQUIV | 反馈抽头设计推导；(2-53) 等权合并 BOOK-EXACT |
 | blms-tf-turbo | spec 4.6 要求严格块 FBLMS (4-64)~(4-73)；现用逐频点 BLMS 扩展 | `ch4_iterate_time_frequency_turbo.m`(adaptiveChannel)/`blms_tf_turbo.m` | blmsStep/blmsLeakage 工程值 | test_ch4_turbo_eq_4_24_73 | 不适用（无原文数字化曲线） | ENGINEERING | 未用严格块 FBLMS 内核（spec 4.6 禁止标 BOOK） |
 | fblms | (4-64)~(4-73) 块 FBLMS（频域滤波/时域约束/误差块） | `fblms.m`/`fblms_equalizer.m` | 块长 32/滤波长 16（工程值） | test_fblms_and_curve_benchmark | 不适用（无原文数字化曲线） | BOOK-EXACT | 块参数为工程值 |
-| tdda-teq | spec 4.8 盒式未归一化 LMS（零初始权值；第 1 轮无数据先验仅训练段自适应；因果零填充窗；μ=0.05 工程步长） | `ch4_iterate_td_nlms_turbo.m`/`tdda_teq.m` | μ=0.05 按均值收敛参考约半选取（ENGINEERING） | test_tdda_teq_spec4_8/test_ch4_turbo_eq_4_24_73 | 预评级（fce806c）：0 dB 0.4986 → 8 dB 0.3085 → 10 dB 0.0725 → 12 dB 起 0/15360，无相邻 SNR 恶化标记；高 SNR 0.51 平台已消失；待最终哈希重跑确认 | ALG-EQUIV | 项目组合；2/λ_max(R̂) 仅为均值收敛参考（非稳定保证，μ 低于参考仍可发散，已实测）；μ 数值非原文 |
-| fdda-teq | (4-74)~(4-82) 非对称窗/W_m^H⊙R_m 和/B⊙X̃/逐阵元标量分母/γ^i/权重继承 | `ch4_fdda_teq_core.m`/`fdda_teq_true.m` | μ_f=0.2/μ_b=0.01/γ 工程值 | test_fdda_eq_4_74_82 | C（图4-31 结构/趋势基准，预评级确认；合成信道，非原书信道；待最终哈希重跑确认） | BOOK-EXACT | γ_f/γ_b、实验信道、重叠拼接规则未公开/未确认；bookExperimentEquivalent=false |
+| tdda-teq | spec 4.8 盒式未归一化 LMS（零初始权值；第 1 轮无数据先验仅训练段自适应；因果零填充窗；μ=0.05 工程步长） | `ch4_iterate_td_nlms_turbo.m`/`tdda_teq.m` | μ=0.05 按均值收敛参考约半选取（ENGINEERING） | test_tdda_teq_spec4_8/test_ch4_turbo_eq_4_24_73 | 最终评级（ace3c5a）：0 dB 0.4986 → 10 dB 0.0725 → 12 dB 起 0/15360，无异常趋势；高 SNR 0.51 平台已消失 | ALG-EQUIV | 项目组合；2/λ_max(R̂) 仅为均值收敛参考（非稳定保证，μ 低于参考仍可发散，已实测）；μ 数值非原文 |
+| fdda-teq | (4-74)~(4-82) 非对称窗/W_m^H⊙R_m 和/B⊙X̃/逐阵元标量分母/γ^i/权重继承 | `ch4_fdda_teq_core.m`/`fdda_teq_true.m` | μ_f=0.2/μ_b=0.01/γ 工程值 | test_fdda_eq_4_74_82 | C（最终评级 ace3c5a；图4-31 结构/趋势基准，log-RMSE 2.3396、最大水平偏差 5.2263 dB；合成信道，非原书信道） | BOOK-EXACT | γ_f/γ_b、实验信道、重叠拼接规则未公开/未确认；bookExperimentEquivalent=false |
 | fdda-dfe-teq | 共享 FDDA 内核 (4-74)~(4-82)，仅反馈源不同（hard/turbo-soft） | `fdda_dfe_teq.m` | 同内核 | test_fdda_eq_4_74_82 | 不适用（无原文数字化曲线） | ALG-EQUIV | 项目组合名，非原书独立方法（显式覆盖内核 BOOK-EXACT） |
 | cck-rake | (5-11) 接收模型 + MRC 合并等价 | `cck_rake.m`/`ch5_rake_detect.m` | 码本 FR-CCK | test_ch5_cck_eq_5_11_80 | 不适用（无原文数字化曲线） | BOOK-EXACT | 场景码本/信道为工程设定 |
 | cck-dfe | (5-40)~(5-47) CMF+CIR、双向消除、临时判决 | `cck_dfe.m`/`ch5_dfe_detect.m`/`ch5_backward_dfe_detect.m` | 候选裁剪 128（工程值） | test_ch5_cck_eq_5_11_80/test_cck_tr_diversity_eq_5_57 | 不适用（无原文数字化曲线） | BOOK-EXACT | 候选裁剪上限为工程值 |
@@ -844,5 +862,5 @@ THEORY-ONLY：      仅纯分析公式：第5章 5-25~5-28 理论错误概率、
 - 测试：新增 `test_csk_ese_sic_eq_6_21_65.m`（ESE 残差/方差手算 oracle、(6-53) 手算 LLR、
   (6-64)/(6-65) 反馈统计、单用户退化、双用户串行 SIC 全量 oracle（RED 击穿旧固定阻尼）、
   包装器 trace/无阻尼/RNG 保持、damped 工程变体）。
-- 本沙箱 MATLAB 无法启动：上述测试须在用户本机执行（见批次报告命令），验证前不得标
+- 当时本沙箱 MATLAB 无法启动（现已解决）：上述测试须在用户本机执行（见批次报告命令），验证前不得标
   “已通过”，未提交。
