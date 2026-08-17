@@ -13,7 +13,8 @@ function tests = test_new_scan_ch3_eq_3_61_92
 
 tests = functiontests({ ...
     @testIbdfeCoefficientsEq3_86_87, ...
-    @testChannelEstimateFusionEq3_92});
+    @testChannelEstimateFusionEq3_92, ...
+    @testHtfdeLambdaOrientationEq3_61});
 %#ok<*DEFNU>  % setupOnce is invoked by the framework, not by name
 %#ok<*NASGU>  % fixture outputs unused by individual tests are intentional
 end
@@ -110,4 +111,37 @@ verifyError(testCase, @() scfde.equalizers.ch3_channel_estimate_fuse( ...
 verifyError(testCase, @() scfde.equalizers.ch3_channel_estimate_fuse( ...
     H0, HDft, 0, 0), "SCFDE:InvalidFusionInput", ...
     "jointly zero variances must be rejected");
+end
+
+function testHtfdeLambdaOrientationEq3_61(testCase)
+% (3-61) expanded line recovered from book/P60.png: the scalar numerator
+% is lambda * H^H (lambda NOT conjugated).  A REAL lambda cannot
+% distinguish the forms, so this oracle uses a COMPLEX lambda and
+% drives the production front end end-to-end.
+rng(2403, "twister");
+N = 64;
+imp = zeros(1, N);
+imp(1) = 1;
+imp(2) = 0.5 * exp(1j * 0.3);
+imp(5) = 0.2 * exp(-1j * 0.7);
+tx = exp(1j * pi * (0:N-1) / 7);
+r = ifft(fft(imp) .* fft(tx));
+lambda = 0.6 + 0.35j;                 % complex lambda (nonzero phase)
+noiseVariance = 0.05;
+Hf = fft(imp);
+expected = lambda .* conj(Hf) ./ ...
+    (abs(lambda).^2 .* abs(Hf).^2 + noiseVariance);
+wrong = conj(lambda) .* conj(Hf) ./ ...
+    (abs(lambda).^2 .* abs(Hf).^2 + noiseVariance);
+verifyTrue(testCase, any(abs(expected - wrong) > 1e-9), ...
+    "premise: lambda and conj(lambda) orientations differ for complex lambda");
+cfg = struct("fftSize", N, "htfdeSubarrayCount", 1, ...
+    "htfdeElementsPerSubarray", 1, "htfdeElementLambdas", lambda);
+[out, ~] = scfde.equalizers.ch3_htfde_equalize( ...
+    r, imp, noiseVariance, cfg);
+verifyEqual(testCase, out(1, :), ifft(expected .* fft(r)), "AbsTol", 1e-10, ...
+    "front end must use lambda*conj(H) per (3-61) (book/P60.png)");
+verifyGreaterThan(testCase, ...
+    norm(out(1, :) - ifft(wrong .* fft(r))), 1e-6, ...
+    "the conj(lambda) orientation must NOT be produced");
 end

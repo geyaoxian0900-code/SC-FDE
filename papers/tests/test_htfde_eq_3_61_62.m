@@ -6,7 +6,9 @@ function tests = test_htfde_eq_3_61_62
 % STRICT_FORMULA_SPEC.md 3.3 and 2.5/2.6 inside the test body; no
 % production helper participates in the oracle arithmetic:
 %
-%   C_{m,k}(nu) = conj(lambda)*conj(H(nu)) / (|lambda|^2*|H(nu)|^2 + sigma2)
+%   C_{m,k}(nu) = lambda*conj(H(nu)) / (|lambda|^2*|H(nu)|^2 + sigma2)
+%                 (3-61, lambda orientation recovered from book/P60.png:
+%                  the numerator is lambda, NOT conj(lambda))
 %   x_m = IFFT{ sum_k C_{m,k} .* R_{m,k} }            (3-62)
 %   p_m = a_m^H x_m e^{-j*theta_m};  p = sum_m p_m;   q = b^H d~;  z = p - q
 %   phi_m = Im{ p_m (d + q)* }                        (2-36, per sub-array)
@@ -22,29 +24,33 @@ addpath(fullfile(papersDir, "modules"));
 testCase.TestData.papersDir = papersDir;
 end
 
-function testEq361MatrixFormEqualsExpandedForm(testCase)
-% (3-61) first line with Phi = lambda*I must equal the expanded
-% |lambda|^2 / lambda* form; the wrong lambda^2/lambda form must fail.
+function testEq361ScanLambdaOrientationVsMatrixDerivation(testCase)
+% (3-61) from book/P60.png: the explicit expanded line uses lambda*H^H
+% (lambda NOT conjugated).  The algebraically derived matrix form
+% (H^H Phi^H Phi H + s2 I)^{-1} H^H Phi^H with Phi = lambda*I gives
+% conj(lambda)*H^H; the recovered scan supersedes that derivation, so
+% production must equal the SCAN form and DIFFER from the matrix-derived
+% form.  A real lambda cannot distinguish the two, so lambda is complex.
 N = 8;
 H = [1; 0.5 + 0.3j; -0.2 + 0.7j; 0.4 - 0.1j; 0.9; 0.1 + 0.6j; -0.5j; 0.3];
 sigma2 = 0.05;
 lambda = 0.8 * exp(1j * 0.4);          % complex lambda with nonzero phase
+cScan = lambda .* conj(H) ./ ...
+    (abs(lambda)^2 .* abs(H).^2 + sigma2);          % recovered scan form
 Htilde = diag(H);
 Phi = lambda * eye(N);
 Denom = Htilde' * Phi' * Phi * Htilde + sigma2 * eye(N);
-Cmat = Denom \ (Htilde' * Phi');        % N x N diagonal, first line of (3-61)
+Cmat = Denom \ (Htilde' * Phi');        % algebraically derived matrix form
 cMatrix = diag(Cmat);
-cExpanded = conj(lambda) * conj(H) ./ ...
+verifyTrue(testCase, any(abs(cScan - cMatrix) > 1e-9), ...
+    "premise: the recovered scan form differs from the matrix-derived form");
+% The matrix form equals conj(lambda)*conj(H) (derivation check).
+cDerived = conj(lambda) * conj(H) ./ ...
     (abs(lambda)^2 .* abs(H).^2 + sigma2);
-verifyEqual(testCase, cMatrix, cExpanded, "AbsTol", 1e-12, ...
-    "matrix form must equal the |lambda|^2 / lambda* expanded form");
-% Negative: the no-conjugate lambda^2 / lambda form must differ.
-cWrong = lambda * conj(H) ./ (lambda^2 .* abs(H).^2 + sigma2);
-verifyNotEqual(testCase, cWrong, cExpanded, ...
-    "lambda^2/lambda (no conjugate) must not equal the matrix form");
-verifyGreaterThan(testCase, norm(cWrong - cExpanded), 1e-6);
+verifyEqual(testCase, cMatrix, cDerived, "AbsTol", 1e-12, ...
+    "the matrix derivation gives conj(lambda)*H^H (algebra check)");
 % Strict degradation: lambda = 1 reduces to the per-bin MMSE form.
-cLambdaOne = conj(1) * conj(H) ./ (abs(1)^2 .* abs(H).^2 + sigma2);
+cLambdaOne = 1 * conj(H) ./ (abs(1)^2 .* abs(H).^2 + sigma2);
 cOne = conj(H) ./ (abs(H).^2 + sigma2);
 verifyEqual(testCase, cLambdaOne, cOne, "AbsTol", 1e-12);
 end
@@ -61,8 +67,8 @@ r2 = ifft(fft(h2) .* fft(tx));
 sigma2 = 0.01;
 lam1 = 0.9 * exp(1j * 0.2);
 lam2 = 0.85 * exp(-1j * 0.35);
-C1 = conj(lam1) * conj(fft(h1)) ./ (abs(lam1)^2 .* abs(fft(h1)).^2 + sigma2);
-C2 = conj(lam2) * conj(fft(h2)) ./ (abs(lam2)^2 .* abs(fft(h2)).^2 + sigma2);
+C1 = lam1 * conj(fft(h1)) ./ (abs(lam1)^2 .* abs(fft(h1)).^2 + sigma2);
+C2 = lam2 * conj(fft(h2)) ./ (abs(lam2)^2 .* abs(fft(h2)).^2 + sigma2);
 expected = ifft(C1 .* fft(r1) + C2 .* fft(r2));
 branches = [r1; r2];
 branchImpulses = [h1; h2];

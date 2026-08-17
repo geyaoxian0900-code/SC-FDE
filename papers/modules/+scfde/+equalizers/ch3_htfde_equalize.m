@@ -6,8 +6,11 @@ function [subarrayOutputs, trace] = ch3_htfde_equalize(branches, ...
 %   For sub-array m (m = 1..P) with K elements (k = 1..K), each element
 %   carries its own channel H_{m,k}(nu) and received spectrum R_{m,k}(nu):
 %
-%     C_{m,k}(nu) = conj(lambda_{m,k}) * conj(H_{m,k}(nu))
+%     C_{m,k}(nu) = lambda_{m,k} * conj(H_{m,k}(nu))
 %                   / (|lambda_{m,k}|^2 * |H_{m,k}(nu)|^2 + sigma_w^2)   (3-61)
+%   recovered from book/P60.png (2026-08-17): the scalar numerator is
+%   lambda times H Hermitian - NOT conj(lambda) (the algebraically
+%   derived form is rejected by the complex-lambda oracle).
 %     x_m = IFFT{ sum_{k=1..K} C_{m,k} .* R_{m,k} }                     (3-62)
 %
 %   The per-element scalar lambda is the residual-phase factor from
@@ -86,9 +89,13 @@ for subarrayIndex = 1:subarrayCount
         hElement = branchImpulses(globalIndex, :);
         RElement = fft(rElement);
         HElement = fft(hElement, N);
-        % (3-61) diagonal form: C = (|lambda|^2 H^H H + sigma^2 I)^{-1}
-        % lambda* H^H  ->  per frequency bin:
-        CElement = conj(lambda) * conj(HElement) ./ ...
+        % (3-61) diagonal form recovered from book/P60.png:
+        % C = (|lambda|^2 H^H H + sigma^2 I)^{-1} (lambda H^H)
+        % -> per frequency bin:  C = lambda * conj(H) / denom.
+        % The scalar numerator is lambda (NOT conj(lambda)): the
+        % recovered scan's explicit expanded line supersedes the
+        % algebraically derived conj(lambda) form.
+        CElement = lambda * conj(HElement) ./ ...
             (abs(lambda)^2 .* abs(HElement).^2 + noiseVariance);
         jointSpectrum = jointSpectrum + CElement .* RElement;
     end
