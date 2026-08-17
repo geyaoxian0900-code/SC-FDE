@@ -7,7 +7,9 @@ function tests = test_ch3_fde_ibdfe_eq_3_39_92
 %   * mmse: per-bin H*/(|H|^2+sigma^2) equals the book form
 %     H*/(N sigma^2 + M_X |H|^2) up to the common real factor N
 %     (m_x = 1, M_X = N) - the golden decision-equivalence proof the
-%     spec demands; iteration-1 IBDFE degrades to the MMSE decisions;
+%     spec demands; iteration-1 IBDFE is oracle-locked to the exact
+%     (3-86)/(3-87) filter (N*sigma_w^2 term), which supersedes the old
+%     "degrades to MMSE" equivalence (the N factor changes decisions);
 %   * zf: strict 1/(lambda H_k), no epsilon floor; exact-null fixture
 %     must REPORT singularBins (RED against the old max(H,eps) floor);
 %   * ibdfe structure: B = C H - 1, unit gain, hard feedback = previous
@@ -19,7 +21,7 @@ function tests = test_ch3_fde_ibdfe_eq_3_39_92
 
 tests = functiontests({ ...
     @testMmseGoldenCommonFactorEq3_71, ...
-    @testFirstIbdfeIterationDegradesToMmse, ...
+    @testFirstIbdfeIterationMatchesEq3_86_87, ...
     @testZfStrictFormAndSingularReporting, ...
     @testIbdfeStructureEq3_64_71, ...
     @testHardFeedbackUsesPreviousCompleteBlock, ...
@@ -70,17 +72,33 @@ verifyTrue(testCase, all(imag(prodC ./ bookC) < 1e-12), ...
     "the common factor must be REAL (decision-equivalent)");
 end
 
-function testFirstIbdfeIterationDegradesToMmse(testCase)
+function testFirstIbdfeIterationMatchesEq3_86_87(testCase)
+% (3-86)/(3-87) with N*sigma_w^2 (book/P67.png) changes the iteration-1
+% filter, so the old "degrades to MMSE-FDE" assertion is replaced by a
+% DIRECT equation oracle: the iteration-1 coefficients must equal
+% Lambda/Gamma with Sigma = 1 (no prior feedback) and the equalized
+% symbols must equal ifft(C .* Y) (zero feedback).
 [received, block, H, h, nv] = buildCh3Frame(testCase, 702, 15);
-ch = struct("received", received, "impulse", h);
-src = struct("data", block(1:40), "tx", block, "training", block(1:40));
-cfgMmse = struct("noiseVariance", nv, "snrDb", 15, "modulation", "qpsk");
-cfgOne = cfgMmse;
-cfgOne.ibdfeIterations = 1;
-recvMmse = scfde.equalizers.mmse_fde(ch, src, cfgMmse);
-recvSd1 = scfde.equalizers.sd_ibdfe(ch, src, cfgOne);
-verifyEqual(testCase, recvSd1.outputs{1}, recvMmse.outputs{1}, ...
-    "iteration-1 SD-IBDFE must degrade to the MMSE-FDE decisions");
+N = 64;
+uw = scfde.equalizers.ch3_zadoff_chu(24, 1);
+training = scfde.equalizers.ch3_zadoff_chu(N, 1);
+cfg = struct("fftSize", N, "dataSymbols", 40, "uwLength", 24, ...
+    "ibdfeIterations", 1, "channelEstimateLength", 8, ...
+    "channelRegularization", 0.1, "noiseVariance", nv, ...
+    "modulation", "qpsk", "snrDb", 15);
+[symbols, trace] = scfde.equalizers.ch3_ibdfe_equalize( ...
+    received, received, training, H, nv, uw, cfg, "hard", false);
+lambdaExpected = conj(H) ./ (abs(H).^2 + N * nv);
+gammaExpected = mean(lambdaExpected .* H);
+cExpected = lambdaExpected ./ gammaExpected;
+verifyEqual(testCase, trace.feedforward(1, :), cExpected, "AbsTol", 1e-12, ...
+    "iteration-1 feedforward must be Lambda/Gamma per (3-86)/(3-87)");
+verifyEqual(testCase, trace.feedback(1, :), cExpected .* H - 1, ...
+    "AbsTol", 1e-12, "iteration-1 feedback must be C*H-1");
+verifyEqual(testCase, trace.lambdaHistory(1, :), lambdaExpected, ...
+    "AbsTol", 1e-12, "trace must record the exact (3-86) Lambda");
+verifyEqual(testCase, symbols, ifft(cExpected .* fft(received)), ...
+    "AbsTol", 1e-12, "iteration-1 output must be ifft(C .* Y)");
 end
 
 function testZfStrictFormAndSingularReporting(testCase)
@@ -125,8 +143,8 @@ for iteration = 1:cfg.ibdfeIterations
         trace.feedforward(iteration, :) .* H - 1, "AbsTol", 1e-12);
     verifyEqual(testCase, trace.normalization(iteration), 1, "AbsTol", 1e-12);
 end
-verifyEqual(testCase, trace.formulaStatus, "BLOCKED-SOURCE-REVIEW", ...
-    "weakest link ((3-86) A_k) keeps the plain IBDFE from BOOK-EXACT");
+verifyEqual(testCase, trace.formulaStatus, "BOOK-EXACT", ...
+    "the plain IBDFE chain is complete with (3-86)/(3-87) oracle-locked");
 end
 
 function testHardFeedbackUsesPreviousCompleteBlock(testCase)

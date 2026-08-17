@@ -29,9 +29,11 @@ function [symbols, trace, H] = ch3_ibdfe_equalize(receivedData, ...
 %     BLOCKED-SOURCE-REVIEW pending book/17.png.
 %   The fixed-rho linear mixing previously used here is NOT (3-92) and
 %   has been removed (spec 3.6).
-%   A_k uses the H*-form A_k = H_k* (1-rho) / (|H_k|^2 (1-rho) + sigma_w^2);
-%   the full (3-86)/(3-87) A_k form and the rho estimation remain
-%   BLOCKED-SOURCE-REVIEW / ALG-EQUIV (recorded in trace).
+%   A_k uses the exact recovered (3-86)/(3-87) form from book/P67.png:
+%   Lambda_k = conj(H_k) Sigma_k / (|H_k|^2 Sigma_k + N sigma_w^2),
+%   Gamma = mean(Lambda .* H); implemented in
+%   ch3_ibdfe_coefficients.m (no flooring; invalid denominators raise).
+%   The previous H*-form A_k with the missing N factor is superseded.
 N = cfg.fftSize;
 Y = fft(receivedData);
 feedbackSpectrum = complex(zeros(1, N));
@@ -45,12 +47,14 @@ trace.normalization = complex(zeros(1, cfg.ibdfeIterations));
 trace.channelHistory = complex(zeros(cfg.ibdfeIterations, N));
 trace.feedbackMode = string(feedbackMode);
 trace.updatesChannel = logical(updateChannel);
-% Weakest-link certification (batch-11): the whole registered method can
-% be BOOK-EXACT only when EVERY necessary formula in its production
-% chain is source-confirmed.  The plain SD/HD IBDFE chain includes A_k
-% ((3-86), still BLOCKED-SOURCE-REVIEW); the ICE chain additionally
-% includes the (3-92) variance definitions (still BLOCKED-SOURCE-REVIEW).
-% Both paths are therefore BLOCKED-SOURCE-REVIEW overall.
+trace.lambdaHistory = complex(zeros(cfg.ibdfeIterations, N));
+trace.gammaHistory = complex(zeros(1, cfg.ibdfeIterations));
+trace.sigmaHistory = complex(zeros(cfg.ibdfeIterations, N));
+% Weakest-link certification (2026-08-17): the plain SD/HD IBDFE chain is
+% complete once (3-86)/(3-87) are implemented and oracle-locked
+% (book/P67.png) - the ICE chain additionally includes the (3-92)
+% variance DEFINITIONS (still BLOCKED-SOURCE-REVIEW, book/P68.png), so
+% only the ICE paths stay blocked.
 trace.formulaStatus = "BLOCKED-SOURCE-REVIEW";
 trace.formulaMode = "book";
 trace.bookExperimentEquivalent = false;
@@ -59,21 +63,25 @@ trace.effectiveParameters = struct("iterations", cfg.ibdfeIterations, ...
     "noiseVariance", noiseVariance, "feedbackMode", string(feedbackMode), ...
     "updatesChannel", logical(updateChannel));
 if updateChannel
-    trace.formulaNote = "(3-64)/(3-65)/(3-82)/(3-84)/(3-85)/(3-87) and (3-88)~(3-91) verified; the (3-92) variance DEFINITIONS remain BLOCKED-SOURCE-REVIEW (book/17.png) -> weakest-link certification";
+    trace.formulaNote = "(3-64)~(3-87) verified incl. (3-86)/(3-87) from book/P67.png; the (3-92) variance DEFINITIONS remain BLOCKED-SOURCE-REVIEW (book/P68.png) -> ICE weakest-link certification";
 else
-    trace.formulaNote = "(3-64)/(3-65)/(3-82)/(3-84)/(3-85)/(3-87) verified; the A_k form (3-86) remains BLOCKED-SOURCE-REVIEW (book/17.png) -> weakest-link certification";
+    trace.formulaStatus = "BOOK-EXACT";
+    trace.formulaNote = "(3-64)~(3-87) verified: C=Lambda/Gamma, B=CH-1, unit gain, iteration 1 = MMSE-FDE degradation with N*sigma_w^2 per (3-86)/(3-87) (book/P67.png); first-iteration filter oracle-locked in test_ch3_fde_ibdfe_eq_3_39_92";
 end
 trace.channelUpdateStatus = "ENGINEERING-BLOCKED";
 trace.channelUpdateNote = "(3-88)~(3-91) LS + DFT truncation implemented (book/17.png confirms H_LS = R/X_D^0); (3-92) boxed MMSE variance mix applied with the scan-confirmed numerator order (sigmaDft2*H_old + sigmaOld2*H_DFT); the two variance DEFINITIONS (residual energies) are ENGINEERING estimates, not recovered from the scan";
 
 for iteration = 1:cfg.ibdfeIterations
     symbolVariance = max(1 - reliability, eps);
-    A = conj(H) .* symbolVariance ./ ...
-        max(abs(H).^2 .* symbolVariance + noiseVariance, eps);
-    Gamma = mean(A .* H);
-    feedforward = A ./ max(Gamma, eps);
-    feedback = feedforward .* H - 1;
+    % (3-86)/(3-87) exact coefficients (book/P67.png): the N*sigma_w^2
+    % term is REQUIRED; invalid denominators raise instead of flooring.
+    [feedforward, feedback, lambda, gamma] = ...
+        scfde.equalizers.ch3_ibdfe_coefficients( ...
+        H, symbolVariance, noiseVariance, N);
     trace.normalization(iteration) = mean(feedforward .* H);
+    trace.lambdaHistory(iteration, :) = lambda;
+    trace.gammaHistory(iteration) = gamma;
+    trace.sigmaHistory(iteration, :) = symbolVariance;
     estimateSpectrum = feedforward .* Y - feedback .* feedbackSpectrum;
     symbols = ifft(estimateSpectrum);
 
