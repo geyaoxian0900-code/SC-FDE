@@ -19,7 +19,12 @@ function tests = test_new_scan_ch5_eq_5_41_69
 %     decisions), (5-53)/(5-54) filter orientations w_i = x_i / f_i = x_i;
 %   * (5-57) equal-weight 1/2 merge of the two BiDFE branches after
 %     same-time-order restoration, (5-58) dec[y(k)], (5-59) iterative
-%     tentative decisions.
+%     tentative decisions;
+%   * (5-60)~(5-69) MAP-CCK-TE posterior/extrinsic LLR (book/P138.png~
+%     P140.png): enumerated log-sum-exp oracle over the 256 codewords,
+%     and (5-69) L_post = L_ext + L_prior separation with invariance of
+%     the extrinsic to the bit's own prior (RED against posterior
+%     feedback).
 %
 % The BiDFE oracles are INDEPENDENT INLINE REPLICAS of the recovered
 % signal flow (raw-domain block model with raw-channel convolution
@@ -36,6 +41,8 @@ tests = functiontests({ ...
     @testBidfe2NegativeSharedStateAndForwardOnly, ...
     @testBidfeBranchesIdentityExact, ...
     @testTrDiversityMergeEq5_57_59, ...
+    @testMapCckTeEnumeratedPosteriorEq5_64_69, ...
+    @testMapCckTeExtrinsicSeparationEq5_69, ...
     @testRegisteredBankFinite});
 %#ok<*DEFNU>  % setupOnce is invoked by the framework, not by name
 %#ok<*NASGU>  % fixture outputs unused by individual tests are intentional
@@ -438,6 +445,144 @@ verifyEqual(testCase, recv.estimates{1}, mergeOracle, "AbsTol", 1e-9, ...
     "(5-57) equal-weight merge must be produced by the wrapper");
 verifyEqual(testCase, recv.traces{1}.branchForward, fwIdx, ...
     "wrapper forward branch must be the BiDFE-2 forward pass");
+end
+
+function testMapCckTeEnumeratedPosteriorEq5_64_69(testCase)
+% MAP-CCK-TE (5-60)~(5-69), book/P138.png~P140.png: the posterior LLR of
+% bit i is the log-sum-exp over the codewords whose bit i is 0 minus the
+% log-sum-exp over the codewords whose bit i is 1, where each codeword
+% carries the AWGN likelihood and the product of the bit priors built
+% from the prior LLRs.  The oracle enumerates all 256 codewords directly
+% with the sigmoid prior probabilities - no production helper reuse.
+book = fixtureBook();
+[~, bits] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
+rng(701, "twister");
+noiseVariance = 0.08;
+blockCount = 3;
+obs = complex(zeros(blockCount, 8));
+txIdx = zeros(1, blockCount);
+for block = 1:blockCount
+    txIdx(block) = randi(size(book, 1));
+    obs(block, :) = book(txIdx(block), :) + ...
+        sqrt(noiseVariance / 2) * (randn(1, 8) + 1j * randn(1, 8));
+end
+priorWords = 0.6 * randn(blockCount, 8);
+% Independent enumerated oracle.
+posteriorOracle = zeros(blockCount, 8);
+softOracle = complex(zeros(blockCount, 8));
+for block = 1:blockCount
+    priorLlr = priorWords(block, :);
+    metric = zeros(size(book, 1), 1);
+    for candidate = 1:size(book, 1)
+        % ln p(r|c) + sum_j ln P(b_j) with the sigmoid priors:
+        %   P(b=0) = 1/(1+exp(-L)), P(b=1) = 1/(1+exp(L)).
+        logPrior = -log(1 + exp(-(1 - 2 * bits(candidate, :)) .* priorLlr));
+        metric(candidate) = -sum(abs(obs(block, :) - book(candidate, :)).^2) / ...
+            noiseVariance + sum(logPrior);
+    end
+    maximum = max(metric);
+    weights = exp(metric - maximum);
+    weights = weights / sum(weights);
+    softOracle(block, :) = weights.' * book;
+    for bit = 1:8
+        zeroSet = metric(bits(:, bit) == 0);
+        oneSet = metric(bits(:, bit) == 1);
+        m0 = max(zeroSet);
+        m1 = max(oneSet);
+        posteriorOracle(block, bit) = m0 + log(sum(exp(zeroSet - m0))) - ...
+            (m1 + log(sum(exp(oneSet - m1))));
+    end
+end
+[detected, softWord, posteriorLlr] = ...
+    scfde.equalizers.ch5_soft_book_detect_with_prior( ...
+    obs, book, bits, noiseVariance, priorWords);
+verifyEqual(testCase, posteriorLlr, posteriorOracle, "AbsTol", 1e-10, ...
+    "posterior LLR must be the enumerated (5-64)~(5-69) log-sum-exp");
+verifyEqual(testCase, softWord, softOracle, "AbsTol", 1e-12, ...
+    "soft codeword must be the posterior mean over the enumerated metrics");
+verifyEqual(testCase, detected, txIdx, ...
+    "the MAP decision must be the transmitted codeword at this SNR");
+% Negative: swapping the bit-conditioned subsets must change the LLR.
+verifyTrue(testCase, any(abs(posteriorOracle(:, 1) - (-posteriorOracle(:, 1))) > 1e-9), ...
+    "premise: the zero/one subsets are not symmetric");
+end
+
+function testMapCckTeExtrinsicSeparationEq5_69(testCase)
+% (5-69): the posterior LLR splits as the EXTRINSIC LLR (likelihood and
+% every OTHER bit's prior) plus the bit's OWN prior LLR.  Changing a
+% bit's own prior changes the posterior by exactly that amount but does
+% NOT change its extrinsic LLR.  Negative: feeding the posterior itself
+% back as the prior must NOT be the production extrinsic.
+book = fixtureBook();
+[~, bits] = scfde.equalizers.ch5_cck_codebook("FR-CCK", 8, true);
+rng(702, "twister");
+noiseVariance = 0.05;
+blockCount = 2;
+obs = complex(zeros(blockCount, 8));
+for block = 1:blockCount
+    obs(block, :) = book(randi(size(book, 1)), :) + ...
+        sqrt(noiseVariance / 2) * (randn(1, 8) + 1j * randn(1, 8));
+end
+priorWords = 0.7 * randn(blockCount, 8);
+% Independent enumerated oracle for the EXTRINSIC part: the prior term
+% of the target bit is EXCLUDED.
+extrinsicOracle = zeros(blockCount, 8);
+for block = 1:blockCount
+    priorLlr = priorWords(block, :);
+    for bit = 1:8
+        metric = zeros(size(book, 1), 1);
+        for candidate = 1:size(book, 1)
+            others = setdiff(1:8, bit);
+            logPrior = -sum(log(1 + exp(-(1 - 2 * bits(candidate, others)) .* ...
+                priorLlr(others))));
+            metric(candidate) = -sum(abs(obs(block, :) - book(candidate, :)).^2) / ...
+                noiseVariance + logPrior;
+        end
+        zeroSet = metric(bits(:, bit) == 0);
+        oneSet = metric(bits(:, bit) == 1);
+        m0 = max(zeroSet);
+        m1 = max(oneSet);
+        extrinsicOracle(block, bit) = m0 + log(sum(exp(zeroSet - m0))) - ...
+            (m1 + log(sum(exp(oneSet - m1))));
+    end
+end
+[~, ~, posteriorLlr] = scfde.equalizers.ch5_soft_book_detect_with_prior( ...
+    obs, book, bits, noiseVariance, priorWords);
+% (5-69) L_post = L_ext + L_prior: the production extrinsic must equal
+% the enumerated extrinsic.
+verifyEqual(testCase, posteriorLlr - priorWords, extrinsicOracle, ...
+    "AbsTol", 1e-10, "(5-69) L_post = L_ext + L_prior must hold");
+% Perturb a bit's OWN prior by delta: the posterior of THAT bit shifts
+% by exactly delta, and the EXTRINSIC of THAT bit is unchanged (other
+% bits' extrinsics legitimately change because they depend on this
+% bit's prior through the enumeration).
+delta = 1.3;
+shiftedPrior = priorWords;
+shiftedPrior(1, 3) = shiftedPrior(1, 3) + delta;
+[~, ~, shiftedPosterior] = ...
+    scfde.equalizers.ch5_soft_book_detect_with_prior( ...
+    obs, book, bits, noiseVariance, shiftedPrior);
+verifyEqual(testCase, shiftedPosterior(1, 3) - posteriorLlr(1, 3), delta, ...
+    "AbsTol", 1e-10, ...
+    "changing a bit's own prior must shift its posterior by that amount");
+verifyEqual(testCase, shiftedPosterior(1, 3) - shiftedPrior(1, 3), ...
+    posteriorLlr(1, 3) - priorWords(1, 3), "AbsTol", 1e-10, ...
+    "the bit's own extrinsic LLR must be invariant to its own prior");
+% Negative: posterior feedback (feeding the posterior back as the next
+% iteration's prior) changes the next extrinsic versus the correct
+% extrinsic feedback; production must subtract the prior per (5-69).
+nextPriorPosterior = posteriorLlr;              % WRONG: posterior feedback
+[~, ~, nextPosteriorWrong] = ...
+    scfde.equalizers.ch5_soft_book_detect_with_prior( ...
+    obs, book, bits, noiseVariance, nextPriorPosterior);
+wrongExtrinsic = nextPosteriorWrong - nextPriorPosterior;
+nextPriorExtrinsic = posteriorLlr - priorWords; % correct extrinsic feedback
+[~, ~, nextPosteriorRight] = ...
+    scfde.equalizers.ch5_soft_book_detect_with_prior( ...
+    obs, book, bits, noiseVariance, nextPriorExtrinsic);
+rightExtrinsic = nextPosteriorRight - nextPriorExtrinsic;
+verifyTrue(testCase, any(abs(wrongExtrinsic(:) - rightExtrinsic(:)) > 1e-9), ...
+    "posterior feedback must NOT be produced as the extrinsic LLR");
 end
 
 function testRegisteredBankFinite(testCase)
